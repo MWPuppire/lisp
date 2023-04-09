@@ -14,7 +14,7 @@ pub enum LispValue {
     Func {
         args: Vec<String>,
         body: Box<LispValue>,
-        env: LispEnv,
+        // env: LispEnv,
     },
 }
 

@@ -36,26 +36,26 @@ impl LispParser {
         }
     }
     pub fn next(&mut self) -> Result<LispValue, LispError> {
-        let (val, rest) = self.read_form(&self.tokens[self.idx..])?;
+        let (val, rest) = Self::read_form(&self.tokens[self.idx..])?;
         self.idx = self.tokens.len() - rest.len();
         Ok(val)
     }
     pub fn peek(&self) -> Result<LispValue, LispError> {
-        let (val, _) = self.read_form(&self.tokens[self.idx..])?;
+        let (val, _) = Self::read_form(&self.tokens[self.idx..])?;
         Ok(val)
     }
-    fn read_form<'a>(&self, tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
+    fn read_form<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
         if tokens.len() == 0 {
             return Ok((LispValue::Nil, tokens));
         }
         let (token, rest) = tokens.split_first().ok_or(LispError::SyntaxError(0, 0))?;
         match token.as_str() {
-            "(" => self.read_list(rest),
+            "(" => Self::read_list(rest),
             ")" => Err(LispError::SyntaxError(0, 0)),
-            _ => Ok((self.read_atom(token.clone())?, rest)),
+            _ => Ok((Self::read_atom(token.clone())?, rest)),
         }
     }
-    fn read_list<'a>(&self, tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
+    fn read_list<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
         let mut res: Vec<LispValue> = vec![];
         let mut xs = tokens;
         loop {
@@ -63,7 +63,7 @@ impl LispParser {
             if next_token == ")" {
                 break Ok((LispValue::List(res), rest));
             }
-            let (exp, new_xs) = self.read_form(&xs).map_err(|err| match err {
+            let (exp, new_xs) = Self::read_form(&xs).map_err(|err| match err {
                 LispError::UnbalancedParens(x) => LispError::UnbalancedParens(x + 1),
                 _ => err,
             })?;
@@ -71,7 +71,7 @@ impl LispParser {
             xs = new_xs;
         }
     }
-    fn read_atom(&self, token: String) -> Result<LispValue, LispError> {
+    fn read_atom(token: String) -> Result<LispValue, LispError> {
         if token.starts_with(";") {
             // comment
             Ok(LispValue::Nil)

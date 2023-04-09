@@ -1,7 +1,7 @@
 use std::iter::zip;
 use crate::{LispValue, LispError, env::LispEnv};
 
-fn lookup_variable<'a>(val: String, env: &'a LispEnv<'a>) -> Result<&'a LispValue, LispError> {
+fn lookup_variable<'a>(val: String, env: &'a LispEnv) -> Result<&'a LispValue, LispError> {
     env.get(&val).ok_or(LispError::UndefinedVariable(val))
 }
 
@@ -24,12 +24,17 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
         LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
         LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("function", "nil")),
-        LispValue::Func { args: args, body: body, env: fn_env } => {
+        LispValue::Func { args: args, body: body } => {
             if rest.len() != args.len() {
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
             } else {
-                for (key, val) in zip(args, rest) {
-                    fn_env.set(key.to_owned(), eval(val, env)?);
+                let mut in_args = Vec::with_capacity(rest.len());
+                for val in rest.iter() {
+                    in_args.push(eval(val, env)?);
+                }
+                let mut fn_env = env.new_nested();
+                for (key, val) in zip(args, in_args) {
+                    fn_env.set(key.to_owned(), val.clone());
                 }
                 eval(body, &mut fn_env)
             }
@@ -72,11 +77,11 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError
             }
         },
         LispValue::BuiltinFunc(f) => f(&[], env),
-        LispValue::Func { args: args, body: body, env: fn_env } => {
+        LispValue::Func { args: args, body: body } => {
             if args.len() != 0 {
                 Err(LispError::IncorrectArguments(args.len(), 0))
             } else {
-                eval(body, &mut fn_env)
+                eval(body, &mut env.new_nested())
             }
         },
         _ => Ok(value.clone()),

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use lazy_static::lazy_static;
 use crate::{LispValue, builtins::*};
 
@@ -48,9 +49,17 @@ impl<'a> LispEnv<'a> {
     pub fn get(&self, key: &str) -> Option<&LispValue> {
         self.find(key).map(|env| env.data.get(key)).flatten()
     }
-    pub fn set(&mut self, key: String, val: LispValue) {
+    pub fn set(&mut self, key: String, val: LispValue) -> &LispValue {
         // can't assign to an outer value
-        self.data.insert(key, val);
+        match self.data.entry(key) {
+            Entry::Occupied(mut e) => {
+                e.insert(val);
+                &*e.into_mut()
+            },
+            Entry::Vacant(e) => {
+                &*e.insert(val)
+            }
+        }
     }
     pub fn find(&self, key: &str) -> Option<&LispEnv> {
         if self.data.contains_key(key) {

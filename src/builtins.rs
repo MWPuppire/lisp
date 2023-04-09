@@ -121,17 +121,17 @@ pub fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispE
     last
 }
 
-pub fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+pub fn lisp_fn(args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue, LispError> {
     if args.len() < 2 {
         return Err(LispError::IncorrectArguments(1, 0));
     }
     let params = expect_list(&args[0])?;
     let param_names = params.iter().map(|x| expect_symbol(x).map(|s| s.to_owned())).collect::<Result<Vec<String>, LispError>>()?;
     let body = Box::new(args[1].clone());
-    let new_env = env.new_nested();
+    // let new_env = env.new_nested();
     Ok(LispValue::Func {
         args: param_names,
         body: body,
-        env: new_env,
+        // env: new_env,
     })
 }
