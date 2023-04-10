@@ -185,4 +185,6 @@ pub enum LispError {
     OnlyInTry,
     #[error("missing `catch` block for a `try`")]
     TryNoCatch,
+    #[error("cannot redefine variable in current scope")]
+    AlreadyExists,
 }

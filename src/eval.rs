@@ -12,7 +12,7 @@ fn is_macro(val: &LispValue) -> bool {
     }
 }
 
-fn is_macro_call(val: &LispValue, env: &mut LispEnv) -> Result<bool> {
+fn is_macro_call(val: &LispValue, env: &LispEnv) -> Result<bool> {
     match val {
         LispValue::List(list) => {
             if list.len() == 0 {
