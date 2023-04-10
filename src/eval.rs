@@ -64,9 +64,9 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
             } else {
                 let mut fn_env = fn_env.clone();
-                for (key, val) in zip(args, rest) {
-                    let val = eval(val, env);
-                    fn_env.set(key.to_owned(), val?.clone());
+                let vals = rest.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
+                for (key, val) in zip(args, vals) {
+                    fn_env.set(key.to_owned(), val);
                 }
                 eval(body, &mut fn_env)
             }
