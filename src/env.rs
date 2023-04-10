@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::fmt;
 use lazy_static::lazy_static;
 use crate::{LispValue, Result, builtins::add_builtins};
 
@@ -56,7 +57,7 @@ impl LispEnv {
         self.inner.write().unwrap().data.insert(key, val);
     }
     pub fn bind_func(&mut self, name: &'static str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
-        let val = LispValue::BuiltinFunc { name, f };
+        let val = LispValue::BuiltinFunc { name, f: crate::util::LispFunc(f) };
         self.inner.write().unwrap().data.insert(name.to_owned(), val);
     }
     fn find(&self, key: &str) -> Option<Arc<RwLock<InnerEnv>>> {
@@ -69,5 +70,12 @@ impl LispEnv {
             }
         }
         None
+    }
+}
+
+impl fmt::Debug for LispEnv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let map = &self.inner.read().unwrap().data;
+        f.debug_map().entries(map.iter()).finish()
     }
 }

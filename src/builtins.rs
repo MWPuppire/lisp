@@ -453,7 +453,6 @@ fn lisp_inspect(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::Nil)
 }
 
-/*
 fn lisp_try(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     if let Ok(catch) = args[1].expect_list() {
@@ -461,14 +460,19 @@ fn lisp_try(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
         if catch[0] != LispValue::Symbol("catch*".to_owned()) {
             return Err(LispError::TryNoCatch);
         }
-        let err_name = catch[1].expect_symbol()?;
-        let expr = eval(&args[0], env);
-        if let Err(LispError::UncaughtException(except)) = expr {
-            let mut caught_env = env.closure();
-            caught_env.set(err_name.to_owned(), except);
-            eval(&catch[2], &mut caught_env)
-        } else {
-            expr
+        let err_name = catch[1].expect_symbol()?.to_owned();
+        let mut caught_env = env.closure();
+        match eval(&args[0], env) {
+            Ok(x) => Ok(x),
+            Err(LispError::UncaughtException(except)) => {
+                caught_env.set(err_name, except);
+                eval(&catch[2], &mut caught_env)
+            },
+            Err(err) => {
+                let s = err.to_string();
+                caught_env.set(err_name, LispValue::String(s));
+                eval(&catch[2], &mut caught_env)
+            }
         }
     } else {
         Err(LispError::TryNoCatch)
@@ -486,7 +490,6 @@ fn lisp_throw(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     let arg = eval(&args[0], env)?;
     Err(LispError::UncaughtException(arg))
 }
-*/
 
 pub fn add_builtins(env: &mut LispEnv) {
     env.bind_func("+", lisp_plus);
@@ -537,7 +540,7 @@ pub fn add_builtins(env: &mut LispEnv) {
     env.bind_func("defmacro!", lisp_defmacro);
     env.bind_func("macroexpand", lisp_macroexpand);
     env.bind_func("inspect", lisp_inspect);
-//    env.bind_func("try*", lisp_try);
-//    env.bind_func("catch*", lisp_catch);
-//    env.bind_func("throw", lisp_throw);
+    env.bind_func("try*", lisp_try);
+    env.bind_func("catch*", lisp_catch);
+    env.bind_func("throw", lisp_throw);
 }

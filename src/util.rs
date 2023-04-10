@@ -15,6 +15,14 @@ macro_rules! expect {
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone)]
+pub struct LispFunc(pub fn(&[LispValue], &mut LispEnv) -> Result<LispValue>);
+impl fmt::Debug for LispFunc {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum LispValue {
     Symbol(String),
     String(String),
@@ -25,7 +33,7 @@ pub enum LispValue {
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
-        f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>,
+        f: LispFunc,
     },
     Func {
         args: Vec<String>,
@@ -157,7 +165,7 @@ pub enum LispError {
     SyntaxError(usize, usize),
     #[error("unbalanced parentheses (missing {0})")]
     UnbalancedParens(usize),
-    #[error("undefined variable {0}")]
+    #[error("undefined variable `{0}`")]
     UndefinedVariable(String),
     #[error("invalid data type. expected {0}, received {1}")]
     InvalidDataType(&'static str, &'static str),
@@ -171,8 +179,8 @@ pub enum LispError {
     IndexOutOfRange(usize),
     #[error("missing a value for a `let` declaration binding")]
     MissingBinding,
-    // #[error("uncaught exception: {0}")]
-    // UncaughtException(LispValue),
+    #[error("uncaught exception: {0}")]
+    UncaughtException(LispValue),
     #[error("`catch` can only be used inside `try`")]
     OnlyInTry,
     #[error("missing `catch` block for a `try`")]
