@@ -54,14 +54,18 @@ pub fn lisp_let(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let mut new_env = env.closure();
     let list = args[0].expect_list()?;
-    let name = list[0].expect_symbol()?;
-    new_env.set(name.to_owned(), list[1].clone());
+    expect!(list.len() & 1 == 0, LispError::MissingBinding);
+    for pair in list.chunks_exact(2) {
+        let name = pair[0].expect_symbol()?;
+        let val = pair[1].clone();
+        new_env.set(name.to_owned(), val);
+    }
     eval(&args[1], &mut new_env)
 }
 
 pub fn lisp_if(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() > 1 && args.len() < 4, LispError::IncorrectArguments(2, args.len()));
-    let pred = eval(&args[0], env)?.expect_bool()?;
+    let pred = eval(&args[0], env)?.truthiness();
     if pred {
         eval(&args[1], env)
     } else {
@@ -105,11 +109,13 @@ pub fn lisp_equals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 pub fn lisp_prn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
+    // args.len() != 0, so `split_list` isn't `None`
+    let (last, args) = unsafe { args.split_last().unwrap_unchecked() };
     for val in args.iter() {
         let val = eval(val, env)?;
         print!("{} ", val);
     }
-    println!();
+    println!("{}", eval(last, env)?);
     Ok(LispValue::Nil)
 }
 
@@ -136,7 +142,11 @@ pub fn lisp_emptyq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 pub fn lisp_count(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval(&args[0], env)?;
-    Ok(LispValue::Number(val.expect_list()?.len() as f64))
+    if val.is_nil() {
+        Ok(LispValue::Number(0.0))
+    } else {
+        Ok(LispValue::Number(val.expect_list()?.len() as f64))
+    }
 }
 
 pub fn lisp_lt(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -169,7 +179,7 @@ pub fn lisp_gte(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 pub fn lisp_not(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let x = eval(&args[0], env)?.expect_bool()?;
+    let x = eval(&args[0], env)?.truthiness();
     Ok(LispValue::Bool(!x))
 }
 
@@ -427,6 +437,18 @@ pub fn lisp_macroexpand(args: &[LispValue], env: &mut LispEnv) -> Result<LispVal
     expand_macros(&args[0], env)
 }
 
+pub fn lisp_inspect(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
+    // args.len() != 0, so `split_list` isn't `None`
+    let (last, args) = unsafe { args.split_last().unwrap_unchecked() };
+    for val in args.iter() {
+        let val = eval(val, env)?;
+        print!("{} ", val.inspect());
+    }
+    println!("{}", eval(last, env)?.inspect());
+    Ok(LispValue::Nil)
+}
+
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
         ("true".to_owned(), LispValue::Bool(true)),
@@ -479,5 +501,6 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("macro?".to_owned(), LispValue::BuiltinFunc(lisp_macroq)),
         ("defmacro!".to_owned(), LispValue::BuiltinFunc(lisp_defmacro)),
         ("macroexpand".to_owned(), LispValue::BuiltinFunc(lisp_macroexpand)),
+        ("inspect".to_owned(), LispValue::BuiltinFunc(lisp_inspect)),
     ])
 }

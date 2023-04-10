@@ -72,12 +72,6 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("number", self.type_of())),
         }
     }
-    pub fn expect_bool(&self) -> Result<bool> {
-        match self {
-            Self::Bool(b) => Ok(*b),
-            _ => Err(LispError::InvalidDataType("bool", self.type_of())),
-        }
-    }
     pub fn expect_string(&self) -> Result<&str> {
         match self {
             Self::String(s) => Ok(s),
@@ -109,6 +103,14 @@ impl LispValue {
                 args.join(" "),
                 body.to_string()
             ),
+        }
+    }
+    pub fn truthiness(&self) -> bool {
+        match self {
+            Self::Nil => false,
+            Self::Bool(b) => *b,
+            Self::Atom(a) => a.borrow().truthiness(),
+            _ => true,
         }
     }
 }
@@ -165,4 +167,6 @@ pub enum LispError {
     OnlyInQuasiquote,
     #[error("index {0} out of range")]
     IndexOutOfRange(usize),
+    #[error("missing a value for a `let` declaration binding")]
+    MissingBinding,
 }
