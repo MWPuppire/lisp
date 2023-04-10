@@ -29,6 +29,7 @@ pub enum LispValue {
         args: Vec<String>,
         body: Box<LispValue>,
         env: LispEnv,
+        is_macro: bool,
     },
 }
 
@@ -102,7 +103,12 @@ impl LispValue {
             },
             LispValue::BuiltinFunc(_) => format!("#<native function>"),
             LispValue::Atom(x) => format!("(atom {})", x.borrow().inspect()),
-            LispValue::Func { .. } => format!("#<function>")
+            LispValue::Func { args, body, is_macro, .. } => format!(
+                "({} ({}) {})",
+                if *is_macro { "#<macro-fn>" } else { "fn*" },
+                args.join(" "),
+                body.to_string()
+            ),
         }
     }
 }

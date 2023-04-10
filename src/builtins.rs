@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::prelude::*;
-use crate::{LispValue, LispError, Result, expect, env::LispEnv, eval::eval, parser::LispParser};
+use crate::{LispValue, LispError, Result, expect, env::LispEnv, eval::{eval, expand_macros}, parser::LispParser};
 
 fn eval_list_to_numbers(args: &[LispValue], env: &mut LispEnv) -> Result<Vec<f64>> {
     args.iter().map(|x| eval(x, env)?.expect_number()).collect()
@@ -92,6 +92,7 @@ pub fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
         args: param_names,
         body: body,
         env: new_env,
+        is_macro: false,
     })
 }
 
@@ -398,6 +399,34 @@ pub fn lisp_rest(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     }
 }
 
+pub fn lisp_macroq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    match arg {
+        LispValue::Func { is_macro, .. } => Ok(LispValue::Bool(is_macro)),
+        _ => Ok(LispValue::Bool(false)),
+    }
+}
+
+pub fn lisp_defmacro(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let name = args[0].expect_symbol()?;
+    let val = eval(&args[1], env)?;
+    let val = match val {
+        LispValue::Func { args, body, env, .. } => Ok(LispValue::Func {
+            args, body, env, is_macro: true
+        }),
+        _ => Err(LispError::InvalidDataType("function", val.type_of())),
+    }?;
+    env.set(name.to_owned(), val.clone());
+    Ok(val)
+}
+
+pub fn lisp_macroexpand(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    expand_macros(&args[0], env)
+}
+
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
         ("true".to_owned(), LispValue::Bool(true)),
@@ -447,5 +476,8 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("head".to_owned(), LispValue::BuiltinFunc(lisp_first)),
         ("rest".to_owned(), LispValue::BuiltinFunc(lisp_rest)),
         ("tail".to_owned(), LispValue::BuiltinFunc(lisp_rest)),
+        ("macro?".to_owned(), LispValue::BuiltinFunc(lisp_macroq)),
+        ("defmacro!".to_owned(), LispValue::BuiltinFunc(lisp_defmacro)),
+        ("macroexpand".to_owned(), LispValue::BuiltinFunc(lisp_macroexpand)),
     ])
 }
