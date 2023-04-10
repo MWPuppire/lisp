@@ -346,8 +346,18 @@ pub fn lisp_cons(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     let arg2 = eval(&args[1], env)?;
     let list = arg2.expect_list()?;
     let mut new_list = vec![arg1];
-    new_list.append(&mut list.to_owned());
+    new_list.extend_from_slice(list);
     Ok(LispValue::List(new_list))
+}
+
+pub fn lisp_concat(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    let mut out = vec![];
+    for arg in args {
+        let evaled = eval(arg, env)?;
+        let list = evaled.expect_list()?;
+        out.extend_from_slice(list);
+    }
+    Ok(LispValue::List(out))
 }
 
 pub fn create_builtins() -> HashMap<String, LispValue> {
@@ -393,5 +403,6 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("unquote".to_owned(), LispValue::BuiltinFunc(lisp_unquote)),
         ("splice-unquote".to_owned(), LispValue::BuiltinFunc(lisp_unquote)),
         ("cons".to_owned(), LispValue::BuiltinFunc(lisp_cons)),
+        ("concat".to_owned(), LispValue::BuiltinFunc(lisp_concat)),
     ])
 }
