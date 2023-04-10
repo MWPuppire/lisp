@@ -451,9 +451,6 @@ pub fn lisp_inspect(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> 
 
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
-        ("true".to_owned(), LispValue::Bool(true)),
-        ("false".to_owned(), LispValue::Bool(false)),
-        ("nil".to_owned(), LispValue::Nil),
         ("+".to_owned(), LispValue::BuiltinFunc(lisp_plus)),
         ("-".to_owned(), LispValue::BuiltinFunc(lisp_minus)),
         ("*".to_owned(), LispValue::BuiltinFunc(lisp_times)),

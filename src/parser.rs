@@ -128,6 +128,12 @@ impl LispParser {
             } else {
                 Err(LispError::SyntaxError(0, 0))
             }
+        } else if token == "true" {
+            Ok(LispValue::Bool(true))
+        } else if token == "false" {
+            Ok(LispValue::Bool(false))
+        } else if token == "nil" {
+            Ok(LispValue::Nil)
         } else if token.len() != 0 {
             Ok(LispValue::Symbol(token))
         } else {
