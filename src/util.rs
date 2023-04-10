@@ -4,6 +4,15 @@ use std::cell::RefCell;
 use thiserror::Error;
 use crate::env::LispEnv;
 
+#[macro_export]
+macro_rules! expect {
+    ($cond:expr, $err:expr) => {
+        if !$cond {
+            return Err($err);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum LispValue {
     Symbol(String),
@@ -21,6 +30,59 @@ pub enum LispValue {
     },
 }
 
+impl LispValue {
+    pub fn type_of(&self) -> &'static str {
+        match self {
+            Self::Symbol(_) => "symbol",
+            Self::List(_) => "list",
+            Self::BuiltinFunc(_) => "function",
+            Self::String(_) => "string",
+            Self::Number(_) => "number",
+            Self::Bool(_) => "bool",
+            Self::Nil => "nil",
+            Self::Func { .. } => "function",
+            Self::Atom(_) => "atom",
+        }
+    }
+
+    pub fn expect_symbol(&self) -> Result<&str, LispError> {
+        match self {
+            Self::Symbol(s) => Ok(s),
+            _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
+        }
+    }
+    pub fn expect_list(&self) -> Result<&[LispValue], LispError> {
+        match self {
+            Self::List(l) => Ok(&l),
+            _ => Err(LispError::InvalidDataType("list", self.type_of())),
+        }
+    }
+    pub fn expect_atom(&self) -> Result<Rc<RefCell<LispValue>>, LispError> {
+        match self {
+            Self::Atom(x) => Ok(x.clone()),
+            _ => Err(LispError::InvalidDataType("atom", self.type_of())),
+        }
+    }
+    pub fn expect_number(&self) -> Result<f64, LispError> {
+        match self {
+            Self::Number(f) => Ok(*f),
+            _ => Err(LispError::InvalidDataType("number", self.type_of())),
+        }
+    }
+    pub fn expect_bool(&self) -> Result<bool, LispError> {
+        match self {
+            Self::Bool(b) => Ok(*b),
+            _ => Err(LispError::InvalidDataType("bool", self.type_of())),
+        }
+    }
+    pub fn expect_string(&self) -> Result<&str, LispError> {
+        match self {
+            Self::String(s) => Ok(s),
+            _ => Err(LispError::InvalidDataType("string", self.type_of())),
+        }
+    }
+}
+
 impl std::cmp::PartialEq for LispValue {
     fn eq(&self, other: &LispValue) -> bool {
         match (self, other) {
@@ -30,7 +92,7 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::Bool(a), LispValue::Bool(b)) => a == b,
             (LispValue::Nil, LispValue::Nil) => true,
             (LispValue::List(a), LispValue::List(b)) => a == b,
-            (LispValue::Atom(a), LispValue::Atom(b)) => *a == *b,
+            (LispValue::Atom(a), LispValue::Atom(b)) => a == b,
             _ => false,
         }
     }

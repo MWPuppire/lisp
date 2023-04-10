@@ -40,48 +40,6 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
     }
 }
 
-pub fn eval_to_number(value: &LispValue, env: &mut LispEnv) -> Result<f64, LispError> {
-    match value {
-        LispValue::Number(f) => Ok(*f),
-        LispValue::Bool(_) => Err(LispError::InvalidDataType("number", "bool")),
-        LispValue::String(_) => Err(LispError::InvalidDataType("number", "string")),
-        LispValue::Nil => Err(LispError::InvalidDataType("number", "nil")),
-        LispValue::Atom(_) => Err(LispError::InvalidDataType("number", "atom")),
-        LispValue::Func { .. } => Err(LispError::InvalidDataType("number", "function")),
-        LispValue::BuiltinFunc(_) => Err(LispError::InvalidDataType("number", "function")),
-        LispValue::List(l) => {
-            if l.len() == 0 {
-                Err(LispError::InvalidDataType("number", "list"))
-            } else {
-                let head = &l[0];
-                eval_to_number(&eval_list(head, &l[1..], env)?, env)
-            }
-        },
-        LispValue::Symbol(s) => eval_to_number(&lookup_variable(s.clone(), env)?, env),
-    }
-}
-
-pub fn eval_to_bool(value: &LispValue, env: &mut LispEnv) -> Result<bool, LispError> {
-    match value {
-        LispValue::Number(_) => Err(LispError::InvalidDataType("bool", "number")),
-        LispValue::Bool(b) => Ok(*b),
-        LispValue::String(_) => Err(LispError::InvalidDataType("bool", "string")),
-        LispValue::Nil => Err(LispError::InvalidDataType("bool", "nil")),
-        LispValue::Atom(_) => Err(LispError::InvalidDataType("bool", "atom")),
-        LispValue::Func { .. } => Err(LispError::InvalidDataType("bool", "function")),
-        LispValue::BuiltinFunc(_) => Err(LispError::InvalidDataType("bool", "function")),
-        LispValue::List(l) => {
-            if l.len() == 0 {
-                Err(LispError::InvalidDataType("bool", "list"))
-            } else {
-                let head = &l[0];
-                eval_to_bool(&eval_list(head, &l[1..], env)?, env)
-            }
-        },
-        LispValue::Symbol(s) => eval_to_bool(&lookup_variable(s.clone(), env)?, env),
-    }
-}
-
 pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError> {
     match value {
         LispValue::Symbol(s) => lookup_variable(s.clone(), env),
