@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::{LispValue, LispError, env::LispEnv, eval::{eval, eval_to_number, eval_to_bool}};
 
 fn eval_list_to_numbers(args: &[LispValue], env: &mut LispEnv) -> Result<Vec<f64>, LispError> {
@@ -121,18 +122,18 @@ pub fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispE
     Ok(last)
 }
 
-pub fn lisp_fn(args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue, LispError> {
+pub fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
     if args.len() != 2 {
         return Err(LispError::IncorrectArguments(2, args.len()));
     }
     let params = expect_list(&args[0])?;
     let param_names = params.iter().map(|x| expect_symbol(x).map(|s| s.to_owned())).collect::<Result<Vec<String>, LispError>>()?;
     let body = Box::new(args[1].clone());
-    // let new_env = env.new_nested();
+    let new_env = env.new_nested();
     Ok(LispValue::Func {
         args: param_names,
         body: body,
-        // env: new_env,
+        env: new_env,
     })
 }
 
@@ -223,4 +224,32 @@ pub fn lisp_gte(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, Lisp
     let x = eval_to_number(&args[0], env)?;
     let y = eval_to_number(&args[1], env)?;
     Ok(LispValue::Bool(x >= y))
+}
+
+pub fn create_builtins() -> HashMap<String, LispValue> {
+    HashMap::from([
+        ("true".to_owned(), LispValue::Bool(true)),
+        ("false".to_owned(), LispValue::Bool(false)),
+        ("nil".to_owned(), LispValue::Nil),
+        ("+".to_owned(), LispValue::BuiltinFunc(lisp_plus)),
+        ("-".to_owned(), LispValue::BuiltinFunc(lisp_minus)),
+        ("*".to_owned(), LispValue::BuiltinFunc(lisp_times)),
+        ("/".to_owned(), LispValue::BuiltinFunc(lisp_divide)),
+        ("//".to_owned(), LispValue::BuiltinFunc(lisp_int_divide)),
+        ("def!".to_owned(), LispValue::BuiltinFunc(lisp_def)),
+        ("let*".to_owned(), LispValue::BuiltinFunc(lisp_let)),
+        ("if".to_owned(), LispValue::BuiltinFunc(lisp_if)),
+        ("do".to_owned(), LispValue::BuiltinFunc(lisp_do)),
+        ("fn*".to_owned(), LispValue::BuiltinFunc(lisp_fn)),
+        ("=".to_owned(), LispValue::BuiltinFunc(lisp_equals)),
+        ("prn".to_owned(), LispValue::BuiltinFunc(lisp_prn)),
+        ("list".to_owned(), LispValue::BuiltinFunc(lisp_list)),
+        ("list?".to_owned(), LispValue::BuiltinFunc(lisp_listq)),
+        ("empty?".to_owned(), LispValue::BuiltinFunc(lisp_emptyq)),
+        ("count".to_owned(), LispValue::BuiltinFunc(lisp_count)),
+        ("<".to_owned(), LispValue::BuiltinFunc(lisp_lt)),
+        ("<=".to_owned(), LispValue::BuiltinFunc(lisp_lte)),
+        (">".to_owned(), LispValue::BuiltinFunc(lisp_gt)),
+        (">=".to_owned(), LispValue::BuiltinFunc(lisp_gte)),
+    ])
 }

@@ -1,14 +1,14 @@
 use std::iter::zip;
 use crate::{LispValue, LispError, env::LispEnv};
 
-fn lookup_variable<'a>(val: String, env: &'a LispEnv) -> Result<&'a LispValue, LispError> {
+fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue, LispError> {
     env.get(&val).ok_or(LispError::UndefinedVariable(val))
 }
 
 fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
     match head {
         LispValue::Symbol(s) => {
-            let val = lookup_variable(s.clone(), env)?.clone();
+            let val = lookup_variable(s.clone(), env)?;
             eval_list(&val, rest, env)
         },
         LispValue::List(l) => {
@@ -24,17 +24,14 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
         LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
         LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("function", "nil")),
-        LispValue::Func { args, body } => {
+        LispValue::Func { args, body, env: fn_env } => {
             if rest.len() != args.len() {
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
             } else {
-                let mut in_args = Vec::with_capacity(rest.len());
-                for val in rest.iter() {
-                    in_args.push(eval(val, env)?);
-                }
-                let mut fn_env = env.new_nested();
-                for (key, val) in zip(args, in_args) {
-                    fn_env.set(key.to_owned(), val.clone());
+                let mut fn_env = fn_env.clone();
+                for (key, val) in zip(args, rest) {
+                    let val = eval(val, env);
+                    fn_env.set(key.to_owned(), val?.clone());
                 }
                 eval(body, &mut fn_env)
             }
@@ -65,7 +62,7 @@ pub fn eval_to_bool(value: &LispValue, env: &mut LispEnv) -> Result<bool, LispEr
 pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError> {
     match value {
         LispValue::Symbol(s) => {
-            let val = lookup_variable(s.clone(), env)?.clone();
+            let val = lookup_variable(s.clone(), env)?;
             eval(&val, env)
         },
         LispValue::List(l) => {
@@ -77,11 +74,11 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError
             }
         },
         LispValue::BuiltinFunc(f) => f(&[], env),
-        LispValue::Func { args, body } => {
+        LispValue::Func { args, body, env: fn_env } => {
             if args.len() != 0 {
                 Err(LispError::IncorrectArguments(args.len(), 0))
             } else {
-                eval(body, &mut env.new_nested())
+                eval(body, &mut fn_env.clone())
             }
         },
         _ => Ok(value.clone()),
