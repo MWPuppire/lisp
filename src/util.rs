@@ -1,4 +1,6 @@
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 use thiserror::Error;
 use crate::env::LispEnv;
 
@@ -11,6 +13,7 @@ pub enum LispValue {
     Nil,
     List(Vec<LispValue>),
     BuiltinFunc(fn(&[LispValue], &mut LispEnv) -> Result<LispValue, LispError>),
+    Atom(Rc<RefCell<LispValue>>),
     Func {
         args: Vec<String>,
         body: Box<LispValue>,
@@ -27,6 +30,7 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::Bool(a), LispValue::Bool(b)) => a == b,
             (LispValue::Nil, LispValue::Nil) => true,
             (LispValue::List(a), LispValue::List(b)) => a == b,
+            (LispValue::Atom(a), LispValue::Atom(b)) => *a == *b,
             _ => false,
         }
     }
@@ -45,6 +49,7 @@ impl fmt::Display for LispValue {
                 write!(f, "({})", xs.join(" "))
             },
             LispValue::BuiltinFunc(_) => write!(f, "#<native function>"),
+            LispValue::Atom(x) => write!(f, "Atom({})", x.borrow()),
             LispValue::Func { .. } => write!(f, "#<function>"),
         }
     }

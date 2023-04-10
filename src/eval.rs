@@ -24,6 +24,7 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
         LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
         LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("function", "nil")),
+        LispValue::Atom(_) => Err(LispError::InvalidDataType("function", "atom")),
         LispValue::Func { args, body, env: fn_env } => {
             if rest.len() != args.len() {
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
@@ -45,7 +46,18 @@ pub fn eval_to_number(value: &LispValue, env: &mut LispEnv) -> Result<f64, LispE
         LispValue::Bool(_) => Err(LispError::InvalidDataType("number", "bool")),
         LispValue::String(_) => Err(LispError::InvalidDataType("number", "string")),
         LispValue::Nil => Err(LispError::InvalidDataType("number", "nil")),
-        _ => eval_to_number(&eval(value, env)?, env)
+        LispValue::Atom(_) => Err(LispError::InvalidDataType("number", "atom")),
+        LispValue::Func { .. } => Err(LispError::InvalidDataType("number", "function")),
+        LispValue::BuiltinFunc(_) => Err(LispError::InvalidDataType("number", "function")),
+        LispValue::List(l) => {
+            if l.len() == 0 {
+                Err(LispError::InvalidDataType("number", "list"))
+            } else {
+                let head = &l[0];
+                eval_to_number(&eval_list(head, &l[1..], env)?, env)
+            }
+        },
+        LispValue::Symbol(s) => eval_to_number(&lookup_variable(s.clone(), env)?, env),
     }
 }
 
@@ -55,7 +67,18 @@ pub fn eval_to_bool(value: &LispValue, env: &mut LispEnv) -> Result<bool, LispEr
         LispValue::Bool(b) => Ok(*b),
         LispValue::String(_) => Err(LispError::InvalidDataType("bool", "string")),
         LispValue::Nil => Err(LispError::InvalidDataType("bool", "nil")),
-        _ => eval_to_bool(&eval(value, env)?, env)
+        LispValue::Atom(_) => Err(LispError::InvalidDataType("bool", "atom")),
+        LispValue::Func { .. } => Err(LispError::InvalidDataType("bool", "function")),
+        LispValue::BuiltinFunc(_) => Err(LispError::InvalidDataType("bool", "function")),
+        LispValue::List(l) => {
+            if l.len() == 0 {
+                Err(LispError::InvalidDataType("bool", "list"))
+            } else {
+                let head = &l[0];
+                eval_to_bool(&eval_list(head, &l[1..], env)?, env)
+            }
+        },
+        LispValue::Symbol(s) => eval_to_bool(&lookup_variable(s.clone(), env)?, env),
     }
 }
 

@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::cell::RefCell;
 use crate::{LispValue, LispError, env::LispEnv, eval::{eval, eval_to_number, eval_to_bool}};
 
 fn eval_list_to_numbers(args: &[LispValue], env: &mut LispEnv) -> Result<Vec<f64>, LispError> {
@@ -15,6 +17,7 @@ fn expect_symbol(arg: &LispValue) -> Result<&str, LispError> {
         LispValue::Bool(_) => Err(LispError::InvalidDataType("symbol", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("symbol", "nil")),
         LispValue::Func { .. } => Err(LispError::InvalidDataType("symbol", "function")),
+        LispValue::Atom(_) => Err(LispError::InvalidDataType("symbol", "atom")),
     }
 }
 
@@ -28,6 +31,21 @@ fn expect_list(arg: &LispValue) -> Result<&[LispValue], LispError> {
         LispValue::Bool(_) => Err(LispError::InvalidDataType("list", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("list", "nil")),
         LispValue::Func { .. } => Err(LispError::InvalidDataType("list", "function")),
+        LispValue::Atom(_) => Err(LispError::InvalidDataType("list", "atom")),
+    }
+}
+
+fn expect_atom(arg: &LispValue) -> Result<Rc<RefCell<LispValue>>, LispError> {
+    match arg {
+        LispValue::Symbol(_) => Err(LispError::InvalidDataType("atom", "symbol")),
+        LispValue::List(_) => Err(LispError::InvalidDataType("atom", "list")),
+        LispValue::BuiltinFunc(_) => Err(LispError::InvalidDataType("atom", "function")),
+        LispValue::String(_) => Err(LispError::InvalidDataType("atom", "string")),
+        LispValue::Number(_) => Err(LispError::InvalidDataType("atom", "number")),
+        LispValue::Bool(_) => Err(LispError::InvalidDataType("atom", "bool")),
+        LispValue::Nil => Err(LispError::InvalidDataType("atom", "nil")),
+        LispValue::Func { .. } => Err(LispError::InvalidDataType("atom", "function")),
+        LispValue::Atom(x) => Ok(x.clone()),
     }
 }
 
@@ -226,6 +244,73 @@ pub fn lisp_gte(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, Lisp
     Ok(LispValue::Bool(x >= y))
 }
 
+pub fn lisp_not(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let x = eval_to_bool(&args[0], env)?;
+    Ok(LispValue::Bool(!x))
+}
+
+pub fn lisp_atom(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let x = eval(&args[0], env)?;
+    Ok(LispValue::Atom(Rc::new(RefCell::new(x))))
+}
+
+pub fn lisp_atomq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match val {
+        LispValue::Atom(_) => true,
+        _ => false,
+    }))
+}
+
+pub fn lisp_deref(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    let atom = expect_atom(&val)?;
+    let out = atom.borrow().clone();
+    Ok(out)
+}
+
+pub fn lisp_reset(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    let atom = expect_atom(&val)?;
+    let val = eval(&args[1], env)?;
+    *atom.borrow_mut() = val.clone();
+    Ok(val)
+}
+
+pub fn lisp_swap(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    let atom = expect_atom(&val)?;
+    let val = eval(&args[1], env)?;
+    let list = LispValue::List(vec![
+        val,
+        LispValue::List(vec![
+            LispValue::Symbol("deref".to_owned()),
+            LispValue::Atom(atom.clone()),
+        ]),
+    ]);
+    let out_val = eval(&list, env)?;
+    *atom.borrow_mut() = out_val.clone();
+    Ok(out_val)
+}
+
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
         ("true".to_owned(), LispValue::Bool(true)),
@@ -251,5 +336,11 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("<=".to_owned(), LispValue::BuiltinFunc(lisp_lte)),
         (">".to_owned(), LispValue::BuiltinFunc(lisp_gt)),
         (">=".to_owned(), LispValue::BuiltinFunc(lisp_gte)),
+        ("not".to_owned(), LispValue::BuiltinFunc(lisp_not)),
+        ("atom".to_owned(), LispValue::BuiltinFunc(lisp_atom)),
+        ("atomq".to_owned(), LispValue::BuiltinFunc(lisp_atomq)),
+        ("deref".to_owned(), LispValue::BuiltinFunc(lisp_deref)),
+        ("reset!".to_owned(), LispValue::BuiltinFunc(lisp_reset)),
+        ("swap!".to_owned(), LispValue::BuiltinFunc(lisp_swap)),
     ])
 }

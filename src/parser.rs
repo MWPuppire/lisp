@@ -22,7 +22,7 @@ impl LispParser {
     }
     pub fn add_tokenize(&mut self, input: &str) {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
+            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
         }
         let input = input.trim_end();
         if input.len() == 0 {
@@ -84,6 +84,12 @@ impl LispParser {
             } else {
                 Err(LispError::SyntaxError(0, 0))
             }
+        } else if token.starts_with("@") {
+            let name = token[1..].to_owned();
+            Ok(LispValue::List(vec![
+                LispValue::Symbol("deref".to_owned()),
+                LispValue::Symbol(name),
+            ]))
         } else if token.len() != 0 {
             Ok(LispValue::Symbol(token))
         } else {
