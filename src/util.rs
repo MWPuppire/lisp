@@ -83,6 +83,22 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
+    pub fn inspect(&self) -> String {
+        match self {
+            LispValue::Symbol(s) => format!("{}", s),
+            LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
+            LispValue::Number(n) => format!("{}", n),
+            LispValue::Bool(b) => format!("{}", b),
+            LispValue::Nil => format!("nil"),
+            LispValue::List(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
+                format!("'({})", xs.join(" "))
+            },
+            LispValue::BuiltinFunc(_) => format!("#<native function>"),
+            LispValue::Atom(x) => format!("(atom {})", x.borrow().inspect()),
+            LispValue::Func { .. } => format!("#<function>")
+        }
+    }
 }
 
 impl std::cmp::PartialEq for LispValue {
@@ -103,8 +119,8 @@ impl std::cmp::PartialEq for LispValue {
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LispValue::Symbol(s) => write!(f, "Symbol({})", s),
-            LispValue::String(s) => write!(f, r#""{}""#, s),
+            LispValue::Symbol(s) => write!(f, "{}", s),
+            LispValue::String(s) => write!(f, "{}", s),
             LispValue::Number(n) => write!(f, "{}", n),
             LispValue::Bool(b) => write!(f, "{}", b),
             LispValue::Nil => write!(f, "nil"),
@@ -113,7 +129,7 @@ impl fmt::Display for LispValue {
                 write!(f, "({})", xs.join(" "))
             },
             LispValue::BuiltinFunc(_) => write!(f, "#<native function>"),
-            LispValue::Atom(x) => write!(f, "Atom({})", x.borrow()),
+            LispValue::Atom(x) => write!(f, "{}", x.borrow()),
             LispValue::Func { .. } => write!(f, "#<function>"),
         }
     }
@@ -133,4 +149,6 @@ pub enum LispError {
     IncorrectArguments(usize, usize),
     #[error("error calling into native function")]
     OSFailure(#[from] std::io::Error),
+    #[error("`unquote` and `splice-unquote` can only be used inside `quasiquote`")]
+    OnlyInQuasiquote,
 }

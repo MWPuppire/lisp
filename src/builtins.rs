@@ -276,6 +276,80 @@ pub fn lisp_load_file(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue
     Ok(last)
 }
 
+pub fn lisp_typeof(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let x = eval(&args[0], env)?;
+    Ok(LispValue::String(x.type_of().to_owned()))
+}
+
+pub fn lisp_quote(args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    Ok(args[0].clone())
+}
+
+pub fn inner_quasiquote(arg: &LispValue, env: &mut LispEnv) -> Result<(LispValue, bool)> {
+    match arg {
+        LispValue::List(l) => {
+            if l.len() == 0 {
+                Ok((arg.clone(), false))
+            } else if l[0] == LispValue::Symbol("unquote".to_owned()) {
+                expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
+                Ok((eval(&l[1], env)?, false))
+            } else if l[0] == LispValue::Symbol("splice-unquote".to_owned()) {
+                expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
+                Ok((eval(&l[1], env)?, true))
+            } else {
+                let mut out = vec![];
+                for val in l {
+                    let (new_val, inplace) = inner_quasiquote(val, env)?;
+                    if inplace {
+                        out.extend_from_slice(new_val.expect_list()?);
+                    } else {
+                        out.push(new_val);
+                    }
+                }
+                Ok((LispValue::List(out), false))
+            }
+        },
+        _ => Ok((arg.clone(), false)),
+    }
+}
+
+pub fn lisp_quasiquote(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let list = args[0].expect_list()?;
+    if list[0] == LispValue::Symbol("unquote".to_owned()) || list[0] == LispValue::Symbol("splice-unquote".to_owned()) {
+        expect!(list.len() == 2, LispError::IncorrectArguments(1, list.len() - 1));
+        return eval(&list[1], env);
+    }
+    let mut out = vec![];
+    for val in list {
+        let (new_val, inplace) = inner_quasiquote(val, env)?;
+        if inplace {
+            out.extend_from_slice(new_val.expect_list()?);
+        } else {
+            out.push(new_val);
+        }
+    }
+    Ok(LispValue::List(out))
+}
+
+// `lisp_quasiquote` handles the `unquote` and `splice-unquote` methods itself,
+// so this can only be called outside `quasiquote` (which is an error)
+pub fn lisp_unquote(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+    Err(LispError::OnlyInQuasiquote)
+}
+
+pub fn lisp_cons(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let arg1 = eval(&args[0], env)?;
+    let arg2 = eval(&args[1], env)?;
+    let list = arg2.expect_list()?;
+    let mut new_list = vec![arg1];
+    new_list.append(&mut list.to_owned());
+    Ok(LispValue::List(new_list))
+}
+
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
         ("true".to_owned(), LispValue::Bool(true)),
@@ -313,5 +387,11 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("str".to_owned(), LispValue::BuiltinFunc(lisp_str)),
         ("slurp".to_owned(), LispValue::BuiltinFunc(lisp_slurp)),
         ("load-file".to_owned(), LispValue::BuiltinFunc(lisp_load_file)),
+        ("typeof".to_owned(), LispValue::BuiltinFunc(lisp_typeof)),
+        ("quote".to_owned(), LispValue::BuiltinFunc(lisp_quote)),
+        ("quasiquote".to_owned(), LispValue::BuiltinFunc(lisp_quasiquote)),
+        ("unquote".to_owned(), LispValue::BuiltinFunc(lisp_unquote)),
+        ("splice-unquote".to_owned(), LispValue::BuiltinFunc(lisp_unquote)),
+        ("cons".to_owned(), LispValue::BuiltinFunc(lisp_cons)),
     ])
 }

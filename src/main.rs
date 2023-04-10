@@ -49,7 +49,7 @@ fn main() -> std::result::Result<(), anyhow::Error> {
                 buffer = String::new();
                 let out = eval(&parser.next()?, &mut env);
                 match out {
-                    Ok(out) => println!("{}", out),
+                    Ok(out) => println!("{}", out.inspect()),
                     Err(err) => println!("Err: {}", err),
                 }
             } else {

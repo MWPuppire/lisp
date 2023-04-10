@@ -51,7 +51,8 @@ impl LispParser {
         if tokens.len() == 0 {
             return Ok((LispValue::Nil, tokens));
         }
-        let (token, rest) = tokens.split_first().ok_or(LispError::SyntaxError(0, 0))?;
+        // since we test for `tokens.len() == 0`, this has to be `Some`
+        let (token, rest) = unsafe { tokens.split_first().unwrap_unchecked() };
         match token.as_str() {
             "(" => Self::read_list(rest),
             ")" => Err(LispError::SyntaxError(0, 0)),
@@ -59,6 +60,34 @@ impl LispParser {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
                     LispValue::Symbol("deref".to_owned()),
+                    inner,
+                ]), new_rest))
+            },
+            "'" => {
+                let (inner, new_rest) = Self::read_form(rest)?;
+                Ok((LispValue::List(vec![
+                    LispValue::Symbol("quote".to_owned()),
+                    inner,
+                ]), new_rest))
+            },
+            "`" => {
+                let (inner, new_rest) = Self::read_form(rest)?;
+                Ok((LispValue::List(vec![
+                    LispValue::Symbol("quasiquote".to_owned()),
+                    inner,
+                ]), new_rest))
+            },
+            "~" => {
+                let (inner, new_rest) = Self::read_form(rest)?;
+                Ok((LispValue::List(vec![
+                    LispValue::Symbol("unquote".to_owned()),
+                    inner,
+                ]), new_rest))
+            },
+            "~@" => {
+                let (inner, new_rest) = Self::read_form(rest)?;
+                Ok((LispValue::List(vec![
+                    LispValue::Symbol("splice-unquote".to_owned()),
                     inner,
                 ]), new_rest))
             },
