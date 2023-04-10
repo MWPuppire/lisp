@@ -19,6 +19,16 @@ lazy_static! {
         m.insert("if".to_owned(), LispValue::BuiltinFunc(lisp_if));
         m.insert("do".to_owned(), LispValue::BuiltinFunc(lisp_do));
         m.insert("fn*".to_owned(), LispValue::BuiltinFunc(lisp_fn));
+        m.insert("=".to_owned(), LispValue::BuiltinFunc(lisp_equals));
+        m.insert("prn".to_owned(), LispValue::BuiltinFunc(lisp_prn));
+        m.insert("list".to_owned(), LispValue::BuiltinFunc(lisp_list));
+        m.insert("list?".to_owned(), LispValue::BuiltinFunc(lisp_listq));
+        m.insert("empty?".to_owned(), LispValue::BuiltinFunc(lisp_emptyq));
+        m.insert("count".to_owned(), LispValue::BuiltinFunc(lisp_count));
+        m.insert("<".to_owned(), LispValue::BuiltinFunc(lisp_lt));
+        m.insert("<=".to_owned(), LispValue::BuiltinFunc(lisp_lte));
+        m.insert(">".to_owned(), LispValue::BuiltinFunc(lisp_gt));
+        m.insert(">=".to_owned(), LispValue::BuiltinFunc(lisp_gte));
         LispEnv {
             data: m,
             outer: None,

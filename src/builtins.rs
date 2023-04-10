@@ -114,16 +114,16 @@ pub fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispE
     if args.len() < 1 {
         return Err(LispError::IncorrectArguments(1, 0));
     }
-    let mut last = eval(&args[0], env);
+    let mut last = eval(&args[0], env)?;
     for val in args.iter().skip(1) {
-        last = eval(val, env);
+        last = eval(val, env)?;
     }
-    last
+    Ok(last)
 }
 
 pub fn lisp_fn(args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue, LispError> {
-    if args.len() < 2 {
-        return Err(LispError::IncorrectArguments(1, 0));
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
     }
     let params = expect_list(&args[0])?;
     let param_names = params.iter().map(|x| expect_symbol(x).map(|s| s.to_owned())).collect::<Result<Vec<String>, LispError>>()?;
@@ -134,4 +134,93 @@ pub fn lisp_fn(args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue, Lisp
         body: body,
         // env: new_env,
     })
+}
+
+pub fn lisp_equals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let x = eval(&args[0], env)?;
+    let y = eval(&args[1], env)?;
+    Ok(LispValue::Bool(x == y))
+}
+
+pub fn lisp_prn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() < 1 {
+        return Err(LispError::IncorrectArguments(1, 0));
+    }
+    for val in args.iter() {
+        let val = eval(val, env)?;
+        print!("{} ", val);
+    }
+    println!();
+    Ok(LispValue::Nil)
+}
+
+pub fn lisp_list(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    let vals: Vec<LispValue> = args.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>, LispError>>()?;
+    Ok(LispValue::List(vals))
+}
+
+pub fn lisp_listq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match val {
+        LispValue::List(_) => true,
+        _ => false,
+    }))
+}
+
+pub fn lisp_emptyq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    Ok(LispValue::Bool(expect_list(&val)?.len() == 0))
+}
+
+pub fn lisp_count(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 1 {
+        return Err(LispError::IncorrectArguments(1, args.len()));
+    }
+    let val = eval(&args[0], env)?;
+    Ok(LispValue::Number(expect_list(&val)?.len() as f64))
+}
+
+pub fn lisp_lt(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let x = eval_to_number(&args[0], env)?;
+    let y = eval_to_number(&args[1], env)?;
+    Ok(LispValue::Bool(x < y))
+}
+
+pub fn lisp_lte(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let x = eval_to_number(&args[0], env)?;
+    let y = eval_to_number(&args[1], env)?;
+    Ok(LispValue::Bool(x <= y))
+}
+
+pub fn lisp_gt(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let x = eval_to_number(&args[0], env)?;
+    let y = eval_to_number(&args[1], env)?;
+    Ok(LispValue::Bool(x > y))
+}
+
+pub fn lisp_gte(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+    if args.len() != 2 {
+        return Err(LispError::IncorrectArguments(2, args.len()));
+    }
+    let x = eval_to_number(&args[0], env)?;
+    let y = eval_to_number(&args[1], env)?;
+    Ok(LispValue::Bool(x >= y))
 }

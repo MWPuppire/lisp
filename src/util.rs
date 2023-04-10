@@ -18,6 +18,20 @@ pub enum LispValue {
     },
 }
 
+impl std::cmp::PartialEq for LispValue {
+    fn eq(&self, other: &LispValue) -> bool {
+        match (self, other) {
+            (LispValue::Symbol(a), LispValue::Symbol(b)) => a == b,
+            (LispValue::String(a), LispValue::String(b)) => a == b,
+            (LispValue::Number(a), LispValue::Number(b)) => a == b,
+            (LispValue::Bool(a), LispValue::Bool(b)) => a == b,
+            (LispValue::Nil, LispValue::Nil) => true,
+            (LispValue::List(a), LispValue::List(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

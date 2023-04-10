@@ -24,7 +24,7 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
         LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
         LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),
         LispValue::Nil => Err(LispError::InvalidDataType("function", "nil")),
-        LispValue::Func { args: args, body: body } => {
+        LispValue::Func { args, body } => {
             if rest.len() != args.len() {
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
             } else {
@@ -77,7 +77,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError
             }
         },
         LispValue::BuiltinFunc(f) => f(&[], env),
-        LispValue::Func { args: args, body: body } => {
+        LispValue::Func { args, body } => {
             if args.len() != 0 {
                 Err(LispError::IncorrectArguments(args.len(), 0))
             } else {
