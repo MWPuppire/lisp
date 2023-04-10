@@ -105,7 +105,7 @@ impl LispValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
                 format!("'({})", xs.join(" "))
             },
-            LispValue::BuiltinFunc { name, .. } => format!("'{}", name),
+            LispValue::BuiltinFunc { name, .. } => format!("{}", name),
             LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             LispValue::Func { args, body, is_macro, .. } => format!(
                 "({} ({}) {})",
