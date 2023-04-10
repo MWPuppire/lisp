@@ -53,7 +53,7 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
                 eval_list(&eval_list(inner_head, &l[1..], env)?, rest, env)
             }
         },
-        LispValue::BuiltinFunc(f) => f(rest, env),
+        LispValue::BuiltinFunc { f, .. } => f(rest, env),
         LispValue::String(_) => Err(LispError::InvalidDataType("function", "string")),
         LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
         LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),

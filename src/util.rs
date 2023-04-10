@@ -1,6 +1,5 @@
 use std::fmt;
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use crate::env::LispEnv;
 
@@ -23,8 +22,11 @@ pub enum LispValue {
     Bool(bool),
     Nil,
     List(Vec<LispValue>),
-    BuiltinFunc(fn(&[LispValue], &mut LispEnv) -> Result<LispValue>),
-    Atom(Rc<RefCell<LispValue>>),
+    Atom(Arc<RwLock<LispValue>>),
+    BuiltinFunc {
+        name: &'static str,
+        f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>,
+    },
     Func {
         args: Vec<String>,
         body: Box<LispValue>,
@@ -38,7 +40,7 @@ impl LispValue {
         match self {
             Self::Symbol(_) => "symbol",
             Self::List(_) => "list",
-            Self::BuiltinFunc(_) => "function",
+            Self::BuiltinFunc { .. } => "function",
             Self::String(_) => "string",
             Self::Number(_) => "number",
             Self::Bool(_) => "bool",
@@ -60,7 +62,7 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("list", self.type_of())),
         }
     }
-    pub fn expect_atom(&self) -> Result<Rc<RefCell<LispValue>>> {
+    pub fn expect_atom(&self) -> Result<Arc<RwLock<LispValue>>> {
         match self {
             Self::Atom(x) => Ok(x.clone()),
             _ => Err(LispError::InvalidDataType("atom", self.type_of())),
@@ -95,8 +97,8 @@ impl LispValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
                 format!("'({})", xs.join(" "))
             },
-            LispValue::BuiltinFunc(_) => format!("#<native function>"),
-            LispValue::Atom(x) => format!("(atom {})", x.borrow().inspect()),
+            LispValue::BuiltinFunc { name, .. } => format!("'{}", name),
+            LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             LispValue::Func { args, body, is_macro, .. } => format!(
                 "({} ({}) {})",
                 if *is_macro { "#<macro-fn>" } else { "fn*" },
@@ -109,7 +111,7 @@ impl LispValue {
         match self {
             Self::Nil => false,
             Self::Bool(b) => *b,
-            Self::Atom(a) => a.borrow().truthiness(),
+            Self::Atom(a) => a.read().unwrap().truthiness(),
             _ => true,
         }
     }
@@ -124,7 +126,7 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::Bool(a), LispValue::Bool(b)) => a == b,
             (LispValue::Nil, LispValue::Nil) => true,
             (LispValue::List(a), LispValue::List(b)) => a == b,
-            (LispValue::Atom(a), LispValue::Atom(b)) => a == b,
+            (LispValue::Atom(a), LispValue::Atom(b)) => *a.read().unwrap() == *b.read().unwrap(),
             _ => false,
         }
     }
@@ -142,8 +144,8 @@ impl fmt::Display for LispValue {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "({})", xs.join(" "))
             },
-            LispValue::BuiltinFunc(_) => write!(f, "#<native function>"),
-            LispValue::Atom(x) => write!(f, "{}", x.borrow()),
+            LispValue::BuiltinFunc { .. } => write!(f, "#<native function>"),
+            LispValue::Atom(x) => write!(f, "{}", x.read().unwrap()),
             LispValue::Func { .. } => write!(f, "#<function>"),
         }
     }
@@ -169,4 +171,10 @@ pub enum LispError {
     IndexOutOfRange(usize),
     #[error("missing a value for a `let` declaration binding")]
     MissingBinding,
+    // #[error("uncaught exception: {0}")]
+    // UncaughtException(LispValue),
+    #[error("`catch` can only be used inside `try`")]
+    OnlyInTry,
+    #[error("missing `catch` block for a `try`")]
+    TryNoCatch,
 }

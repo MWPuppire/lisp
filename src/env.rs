@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::cell::RefCell;
-use crate::{LispValue, Result, builtins::create_builtins};
+use std::sync::{Arc, RwLock};
+use lazy_static::lazy_static;
+use crate::{LispValue, Result, builtins::add_builtins};
 
 struct InnerEnv {
     data: HashMap<String, LispValue>,
@@ -10,35 +10,37 @@ struct InnerEnv {
 
 #[derive(Clone)]
 pub struct LispEnv {
-    inner: Rc<RefCell<InnerEnv>>,
+    inner: Arc<RwLock<InnerEnv>>,
+}
+
+lazy_static! {
+    static ref BUILTINS: LispEnv = {
+        let mut m = LispEnv::new_empty();
+        add_builtins(&mut m);
+        m
+    };
 }
 
 impl LispEnv {
     pub fn new_empty() -> LispEnv {
         LispEnv {
-            inner: Rc::new(RefCell::new(InnerEnv {
+            inner: Arc::new(RwLock::new(InnerEnv {
                 data: HashMap::new(),
                 enclosing: None,
             })),
         }
     }
     pub fn new_stdlib() -> LispEnv {
-        let builtins = LispEnv {
-            inner: Rc::new(RefCell::new(InnerEnv {
-                data: create_builtins(),
-                enclosing: None,
-            })),
-        };
         LispEnv {
-            inner: Rc::new(RefCell::new(InnerEnv {
+            inner: Arc::new(RwLock::new(InnerEnv {
                 data: HashMap::new(),
-                enclosing: Some(builtins),
+                enclosing: Some(BUILTINS.clone()),
             })),
         }
     }
     pub fn closure(&self) -> LispEnv {
         LispEnv {
-            inner: Rc::new(RefCell::new(InnerEnv {
+            inner: Arc::new(RwLock::new(InnerEnv {
                 data: HashMap::new(),
                 enclosing: Some(self.clone()),
             })),
@@ -47,23 +49,23 @@ impl LispEnv {
     pub fn get(&self, key: &str) -> Option<LispValue> {
         // since `find()` succeeded, the `get()` must resolve successfully,
         // so `unwrap_unchecked` is safe
-        self.find(key).map(|env| unsafe { env.borrow().data.get(key).unwrap_unchecked().clone() })
+        self.find(key).map(|env| unsafe { env.read().unwrap().data.get(key).unwrap_unchecked().clone() })
     }
     pub fn set(&mut self, key: String, val: LispValue) {
         // can't assign to an outer value
-        self.inner.borrow_mut().data.insert(key, val);
+        self.inner.write().unwrap().data.insert(key, val);
     }
-    pub fn bind_func(&mut self, name: &str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
-        let val = LispValue::BuiltinFunc(f);
-        self.inner.borrow_mut().data.insert(name.to_owned(), val);
+    pub fn bind_func(&mut self, name: &'static str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
+        let val = LispValue::BuiltinFunc { name, f };
+        self.inner.write().unwrap().data.insert(name.to_owned(), val);
     }
-    fn find(&self, key: &str) -> Option<Rc<RefCell<InnerEnv>>> {
+    fn find(&self, key: &str) -> Option<Arc<RwLock<InnerEnv>>> {
         let mut env = Some(self.inner.clone());
         while let Some(inner) = env {
-            if inner.borrow().data.contains_key(key) {
+            if inner.read().unwrap().data.contains_key(key) {
                 return Some(inner);
             } else {
-                env = inner.borrow().enclosing.clone().map(|x| x.inner);
+                env = inner.read().unwrap().enclosing.clone().map(|x| x.inner);
             }
         }
         None

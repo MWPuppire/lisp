@@ -1,7 +1,6 @@
 extern crate lazy_static;
 extern crate regex;
 extern crate thiserror;
-extern crate anyhow;
 extern crate rustyline;
 extern crate unescape;
 
@@ -18,8 +17,8 @@ pub mod env;
 use crate::env::LispEnv;
 pub mod builtins;
 
-fn main() -> std::result::Result<(), anyhow::Error> {
-    let mut rl = rustyline::DefaultEditor::new()?;
+fn main() -> Result<()> {
+    let mut rl = rustyline::DefaultEditor::new().unwrap();
 
     let mut parser = LispParser::new();
     let mut env = LispEnv::new_stdlib();
@@ -45,7 +44,7 @@ fn main() -> std::result::Result<(), anyhow::Error> {
             parser.add_tokenize(&line);
             complete = parser.is_complete();
             if complete {
-                rl.add_history_entry(buffer + &line)?;
+                rl.add_history_entry(buffer + &line).unwrap();
                 buffer = String::new();
                 let out = eval(&parser.next()?, &mut env);
                 match out {
