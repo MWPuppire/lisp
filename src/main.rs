@@ -47,12 +47,15 @@ fn main() -> Result<()> {
                 rl.add_history_entry(buffer + &line).unwrap();
                 buffer = String::new();
                 while parser.has_tokens() {
-                    let out = eval(&parser.next()?, &mut env);
-                    match out {
-                        Ok(out) => println!("{}", out.inspect()),
+                    match parser.next() {
+                        Ok(tok) => match eval(&tok, &mut env) {
+                            Ok(out) => println!("{}", out.inspect()),
+                            Err(err) => println!("Err: {}", err),
+                        },
                         Err(err) => println!("Err: {}", err),
                     }
                 }
+                parser.next_line();
             } else {
                 buffer = buffer + &line + "\n";
             }
