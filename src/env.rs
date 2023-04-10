@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::{LispValue, builtins::create_builtins};
+use crate::{LispValue, Result, builtins::create_builtins};
 
 struct InnerEnv {
     data: HashMap<String, LispValue>,
@@ -14,7 +14,15 @@ pub struct LispEnv {
 }
 
 impl LispEnv {
-    pub fn new_builtin() -> LispEnv {
+    pub fn new_empty() -> LispEnv {
+        LispEnv {
+            inner: Rc::new(RefCell::new(InnerEnv {
+                data: HashMap::new(),
+                enclosing: None,
+            })),
+        }
+    }
+    pub fn new_stdlib() -> LispEnv {
         let builtins = LispEnv {
             inner: Rc::new(RefCell::new(InnerEnv {
                 data: create_builtins(),
@@ -28,7 +36,7 @@ impl LispEnv {
             })),
         }
     }
-    pub fn new_nested(&self) -> LispEnv {
+    pub fn closure(&self) -> LispEnv {
         LispEnv {
             inner: Rc::new(RefCell::new(InnerEnv {
                 data: HashMap::new(),
@@ -44,6 +52,10 @@ impl LispEnv {
     pub fn set(&mut self, key: String, val: LispValue) {
         // can't assign to an outer value
         self.inner.borrow_mut().data.insert(key, val);
+    }
+    pub fn bind_func(&mut self, name: &str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
+        let val = LispValue::BuiltinFunc(f);
+        self.inner.borrow_mut().data.insert(name.to_owned(), val);
     }
     fn find(&self, key: &str) -> Option<Rc<RefCell<InnerEnv>>> {
         let mut env = Some(self.inner.clone());

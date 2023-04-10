@@ -13,6 +13,8 @@ macro_rules! expect {
     }
 }
 
+pub type Result<T> = std::result::Result<T, LispError>;
+
 #[derive(Clone)]
 pub enum LispValue {
     Symbol(String),
@@ -21,7 +23,7 @@ pub enum LispValue {
     Bool(bool),
     Nil,
     List(Vec<LispValue>),
-    BuiltinFunc(fn(&[LispValue], &mut LispEnv) -> Result<LispValue, LispError>),
+    BuiltinFunc(fn(&[LispValue], &mut LispEnv) -> Result<LispValue>),
     Atom(Rc<RefCell<LispValue>>),
     Func {
         args: Vec<String>,
@@ -45,37 +47,37 @@ impl LispValue {
         }
     }
 
-    pub fn expect_symbol(&self) -> Result<&str, LispError> {
+    pub fn expect_symbol(&self) -> Result<&str> {
         match self {
             Self::Symbol(s) => Ok(s),
             _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
         }
     }
-    pub fn expect_list(&self) -> Result<&[LispValue], LispError> {
+    pub fn expect_list(&self) -> Result<&[LispValue]> {
         match self {
             Self::List(l) => Ok(&l),
             _ => Err(LispError::InvalidDataType("list", self.type_of())),
         }
     }
-    pub fn expect_atom(&self) -> Result<Rc<RefCell<LispValue>>, LispError> {
+    pub fn expect_atom(&self) -> Result<Rc<RefCell<LispValue>>> {
         match self {
             Self::Atom(x) => Ok(x.clone()),
             _ => Err(LispError::InvalidDataType("atom", self.type_of())),
         }
     }
-    pub fn expect_number(&self) -> Result<f64, LispError> {
+    pub fn expect_number(&self) -> Result<f64> {
         match self {
             Self::Number(f) => Ok(*f),
             _ => Err(LispError::InvalidDataType("number", self.type_of())),
         }
     }
-    pub fn expect_bool(&self) -> Result<bool, LispError> {
+    pub fn expect_bool(&self) -> Result<bool> {
         match self {
             Self::Bool(b) => Ok(*b),
             _ => Err(LispError::InvalidDataType("bool", self.type_of())),
         }
     }
-    pub fn expect_string(&self) -> Result<&str, LispError> {
+    pub fn expect_string(&self) -> Result<&str> {
         match self {
             Self::String(s) => Ok(s),
             _ => Err(LispError::InvalidDataType("string", self.type_of())),

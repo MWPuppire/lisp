@@ -1,11 +1,11 @@
 use std::iter::zip;
-use crate::{LispValue, LispError, env::LispEnv};
+use crate::{LispValue, LispError, Result, env::LispEnv};
 
-fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue, LispError> {
+fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
     env.get(&val).ok_or(LispError::UndefinedVariable(val))
 }
 
-fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<LispValue, LispError> {
+fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     match head {
         LispValue::Symbol(s) => {
             let val = lookup_variable(s.clone(), env)?;
@@ -40,7 +40,7 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
     }
 }
 
-pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError> {
+pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     match value {
         LispValue::Symbol(s) => lookup_variable(s.clone(), env),
         LispValue::List(l) => {

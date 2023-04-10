@@ -1,6 +1,7 @@
 use regex::Regex;
 use lazy_static::lazy_static;
-use crate::{LispValue, LispError};
+use unescape::unescape;
+use crate::{LispValue, LispError, Result};
 
 pub struct LispParser {
     tokens: Vec<String>,
@@ -18,6 +19,9 @@ impl LispParser {
             Err(_) => true,
         }
     }
+    pub fn has_tokens(&self) -> bool {
+        self.tokens.len() > 0
+    }
     pub fn add_tokenize(&mut self, input: &str) {
         lazy_static! {
             static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
@@ -33,17 +37,17 @@ impl LispParser {
             self.tokens.push(found.trim_start().to_owned());
         }
     }
-    pub fn next(&mut self) -> Result<LispValue, LispError> {
+    pub fn next(&mut self) -> Result<LispValue> {
         let (val, rest) = Self::read_form(&self.tokens)?;
         let idx = self.tokens.len() - rest.len();
         let _ = self.tokens.drain(0..idx);
         Ok(val)
     }
-    pub fn peek(&self) -> Result<LispValue, LispError> {
+    pub fn peek(&self) -> Result<LispValue> {
         let (val, _) = Self::read_form(&self.tokens)?;
         Ok(val)
     }
-    fn read_form<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
+    fn read_form<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String])> {
         if tokens.len() == 0 {
             return Ok((LispValue::Nil, tokens));
         }
@@ -61,7 +65,7 @@ impl LispParser {
             _ => Ok((Self::read_atom(token.clone())?, rest)),
         }
     }
-    fn read_list<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
+    fn read_list<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String])> {
         let mut res: Vec<LispValue> = vec![];
         let mut xs = tokens;
         loop {
@@ -77,7 +81,7 @@ impl LispParser {
             xs = new_xs;
         }
     }
-    fn read_atom(token: String) -> Result<LispValue, LispError> {
+    fn read_atom(token: String) -> Result<LispValue> {
         if token.starts_with(";") {
             // comment
             Ok(LispValue::Nil)
@@ -86,7 +90,12 @@ impl LispParser {
         } else if token.starts_with("\"") {
             if token.ends_with("\"") {
                 let last = token.len() - 1;
-                Ok(LispValue::String(token[1..last].to_owned()))
+                let unescaped = unescape(&token[1..last]);
+                if let Some(s) = unescaped {
+                    Ok(LispValue::String(s))
+                } else {
+                    Err(LispError::SyntaxError(0, 0))
+                }
             } else {
                 Err(LispError::SyntaxError(0, 0))
             }
