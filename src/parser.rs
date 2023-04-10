@@ -4,13 +4,11 @@ use crate::{LispValue, LispError};
 
 pub struct LispParser {
     tokens: Vec<String>,
-    idx: usize,
 }
 impl LispParser {
     pub fn new() -> Self {
         LispParser {
             tokens: vec![],
-            idx: 0,
         }
     }
     pub fn is_complete(&self) -> bool {
@@ -22,7 +20,7 @@ impl LispParser {
     }
     pub fn add_tokenize(&mut self, input: &str) {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
+            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
         }
         let input = input.trim_end();
         if input.len() == 0 {
@@ -36,12 +34,13 @@ impl LispParser {
         }
     }
     pub fn next(&mut self) -> Result<LispValue, LispError> {
-        let (val, rest) = Self::read_form(&self.tokens[self.idx..])?;
-        self.idx = self.tokens.len() - rest.len();
+        let (val, rest) = Self::read_form(&self.tokens)?;
+        let idx = self.tokens.len() - rest.len();
+        let _ = self.tokens.drain(0..idx);
         Ok(val)
     }
     pub fn peek(&self) -> Result<LispValue, LispError> {
-        let (val, _) = Self::read_form(&self.tokens[self.idx..])?;
+        let (val, _) = Self::read_form(&self.tokens)?;
         Ok(val)
     }
     fn read_form<'a>(tokens: &'a [String]) -> Result<(LispValue, &'a [String]), LispError> {
@@ -52,6 +51,13 @@ impl LispParser {
         match token.as_str() {
             "(" => Self::read_list(rest),
             ")" => Err(LispError::SyntaxError(0, 0)),
+            "@" => {
+                let (inner, new_rest) = Self::read_form(rest)?;
+                Ok((LispValue::List(vec![
+                    LispValue::Symbol("deref".to_owned()),
+                    inner,
+                ]), new_rest))
+            },
             _ => Ok((Self::read_atom(token.clone())?, rest)),
         }
     }
@@ -84,12 +90,6 @@ impl LispParser {
             } else {
                 Err(LispError::SyntaxError(0, 0))
             }
-        } else if token.starts_with("@") {
-            let name = token[1..].to_owned();
-            Ok(LispValue::List(vec![
-                LispValue::Symbol("deref".to_owned()),
-                LispValue::Symbol(name),
-            ]))
         } else if token.len() != 0 {
             Ok(LispValue::Symbol(token))
         } else {

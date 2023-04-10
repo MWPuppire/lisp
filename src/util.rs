@@ -67,4 +67,6 @@ pub enum LispError {
     InvalidDataType(&'static str, &'static str),
     #[error("unexpected arguments. expected {0}, received {1}")]
     IncorrectArguments(usize, usize),
+    #[error("error calling into native function")]
+    OSFailure(#[from] std::io::Error),
 }

@@ -35,7 +35,7 @@ fn main() -> Result<(), anyhow::Error> {
                     Err(err) => println!("Err: {}", err),
                 }
             } else {
-                buffer = buffer + &line;
+                buffer = buffer + &line + "\n";
             }
         } else {
             // eof

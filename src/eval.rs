@@ -84,10 +84,7 @@ pub fn eval_to_bool(value: &LispValue, env: &mut LispEnv) -> Result<bool, LispEr
 
 pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError> {
     match value {
-        LispValue::Symbol(s) => {
-            let val = lookup_variable(s.clone(), env)?;
-            eval(&val, env)
-        },
+        LispValue::Symbol(s) => lookup_variable(s.clone(), env),
         LispValue::List(l) => {
             if l.len() == 0 {
                 Ok(LispValue::List(vec![]))
