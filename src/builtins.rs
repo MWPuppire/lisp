@@ -360,6 +360,44 @@ pub fn lisp_concat(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::List(out))
 }
 
+pub fn lisp_nth(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let arg1 = eval(&args[0], env)?;
+    let arg2 = eval(&args[1], env)?;
+    let list = arg1.expect_list()?;
+    let idx = arg2.expect_number()? as usize;
+    expect!(list.len() > idx, LispError::IndexOutOfRange(idx));
+    Ok(list[idx].clone())
+}
+
+pub fn lisp_first(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    if arg.is_nil() {
+        return Ok(LispValue::Nil);
+    }
+    let list = arg.expect_list()?;
+    if list.len() == 0 {
+        Ok(LispValue::Nil)
+    } else {
+        Ok(list[0].clone())
+    }
+}
+
+pub fn lisp_rest(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    if arg.is_nil() {
+        return Ok(LispValue::List(vec![]));
+    }
+    let list = arg.expect_list()?;
+    if list.len() < 2 {
+        Ok(LispValue::List(vec![]))
+    } else {
+        Ok(LispValue::List(list[1..].to_owned()))
+    }
+}
+
 pub fn create_builtins() -> HashMap<String, LispValue> {
     HashMap::from([
         ("true".to_owned(), LispValue::Bool(true)),
@@ -404,5 +442,10 @@ pub fn create_builtins() -> HashMap<String, LispValue> {
         ("splice-unquote".to_owned(), LispValue::BuiltinFunc(lisp_unquote)),
         ("cons".to_owned(), LispValue::BuiltinFunc(lisp_cons)),
         ("concat".to_owned(), LispValue::BuiltinFunc(lisp_concat)),
+        ("nth".to_owned(), LispValue::BuiltinFunc(lisp_nth)),
+        ("first".to_owned(), LispValue::BuiltinFunc(lisp_first)),
+        ("head".to_owned(), LispValue::BuiltinFunc(lisp_first)),
+        ("rest".to_owned(), LispValue::BuiltinFunc(lisp_rest)),
+        ("tail".to_owned(), LispValue::BuiltinFunc(lisp_rest)),
     ])
 }

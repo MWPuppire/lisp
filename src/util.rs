@@ -83,6 +83,12 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
+    pub fn is_nil(&self) -> bool {
+        match self {
+            Self::Nil => true,
+            _ => false,
+        }
+    }
     pub fn inspect(&self) -> String {
         match self {
             LispValue::Symbol(s) => format!("{}", s),
@@ -151,4 +157,6 @@ pub enum LispError {
     OSFailure(#[from] std::io::Error),
     #[error("`unquote` and `splice-unquote` can only be used inside `quasiquote`")]
     OnlyInQuasiquote,
+    #[error("index {0} out of range")]
+    IndexOutOfRange(usize),
 }
