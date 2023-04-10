@@ -73,14 +73,6 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue, LispError
                 eval_list(head, &l[1..], env)
             }
         },
-        LispValue::BuiltinFunc(f) => f(&[], env),
-        LispValue::Func { args, body, env: fn_env } => {
-            if args.len() != 0 {
-                Err(LispError::IncorrectArguments(args.len(), 0))
-            } else {
-                eval(body, &mut fn_env.clone())
-            }
-        },
         _ => Ok(value.clone()),
     }
 }
