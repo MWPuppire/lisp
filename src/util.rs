@@ -133,7 +133,7 @@ impl LispValue {
             },
             LispValue::Map(m) => {
                 let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect_inner() + " " + &val.inspect_inner()
+                    key.inspect_inner() + " '" + &val.inspect_inner()
                 ).collect();
                 format!("'{{{}}}", xs.join(" "))
             },

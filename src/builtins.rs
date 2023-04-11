@@ -848,6 +848,9 @@ lazy_static! {
         Instant::now()
     };
     pub static ref BUILTINS: HashMap<String, LispValue> = {
+        // dummy to make `time-ms` count from environment (so probably program)
+        // initialization rather than since the first `time-ms` call
+        let _ = *START_TIME;
         hashmap!{
             "+".to_owned() => lisp_func!("+", lisp_plus),
             "-".to_owned() => lisp_func!("-", lisp_minus),

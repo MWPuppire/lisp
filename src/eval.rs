@@ -90,8 +90,8 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
 pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     let value = expand_macros(value, env)?;
     match value {
-        LispValue::Symbol(s) => lookup_variable(s.clone(), env),
-        LispValue::VariadicSymbol(s) => lookup_variable(s.clone(), env),
+        LispValue::Symbol(s) => lookup_variable(s, env),
+        LispValue::VariadicSymbol(s) => lookup_variable(s, env),
         LispValue::List(l) => {
             if l.len() == 0 {
                 Ok(LispValue::List(vec![]))
@@ -103,6 +103,9 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
         LispValue::Vector(l) => {
             Ok(LispValue::Vector(l.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?))
         },
-        _ => Ok(value.clone()),
+        LispValue::Map(m) => {
+            Ok(LispValue::Map(m.iter().map(|(key, val)| Ok((key.clone(), eval(val, env)?))).collect::<Result<Vec<(LispValue, LispValue)>>>()?.into()))
+        },
+        x => Ok(x),
     }
 }
