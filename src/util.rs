@@ -1,6 +1,7 @@
 use std::fmt;
 use std::hash;
 use std::sync::{Arc, RwLock};
+use std::collections::VecDeque;
 use thiserror::Error;
 use im::HashMap;
 use crate::env::{LispEnv, LispClosure};
@@ -16,11 +17,11 @@ macro_rules! expect {
 
 pub type Result<T> = std::result::Result<T, LispError>;
 
-#[derive(Clone)]
-pub struct ExternLispFunc(pub fn(&[LispValue], &mut LispEnv) -> Result<LispValue>);
+#[derive(Clone, Copy)]
+pub struct ExternLispFunc(pub fn(VecDeque<LispValue>, &mut LispEnv) -> Result<LispValue>);
 impl fmt::Debug for ExternLispFunc {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Ok(())
+    fn fmt<'a>(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.0 as fn(VecDeque<LispValue>, &'a mut LispEnv) -> Result<LispValue>).fmt(f)
     }
 }
 
@@ -42,7 +43,7 @@ pub enum LispValue {
     Number(f64),
     Bool(bool),
     Nil,
-    List(Vec<LispValue>),
+    List(VecDeque<LispValue>),
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
@@ -79,19 +80,6 @@ impl LispValue {
             Self::Symbol(s) => Ok(s),
             Self::VariadicSymbol(s) => Ok(s),
             _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
-        }
-    }
-    pub fn expect_list(&self) -> Result<&[LispValue]> {
-        match self {
-            Self::List(l) => Ok(&l),
-            _ => Err(LispError::InvalidDataType("list", self.type_of())),
-        }
-    }
-    pub fn expect_list_or_vec(&self) -> Result<&[LispValue]> {
-        match self {
-            Self::List(l) => Ok(&l),
-            Self::Vector(l) => Ok(&l),
-            _ => Err(LispError::InvalidDataType("list", self.type_of())),
         }
     }
     pub fn expect_hashmap(&self) -> Result<&HashMap<LispValue, LispValue>> {
@@ -183,6 +171,20 @@ impl LispValue {
             Self::Bool(b) => *b,
             Self::Atom(a) => a.read().unwrap().truthiness(),
             _ => true,
+        }
+    }
+    pub fn into_list(self) -> Result<VecDeque<LispValue>> {
+        match self {
+            Self::List(l) => Ok(l),
+            Self::Vector(l) => Ok(VecDeque::from(l)),
+            x => Err(LispError::InvalidDataType("list", x.type_of())),
+        }
+    }
+    pub fn into_symbol(self) -> Result<String> {
+        match self {
+            Self::Symbol(s) => Ok(s),
+            Self::VariadicSymbol(s) => Ok(s),
+            x => Err(LispError::InvalidDataType("symbol", x.type_of())),
         }
     }
 }

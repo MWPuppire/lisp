@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use im::HashMap;
 use crate::{LispValue, Result, builtins::BUILTINS};
 
@@ -65,7 +66,7 @@ impl LispEnv {
         self.data.insert(key, val);
         true
     }
-    pub fn bind_func(&mut self, name: &'static str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
+    pub fn bind_func(&mut self, name: &'static str, f: fn(VecDeque<LispValue>, &mut LispEnv) -> Result<LispValue>) {
         let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };
         self.data.insert(name.to_owned(), val);
     }
