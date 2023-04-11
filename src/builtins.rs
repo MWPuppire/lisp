@@ -280,7 +280,8 @@ fn lisp_swap(mut args: VecDeque<LispValue>, env: &mut LispEnv) -> Result<LispVal
 fn lisp_eval(args: VecDeque<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval(&args[0], env)?;
-    eval(&arg, env)
+    let mut global = env.global();
+    eval(&arg, &mut global)
 }
 
 fn lisp_readline(args: VecDeque<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -339,8 +340,9 @@ fn lisp_load_file(args: VecDeque<LispValue>, env: &mut LispEnv) -> Result<LispVa
     let mut parser = LispParser::new();
     f.read_to_string(&mut buffer)?;
     parser.add_tokenize(&buffer);
+    let mut global = env.global();
     while parser.has_tokens() {
-        eval(&parser.next()?, env)?;
+        eval(&parser.next()?, &mut global)?;
     }
     Ok(LispValue::Nil)
 }

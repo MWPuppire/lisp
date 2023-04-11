@@ -8,6 +8,7 @@ use crate::{LispValue, Result, builtins::BUILTINS};
 #[derive(Clone, Debug)]
 struct InnerEnv {
     data: HashMap<String, LispValue>,
+    global: Option<LispEnv>,
     enclosing: Option<LispEnv>,
 }
 
@@ -15,9 +16,12 @@ struct InnerEnv {
 pub struct LispClosure(LispEnv);
 impl LispClosure {
     pub fn make_env(&self, args: &[(String, LispValue)]) -> LispEnv {
+        let enclosing = self.0.clone();
+        let global = enclosing.global();
         let inner = InnerEnv {
             data: args.into(),
-            enclosing: Some(self.0.clone()),
+            enclosing: Some(enclosing),
+            global: Some(global),
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -36,6 +40,7 @@ lazy_static! {
         let inner = InnerEnv {
             data: BUILTINS.clone(),
             enclosing: None,
+            global: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
@@ -46,6 +51,7 @@ impl LispEnv {
         let inner = InnerEnv {
             data: HashMap::new(),
             enclosing: None,
+            global: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -53,6 +59,7 @@ impl LispEnv {
         let inner = InnerEnv {
             data: HashMap::new(),
             enclosing: Some(BUILTIN_ENV.clone()),
+            global: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -60,6 +67,7 @@ impl LispEnv {
         let inner = InnerEnv {
             data: HashMap::new(),
             enclosing: Some(self.clone()),
+            global: Some(self.global()),
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -72,6 +80,15 @@ impl LispEnv {
     pub fn make_closure(&self) -> LispClosure {
         LispClosure(self.clone())
     }
+    pub fn global(&self) -> LispEnv {
+        let lock = self.0.read().unwrap();
+        if let Some(env) = &lock.global {
+            env.clone()
+        } else {
+            self.clone()
+        }
+    }
+
     pub fn get(&self, key: &str) -> Option<LispValue> {
         let mut env = Some(self.clone());
         while let Some(inner) = env {
