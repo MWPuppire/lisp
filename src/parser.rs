@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
 use regex::Regex;
 use lazy_static::lazy_static;
 use unescape::unescape;
+use im::{vector, Vector};
 use crate::{LispValue, LispError, Result};
 
 struct LispToken {
@@ -123,35 +123,35 @@ impl LispParser {
             Some('}') => Err(LispError::SyntaxError(*row, *col)),
             Some('@') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
-                Ok((LispValue::List(VecDeque::from([
+                Ok((LispValue::List(vector![
                     LispValue::Symbol("deref".to_owned()),
                     inner,
-                ])), new_rest))
+                ]), new_rest))
             },
             Some('\'') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
-                Ok((LispValue::List(VecDeque::from([
+                Ok((LispValue::List(vector![
                     LispValue::Symbol("quote".to_owned()),
                     inner,
-                ])), new_rest))
+                ]), new_rest))
             },
             Some('`') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
-                Ok((LispValue::List(VecDeque::from([
+                Ok((LispValue::List(vector![
                     LispValue::Symbol("quasiquote".to_owned()),
                     inner,
-                ])), new_rest))
+                ]), new_rest))
             },
             Some('~') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
-                Ok((LispValue::List(VecDeque::from([
+                Ok((LispValue::List(vector![
                     LispValue::Symbol(if token == "~@" {
                         "splice-unquote".to_owned()
                     } else {
                         "unquote".to_owned()
                     }),
                     inner,
-                ])), new_rest))
+                ]), new_rest))
             },
             Some('&') => {
                 let (name, new_rest) = Self::read_form(rest)?;
@@ -168,7 +168,7 @@ impl LispParser {
         }
     }
     fn read_list<'a>(tokens: &'a [LispToken]) -> Result<(LispValue, &'a [LispToken])> {
-        let mut res = VecDeque::new();
+        let mut res = Vector::new();
         let mut xs = tokens;
         loop {
             let (LispToken { token, .. }, rest) = xs.split_first().ok_or(LispError::UnbalancedDelim(1, ")"))?;

@@ -1,9 +1,8 @@
 use std::fmt;
 use std::hash;
 use std::sync::{Arc, RwLock};
-use std::collections::VecDeque;
 use thiserror::Error;
-use im::HashMap;
+use im::{HashMap, Vector};
 use crate::env::{LispEnv, LispClosure};
 
 #[macro_export]
@@ -18,10 +17,10 @@ macro_rules! expect {
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Copy)]
-pub struct ExternLispFunc(pub fn(VecDeque<LispValue>, &mut LispEnv) -> Result<LispValue>);
+pub struct ExternLispFunc(pub fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>);
 impl fmt::Debug for ExternLispFunc {
     fn fmt<'a>(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        (self.0 as fn(VecDeque<LispValue>, &'a mut LispEnv) -> Result<LispValue>).fmt(f)
+        (self.0 as fn(Vector<LispValue>, &'a mut LispEnv) -> Result<LispValue>).fmt(f)
     }
 }
 
@@ -43,7 +42,7 @@ pub enum LispValue {
     Number(f64),
     Bool(bool),
     Nil,
-    List(VecDeque<LispValue>),
+    List(Vector<LispValue>),
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
@@ -173,10 +172,10 @@ impl LispValue {
             _ => true,
         }
     }
-    pub fn into_list(self) -> Result<VecDeque<LispValue>> {
+    pub fn into_list(self) -> Result<Vector<LispValue>> {
         match self {
             Self::List(l) => Ok(l),
-            Self::Vector(l) => Ok(VecDeque::from(l)),
+            Self::Vector(l) => Ok(Vector::from(l)),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
         }
     }

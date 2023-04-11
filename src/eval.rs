@@ -1,5 +1,5 @@
 use std::iter::zip;
-use std::collections::VecDeque;
+use im::Vector;
 use crate::{LispValue, LispError, Result, env::LispEnv};
 
 fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
@@ -41,7 +41,7 @@ pub fn expand_macros(val: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(out)
 }
 
-fn eval_list(head: LispValue, rest: VecDeque<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn eval_list(head: LispValue, rest: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     match head {
         LispValue::Symbol(s) => {
             let val = lookup_variable(s, env)?;

@@ -1,7 +1,6 @@
-use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 use std::hash;
-use im::HashMap;
+use im::{HashMap, Vector};
 use lazy_static::lazy_static;
 use crate::{LispValue, Result, builtins::BUILTINS};
 
@@ -118,7 +117,7 @@ impl LispEnv {
         lock.data.insert(key, val);
         true
     }
-    pub fn bind_func(&mut self, name: &'static str, f: fn(VecDeque<LispValue>, &mut LispEnv) -> Result<LispValue>) {
+    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>) {
         let mut lock = self.0.write().unwrap();
         let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };
         lock.data.insert(name.to_owned(), val);
