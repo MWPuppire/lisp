@@ -88,6 +88,12 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("list", self.type_of())),
         }
     }
+    pub fn expect_hashmap(&self) -> Result<&HashMap<LispValue, LispValue>> {
+        match self {
+            Self::Map(m) => Ok(m),
+            _ => Err(LispError::InvalidDataType("map", self.type_of())),
+        }
+    }
     pub fn expect_atom(&self) -> Result<Arc<RwLock<LispValue>>> {
         match self {
             Self::Atom(x) => Ok(x.clone()),
@@ -167,6 +173,7 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::BuiltinFunc { name: a_name, .. }, LispValue::BuiltinFunc { name: b_name, .. }) => a_name == b_name,
             (LispValue::Vector(a), LispValue::Vector(b)) => a == b,
             (LispValue::Keyword(a), LispValue::Keyword(b)) => a == b,
+            (LispValue::Map(a), LispValue::Map(b)) => a == b,
             _ => false,
         }
     }
@@ -255,7 +262,7 @@ pub enum LispError {
     OnlyInQuasiquote,
     #[error("index {0} out of range")]
     IndexOutOfRange(usize),
-    #[error("missing a value for a `let` declaration binding")]
+    #[error("missing a value for a `let` or `hash-map` binding")]
     MissingBinding,
     #[error("uncaught exception: {0}")]
     UncaughtException(LispValue),

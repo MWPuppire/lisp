@@ -548,6 +548,124 @@ fn lisp_symbol(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::Symbol(s.to_owned()))
 }
 
+fn lisp_vector(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    let vals: Vec<LispValue> = args.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
+    Ok(LispValue::Vector(vals))
+}
+
+fn lisp_vectorq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Vector(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_keyword(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    let s = arg.expect_string()?;
+    Ok(LispValue::Keyword(s.to_owned()))
+}
+
+fn lisp_keywordq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Keyword(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_hashmap(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() & 1 == 0, LispError::MissingBinding);
+    let pairs = args.chunks_exact(2).map(|x| {
+        let k = eval(&x[0], env)?;
+        let v = eval(&x[1], env)?;
+        Ok((k, v))
+    }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
+    Ok(LispValue::Map(pairs.into()))
+}
+
+fn lisp_mapq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Map(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_sequentialq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::List(_) => true,
+        LispValue::Vector(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_assoc(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() & 1 == 1, LispError::MissingBinding);
+    let base_map = eval(&args[0], env)?;
+    let base_map = base_map.expect_hashmap()?;
+    let pairs = args[1..].chunks_exact(2).map(|x| {
+        let k = eval(&x[0], env)?;
+        let v = eval(&x[1], env)?;
+        Ok((k, v))
+    }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
+    let new_map: HashMap<LispValue, LispValue> = pairs.into();
+    Ok(LispValue::Map(new_map.union(base_map.clone())))
+}
+
+fn lisp_dissoc(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
+    let base_map = eval(&args[0], env)?;
+    let base_map = base_map.expect_hashmap()?;
+    let keys = args[1..].iter().map(|x| {
+        Ok((eval(&x, env)?, LispValue::Nil))
+    }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
+    Ok(LispValue::Map(base_map.clone().difference(keys.into())))
+}
+
+fn lisp_get(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let map = eval(&args[0], env)?;
+    let map = map.expect_hashmap()?;
+    let key = eval(&args[1], env)?;
+    if let Some(val) = map.get(&key) {
+        Ok(val.clone())
+    } else {
+        Ok(LispValue::Nil)
+    }
+}
+
+fn lisp_containsq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let map = eval(&args[0], env)?;
+    let map = map.expect_hashmap()?;
+    let key = eval(&args[1], env)?;
+    Ok(LispValue::Bool(map.contains_key(&key)))
+}
+
+fn lisp_keys(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let map = eval(&args[0], env)?;
+    let map = map.expect_hashmap()?;
+    let keys = map.keys().map(|x| x.clone()).collect();
+    Ok(LispValue::List(keys))
+}
+
+fn lisp_vals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let map = eval(&args[0], env)?;
+    let map = map.expect_hashmap()?;
+    let vals = map.values().map(|x| x.clone()).collect();
+    Ok(LispValue::List(vals))
+}
+
 macro_rules! lisp_func {
     ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: ExternLispFunc($f) } }
 }
@@ -610,6 +728,19 @@ lazy_static! {
             "false?".to_owned() => lisp_func!("false?", lisp_falseq),
             "symbol?".to_owned() => lisp_func!("symbol?", lisp_symbolq),
             "symbol".to_owned() => lisp_func!("symbol", lisp_symbol),
+            "vector".to_owned() => lisp_func!("vector", lisp_vector),
+            "vector?".to_owned() => lisp_func!("vector?", lisp_vectorq),
+            "keyword".to_owned() => lisp_func!("keyword", lisp_keyword),
+            "keyword?".to_owned() => lisp_func!("keyword?", lisp_keywordq),
+            "hash-map".to_owned() => lisp_func!("hash-map", lisp_hashmap),
+            "map?".to_owned() => lisp_func!("map?", lisp_mapq),
+            "sequential?".to_owned() => lisp_func!("sequential?", lisp_sequentialq),
+            "assoc".to_owned() => lisp_func!("assoc", lisp_assoc),
+            "dissoc".to_owned() => lisp_func!("dissoc", lisp_dissoc),
+            "get".to_owned() => lisp_func!("get", lisp_get),
+            "contains?".to_owned() => lisp_func!("contains?", lisp_containsq),
+            "keys".to_owned() => lisp_func!("keys", lisp_keys),
+            "vals".to_owned() => lisp_func!("vals", lisp_vals),
         }
     };
 }
