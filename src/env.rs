@@ -1,4 +1,3 @@
-use std::fmt;
 use im::HashMap;
 use crate::{LispValue, Result, builtins::BUILTINS};
 
@@ -6,6 +5,19 @@ use crate::{LispValue, Result, builtins::BUILTINS};
 pub struct LispEnv {
     data: HashMap<String, LispValue>,
     enclosing: HashMap<String, LispValue>,
+}
+
+#[derive(Clone, Debug, Hash)]
+pub struct LispClosure {
+    data: HashMap<String, LispValue>,
+}
+impl LispClosure {
+    pub fn make_env(&self, args: &[(String, LispValue)]) -> LispEnv {
+        LispEnv {
+            data: args.into(),
+            enclosing: self.data.clone(),
+        }
+    }
 }
 
 impl LispEnv {
@@ -21,19 +33,18 @@ impl LispEnv {
             enclosing: BUILTINS.clone(),
         }
     }
-    pub fn closure(&self) -> Self {
+    pub fn new_nested(&self) -> Self {
         LispEnv {
             data: HashMap::new(),
             enclosing: self.data.clone().union(self.enclosing.clone()),
         }
     }
-    fn new_altered(&self, altered: HashMap<String, LispValue>) -> Self {
-        LispEnv {
-            data: altered,
-            enclosing: self.enclosing.clone()
+
+    pub fn make_closure(&self) -> LispClosure {
+        LispClosure {
+            data: self.data.clone().union(self.enclosing.clone()),
         }
     }
-
     pub fn get(&self, key: &str) -> Option<LispValue> {
         if let Some(val) = self.data.get(key) {
             Some(val.clone())
@@ -54,14 +65,7 @@ impl LispEnv {
         self.data = self.data.alter(move |_| Some(val), key);
     }
     pub fn bind_func(&mut self, name: &'static str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
-        let val = LispValue::BuiltinFunc { name, f: crate::util::LispFunc(f) };
+        let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };
         self.data = self.data.alter(move |_| Some(val), name.to_owned());
-    }
-}
-
-impl fmt::Debug for LispEnv {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let map = &self.data;
-        f.debug_map().entries(map.iter()).finish()
     }
 }

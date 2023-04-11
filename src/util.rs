@@ -3,7 +3,7 @@ use std::hash;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use im::HashMap;
-use crate::env::LispEnv;
+use crate::env::{LispEnv, LispClosure};
 
 #[macro_export]
 macro_rules! expect {
@@ -17,11 +17,19 @@ macro_rules! expect {
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone)]
-pub struct LispFunc(pub fn(&[LispValue], &mut LispEnv) -> Result<LispValue>);
-impl fmt::Debug for LispFunc {
+pub struct ExternLispFunc(pub fn(&[LispValue], &mut LispEnv) -> Result<LispValue>);
+impl fmt::Debug for ExternLispFunc {
     fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Hash)]
+pub struct LispFunc {
+    pub args: Vec<String>,
+    pub body: LispValue,
+    pub closure: LispClosure,
+    pub is_macro: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -35,14 +43,9 @@ pub enum LispValue {
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
-        f: LispFunc,
+        f: ExternLispFunc,
     },
-    Func {
-        args: Vec<String>,
-        body: Box<LispValue>,
-        env: LispEnv,
-        is_macro: bool,
-    },
+    Func(Box<LispFunc>),
     Keyword(String),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
@@ -75,6 +78,13 @@ impl LispValue {
     pub fn expect_list(&self) -> Result<&[LispValue]> {
         match self {
             Self::List(l) => Ok(&l),
+            _ => Err(LispError::InvalidDataType("list", self.type_of())),
+        }
+    }
+    pub fn expect_list_or_vec(&self) -> Result<&[LispValue]> {
+        match self {
+            Self::List(l) => Ok(&l),
+            Self::Vector(l) => Ok(&l),
             _ => Err(LispError::InvalidDataType("list", self.type_of())),
         }
     }
@@ -115,11 +125,11 @@ impl LispValue {
             },
             LispValue::BuiltinFunc { name, .. } => format!("{}", name),
             LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
-            LispValue::Func { args, body, is_macro, .. } => format!(
+            LispValue::Func(f) => format!(
                 "({} ({}) {})",
-                if *is_macro { "#<macro-fn>" } else { "fn*" },
-                args.join(" "),
-                body.to_string()
+                if f.is_macro { "#<macro-fn>" } else { "fn*" },
+                f.args.join(" "),
+                f.body.to_string()
             ),
             LispValue::Keyword(s) => format!(":{}", s),
             LispValue::Map(m) => {
@@ -212,7 +222,7 @@ impl hash::Hash for LispValue {
             },
             LispValue::BuiltinFunc { name, .. } => name.hash(state),
             LispValue::Atom(x) => x.read().unwrap().hash(state),
-            LispValue::Func { body, .. } => body.hash(state),
+            LispValue::Func(f) => f.hash(state),
             LispValue::Vector(l) => {
                 state.write_u8(0xFF);
                 l.hash(state)

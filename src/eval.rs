@@ -7,7 +7,7 @@ fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
 
 fn is_macro(val: &LispValue) -> bool {
     match val {
-        LispValue::Func { is_macro, .. } => *is_macro,
+        LispValue::Func(f) => f.is_macro,
         _ => false,
     }
 }
@@ -54,16 +54,14 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
             }
         },
         LispValue::BuiltinFunc { f, .. } => f.0(rest, env),
-        LispValue::Func { args, body, env: fn_env, .. } => {
-            if rest.len() != args.len() {
-                Err(LispError::IncorrectArguments(args.len(), rest.len()))
+        LispValue::Func(f) => {
+            if rest.len() != f.args.len() {
+                Err(LispError::IncorrectArguments(f.args.len(), rest.len()))
             } else {
-                let mut fn_env = fn_env.clone();
                 let vals = rest.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
-                for (key, val) in zip(args, vals) {
-                    fn_env.set(key.to_owned(), val);
-                }
-                eval(body, &mut fn_env)
+                let params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
+                let mut fn_env = f.closure.make_env(&params);
+                eval(&f.body, &mut fn_env)
             }
         },
         _ => Err(LispError::InvalidDataType("function", head.type_of())),

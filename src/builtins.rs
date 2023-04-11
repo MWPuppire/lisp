@@ -3,7 +3,11 @@ use std::fs::File;
 use std::io::prelude::*;
 use im::{hashmap, HashMap};
 use lazy_static::lazy_static;
-use crate::{LispValue, LispError, Result, expect, env::LispEnv, eval::{eval, expand_macros}, parser::LispParser};
+use crate::{LispValue, LispError, Result, expect};
+use crate::env::LispEnv;
+use crate::eval::{eval, expand_macros};
+use crate::parser::LispParser;
+use crate::util::{LispFunc, ExternLispFunc};
 
 fn eval_list_to_numbers(args: &[LispValue], env: &mut LispEnv) -> Result<Vec<f64>> {
     args.iter().map(|x| eval(x, env)?.expect_number()).collect()
@@ -55,7 +59,7 @@ fn lisp_def(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 fn lisp_let(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let mut new_env = env.closure();
+    let mut new_env = env.new_nested();
     let list = args[0].expect_list()?;
     expect!(list.len() & 1 == 0, LispError::MissingBinding);
     for pair in list.chunks_exact(2) {
@@ -91,16 +95,16 @@ fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let params = args[0].expect_list()?;
-    let param_names = params.iter().map(|x| x.expect_symbol().map(|x| x.to_owned())).collect::<Result<Vec<String>>>()?;
-    let body = Box::new(args[1].clone());
-    let new_env = env.closure();
-    Ok(LispValue::Func {
-        args: param_names,
-        body: body,
-        env: new_env,
+    let args_list = args[0].expect_list()?;
+    let arg_names = args_list.iter().map(|x| x.expect_symbol().map(|x| x.to_owned())).collect::<Result<Vec<String>>>()?;
+    let body = args[1].clone();
+    let closure = env.make_closure();
+    Ok(LispValue::Func(Box::new(LispFunc {
+        args: arg_names,
+        body,
+        closure,
         is_macro: false,
-    })
+    })))
 }
 
 fn lisp_equals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -139,7 +143,7 @@ fn lisp_listq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 fn lisp_emptyq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval(&args[0], env)?;
-    Ok(LispValue::Bool(val.expect_list()?.len() == 0))
+    Ok(LispValue::Bool(val.expect_list_or_vec()?.len() == 0))
 }
 
 fn lisp_count(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -148,7 +152,7 @@ fn lisp_count(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     if val.is_nil() {
         Ok(LispValue::Number(0.0))
     } else {
-        Ok(LispValue::Number(val.expect_list()?.len() as f64))
+        Ok(LispValue::Number(val.expect_list_or_vec()?.len() as f64))
     }
 }
 
@@ -369,7 +373,7 @@ fn lisp_cons(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let arg1 = eval(&args[0], env)?;
     let arg2 = eval(&args[1], env)?;
-    let list = arg2.expect_list()?;
+    let list = arg2.expect_list_or_vec()?;
     let mut new_list = vec![arg1];
     new_list.extend_from_slice(list);
     Ok(LispValue::List(new_list))
@@ -379,7 +383,7 @@ fn lisp_concat(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     let mut out = vec![];
     for arg in args {
         let evaled = eval(arg, env)?;
-        let list = evaled.expect_list()?;
+        let list = evaled.expect_list_or_vec()?;
         out.extend_from_slice(list);
     }
     Ok(LispValue::List(out))
@@ -401,7 +405,7 @@ fn lisp_first(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::Nil);
     }
-    let list = arg.expect_list()?;
+    let list = arg.expect_list_or_vec()?;
     if list.len() == 0 {
         Ok(LispValue::Nil)
     } else {
@@ -415,7 +419,7 @@ fn lisp_rest(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::List(vec![]));
     }
-    let list = arg.expect_list()?;
+    let list = arg.expect_list_or_vec()?;
     if list.len() < 2 {
         Ok(LispValue::List(vec![]))
     } else {
@@ -427,7 +431,7 @@ fn lisp_macroq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval(&args[0], env)?;
     match arg {
-        LispValue::Func { is_macro, .. } => Ok(LispValue::Bool(is_macro)),
+        LispValue::Func(f) => Ok(LispValue::Bool(f.is_macro)),
         _ => Ok(LispValue::Bool(false)),
     }
 }
@@ -435,13 +439,13 @@ fn lisp_macroq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 fn lisp_defmacro(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let name = args[0].expect_symbol()?;
-    let val = eval(&args[1], env)?;
-    let val = match val {
-        LispValue::Func { args, body, env, .. } => Ok(LispValue::Func {
-            args, body, env, is_macro: true
-        }),
-        _ => Err(LispError::InvalidDataType("function", val.type_of())),
-    }?;
+    let mut val = eval(&args[1], env)?;
+    match val {
+        LispValue::Func(ref mut f) => {
+            f.is_macro = true;
+        },
+        _ => return Err(LispError::InvalidDataType("function", val.type_of())),
+    }
     if !env.insert(name.to_owned(), val.clone()) {
         Err(LispError::AlreadyExists)
     } else {
@@ -474,7 +478,7 @@ fn lisp_try(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
             return Err(LispError::TryNoCatch);
         }
         let err_name = catch[1].expect_symbol()?;
-        let mut caught_env = env.closure();
+        let mut caught_env = env.new_nested();
         match eval(&args[0], env) {
             Ok(x) => Ok(x),
             Err(LispError::UncaughtException(except)) => {
@@ -545,7 +549,7 @@ fn lisp_symbol(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 }
 
 macro_rules! lisp_func {
-    ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: crate::util::LispFunc($f) } }
+    ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: ExternLispFunc($f) } }
 }
 lazy_static! {
     pub static ref BUILTINS: HashMap<String, LispValue> = {
