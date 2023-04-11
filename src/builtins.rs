@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::fs::File;
 use std::io::prelude::*;
+use std::time::Instant;
 use im::{hashmap, HashMap};
 use lazy_static::lazy_static;
 use crate::{LispValue, LispError, Result, expect};
@@ -50,6 +51,13 @@ fn lisp_def(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let name = args[0].expect_symbol()?;
     let val = eval(&args[1], env)?;
+    let val = match val {
+        LispValue::Func(mut f) => {
+            f.name = Some(name.to_owned());
+            LispValue::Func(f)
+        },
+        x => x,
+    };
     if !env.set(name.to_owned(), val.clone()) {
         Err(LispError::AlreadyExists)
     } else {
@@ -115,6 +123,7 @@ fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
         closure,
         variadic,
         is_macro: false,
+        name: None,
     })))
 }
 
@@ -282,7 +291,11 @@ fn lisp_read_string(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> 
     let mut parser = LispParser::new();
     let arg = eval(&args[0], env)?;
     parser.add_tokenize(arg.expect_string()?);
-    parser.next()
+    if parser.has_tokens() {
+        parser.next()
+    } else {
+        Ok(LispValue::Nil)
+    }
 }
 
 fn lisp_str(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -311,11 +324,10 @@ fn lisp_load_file(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     let mut parser = LispParser::new();
     f.read_to_string(&mut buffer)?;
     parser.add_tokenize(&buffer);
-    let mut last = LispValue::Nil;
     while parser.has_tokens() {
-        last = eval(&parser.next()?, env)?;
+        eval(&parser.next()?, env)?;
     }
-    Ok(last)
+    Ok(LispValue::Nil)
 }
 
 fn lisp_typeof(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -461,6 +473,7 @@ fn lisp_defmacro(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     let mut val = eval(&args[1], env)?;
     match val {
         LispValue::Func(ref mut f) => {
+            f.name = Some(name.to_owned());
             f.is_macro = true;
         },
         _ => return Err(LispError::InvalidDataType("function", val.type_of())),
@@ -646,12 +659,16 @@ fn lisp_dissoc(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 fn lisp_get(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let map = eval(&args[0], env)?;
-    let map = map.expect_hashmap()?;
     let key = eval(&args[1], env)?;
-    if let Some(val) = map.get(&key) {
-        Ok(val.clone())
+    if map.is_nil() {
+        return Ok(LispValue::Nil);
     } else {
-        Ok(LispValue::Nil)
+        let map = map.expect_hashmap()?;
+        if let Some(val) = map.get(&key) {
+            Ok(val.clone())
+        } else {
+            Ok(LispValue::Nil)
+        }
     }
 }
 
@@ -750,10 +767,86 @@ fn lisp_numberq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     }))
 }
 
+fn lisp_vec(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    match arg {
+        LispValue::Vector(l) => Ok(LispValue::Vector(l)),
+        LispValue::List(l) => Ok(LispValue::Vector(l)),
+        x => Err(LispError::InvalidDataType("list", x.type_of())),
+    }
+}
+
+fn lisp_time_ms(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+    Ok(LispValue::Number(START_TIME.elapsed().as_secs_f64() * 1000.0))
+}
+
+fn lisp_seq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    match arg {
+        LispValue::Vector(l) => {
+            Ok(if l.len() == 0 {
+                LispValue::Nil
+            } else {
+                LispValue::List(l)
+            })
+        },
+        LispValue::List(l) => {
+            Ok(if l.len() == 0 {
+                LispValue::Nil
+            } else {
+                LispValue::List(l)
+            })
+        },
+        LispValue::String(s) => {
+            Ok(if s.len() == 0 {
+                LispValue::Nil
+            } else {
+                LispValue::List(s.chars().map(|x| LispValue::String(x.to_string())).collect())
+            })
+        },
+        LispValue::Nil => Ok(LispValue::Nil),
+        x => Err(LispError::InvalidDataType("list", x.type_of())),
+    }
+}
+
+fn lisp_conj(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
+    let arg = eval(&args[0], env)?;
+    match arg {
+        LispValue::Vector(mut l) => {
+            let mut args = args[1..].iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
+            l.append(&mut args);
+            Ok(LispValue::Vector(l))
+        },
+        LispValue::List(mut l) => {
+            let mut new_vec = Vec::with_capacity(l.len() + args.len() - 1);
+            for item in args[1..].iter().rev() {
+                new_vec.push(eval(item, env)?);
+            }
+            new_vec.append(&mut l);
+            Ok(LispValue::List(new_vec))
+        },
+        x => Err(LispError::InvalidDataType("list", x.type_of())),
+    }
+}
+
+fn lisp_meta(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+    unimplemented!();
+}
+
+fn lisp_with_meta(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+    unimplemented!();
+}
+
 macro_rules! lisp_func {
     ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: ExternLispFunc($f) } }
 }
 lazy_static! {
+    static ref START_TIME: Instant = {
+        Instant::now()
+    };
     pub static ref BUILTINS: HashMap<String, LispValue> = {
         hashmap!{
             "+".to_owned() => lisp_func!("+", lisp_plus),
@@ -832,6 +925,12 @@ lazy_static! {
             "fn?".to_owned() => lisp_func!("fn?", lisp_fnq),
             "string?".to_owned() => lisp_func!("string?", lisp_stringq),
             "number?".to_owned() => lisp_func!("number?", lisp_numberq),
+            "vec".to_owned() => lisp_func!("vec", lisp_vec),
+            "time-ms".to_owned() => lisp_func!("time-ms", lisp_time_ms),
+            "seq".to_owned() => lisp_func!("seq", lisp_seq),
+            "conj".to_owned() => lisp_func!("conj", lisp_conj),
+            "meta".to_owned() => lisp_func!("meta", lisp_meta),
+            "with-meta".to_owned() => lisp_func!("with-meta", lisp_with_meta),
         }
     };
 }

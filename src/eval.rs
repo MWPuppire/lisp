@@ -65,6 +65,9 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
                 let last_vals = vals.split_off(f.args.len() - 1);
                 let mut params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
                 params.push((f.args[f.args.len() - 1].to_owned(), LispValue::List(last_vals)));
+                if let Some(name) = &f.name {
+                    params.push((name.clone(), LispValue::Func(f.clone())));
+                }
                 let mut fn_env = f.closure.make_env(&params);
                 eval(&f.body, &mut fn_env)
             } else if rest.len() != f.args.len() {
@@ -72,7 +75,10 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
             } else {
                 let evaluator = if f.is_macro { expand_macros } else { eval };
                 let vals = rest.iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
-                let params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
+                let mut params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
+                if let Some(name) = &f.name {
+                    params.push((name.clone(), LispValue::Func(f.clone())));
+                }
                 let mut fn_env = f.closure.make_env(&params);
                 eval(&f.body, &mut fn_env)
             }

@@ -31,6 +31,8 @@ pub struct LispFunc {
     pub closure: LispClosure,
     pub variadic: bool,
     pub is_macro: bool,
+    // used for self-recursive functions
+    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -289,7 +291,7 @@ pub enum LispError {
     InvalidDataType(&'static str, &'static str),
     #[error("unexpected arguments. expected {0}, received {1}")]
     IncorrectArguments(usize, usize),
-    #[error("error calling into native function")]
+    #[error("error calling into native function: {0}")]
     OSFailure(#[from] std::io::Error),
     #[error("`unquote` and `splice-unquote` can only be used inside `quasiquote`")]
     OnlyInQuasiquote,
