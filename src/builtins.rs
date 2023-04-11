@@ -50,7 +50,7 @@ fn lisp_def(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let name = args[0].expect_symbol()?;
     let val = eval(&args[1], env)?;
-    if !env.insert(name.to_owned(), val.clone()) {
+    if !env.set(name.to_owned(), val.clone()) {
         Err(LispError::AlreadyExists)
     } else {
         Ok(val)
@@ -96,6 +96,16 @@ fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let args_list = args[0].expect_list()?;
+    let variadic = if args_list.len() > 0 {
+        let last = &args_list[args_list.len() - 1];
+        match last {
+            LispValue::VariadicSymbol(_) => Ok(true),
+            LispValue::Symbol(_) => Ok(false),
+            _ => Err(LispError::InvalidDataType("symbol", last.type_of())),
+        }?
+    } else {
+        false
+    };
     let arg_names = args_list.iter().map(|x| x.expect_symbol().map(|x| x.to_owned())).collect::<Result<Vec<String>>>()?;
     let body = args[1].clone();
     let closure = env.make_closure();
@@ -103,6 +113,7 @@ fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
         args: arg_names,
         body,
         closure,
+        variadic,
         is_macro: false,
     })))
 }
@@ -394,7 +405,7 @@ fn lisp_nth(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let arg1 = eval(&args[0], env)?;
     let arg2 = eval(&args[1], env)?;
-    let list = arg1.expect_list()?;
+    let list = arg1.expect_list_or_vec()?;
     let idx = arg2.expect_number()? as usize;
     expect!(list.len() > idx, LispError::IndexOutOfRange(idx));
     Ok(list[idx].clone())
@@ -447,7 +458,7 @@ fn lisp_defmacro(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
         },
         _ => return Err(LispError::InvalidDataType("function", val.type_of())),
     }
-    if !env.insert(name.to_owned(), val.clone()) {
+    if !env.set(name.to_owned(), val.clone()) {
         Err(LispError::AlreadyExists)
     } else {
         Ok(val)

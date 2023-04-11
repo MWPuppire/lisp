@@ -45,6 +45,10 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
             let val = lookup_variable(s.clone(), env)?;
             eval_list(&val, rest, env)
         },
+        LispValue::VariadicSymbol(s) => {
+            let val = lookup_variable(s.clone(), env)?;
+            eval_list(&val, rest, env)
+        },
         LispValue::List(l) => {
             if l.len() == 0 {
                 Err(LispError::InvalidDataType("function", "list"))
@@ -55,10 +59,19 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
         },
         LispValue::BuiltinFunc { f, .. } => f.0(rest, env),
         LispValue::Func(f) => {
-            if rest.len() != f.args.len() {
+            if f.variadic && rest.len() >= (f.args.len() - 1) {
+                let evaluator = if f.is_macro { expand_macros } else { eval };
+                let mut vals = rest.iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
+                let last_vals = vals.split_off(f.args.len() - 1);
+                let mut params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
+                params.push((f.args[f.args.len() - 1].to_owned(), LispValue::List(last_vals)));
+                let mut fn_env = f.closure.make_env(&params);
+                eval(&f.body, &mut fn_env)
+            } else if rest.len() != f.args.len() {
                 Err(LispError::IncorrectArguments(f.args.len(), rest.len()))
             } else {
-                let vals = rest.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
+                let evaluator = if f.is_macro { expand_macros } else { eval };
+                let vals = rest.iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
                 let params: Vec<(String, LispValue)> = zip(f.args.iter().map(|x| x.to_owned()), vals).collect();
                 let mut fn_env = f.closure.make_env(&params);
                 eval(&f.body, &mut fn_env)
@@ -72,6 +85,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     let value = expand_macros(value, env)?;
     match value {
         LispValue::Symbol(s) => lookup_variable(s.clone(), env),
+        LispValue::VariadicSymbol(s) => lookup_variable(s.clone(), env),
         LispValue::List(l) => {
             if l.len() == 0 {
                 Ok(LispValue::List(vec![]))

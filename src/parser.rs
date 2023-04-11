@@ -148,6 +148,13 @@ impl LispParser {
                     inner,
                 ]), new_rest))
             },
+            "&" => {
+                let (name, new_rest) = Self::read_form(rest)?;
+                match name {
+                    LispValue::Symbol(s) => Ok((LispValue::VariadicSymbol(s), new_rest)),
+                    _ => Err(LispError::SyntaxError(*row, *col)),
+                }
+            },
             _ => Ok((Self::read_atom(token.clone(), *row, *col)?, rest)),
         }
     }

@@ -56,13 +56,13 @@ impl LispEnv {
         if self.data.contains_key(&key) {
             false
         } else {
-            self.set(key, val);
-            true
+            self.set(key, val)
         }
     }
-    pub fn set(&mut self, key: String, val: LispValue) {
+    pub fn set(&mut self, key: String, val: LispValue) -> bool {
         // can't assign to an outer value
         self.data = self.data.alter(move |_| Some(val), key);
+        true
     }
     pub fn bind_func(&mut self, name: &'static str, f: fn(&[LispValue], &mut LispEnv) -> Result<LispValue>) {
         let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };

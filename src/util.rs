@@ -29,6 +29,7 @@ pub struct LispFunc {
     pub args: Vec<String>,
     pub body: LispValue,
     pub closure: LispClosure,
+    pub variadic: bool,
     pub is_macro: bool,
 }
 
@@ -49,6 +50,7 @@ pub enum LispValue {
     Keyword(String),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
+    VariadicSymbol(String),
 }
 
 impl LispValue {
@@ -66,12 +68,14 @@ impl LispValue {
             Self::Keyword(_) => "keyword",
             Self::Map(_) => "map",
             Self::Vector(_) => "vector",
+            Self::VariadicSymbol(_) => "symbol",
         }
     }
 
     pub fn expect_symbol(&self) -> Result<&str> {
         match self {
             Self::Symbol(s) => Ok(s),
+            Self::VariadicSymbol(s) => Ok(s),
             _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
         }
     }
@@ -148,6 +152,7 @@ impl LispValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
                 format!("'[{}]", xs.join(" "))
             },
+            LispValue::VariadicSymbol(s) => format!("&{}", s),
         }
     }
     pub fn truthiness(&self) -> bool {
@@ -174,6 +179,9 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::Vector(a), LispValue::Vector(b)) => a == b,
             (LispValue::Keyword(a), LispValue::Keyword(b)) => a == b,
             (LispValue::Map(a), LispValue::Map(b)) => a == b,
+            (LispValue::VariadicSymbol(a), LispValue::VariadicSymbol(b)) => a == b,
+            (LispValue::Symbol(a), LispValue::VariadicSymbol(b)) => a == b,
+            (LispValue::VariadicSymbol(a), LispValue::Symbol(b)) => a == b,
             _ => false,
         }
     }
@@ -206,6 +214,7 @@ impl fmt::Display for LispValue {
                 write!(f, "{{{}}}", xs.join(" "))
             },
             LispValue::Keyword(s) => write!(f, ":{}", s),
+            LispValue::VariadicSymbol(s) => write!(f, "{}", s),
         }
     }
 }
@@ -240,6 +249,10 @@ impl hash::Hash for LispValue {
                 s.hash(state)
             },
             LispValue::Nil => state.write_u64(0),
+            LispValue::VariadicSymbol(s) => {
+                state.write_u8('_' as u8);
+                s.hash(state)
+            },
         }
     }
 }
