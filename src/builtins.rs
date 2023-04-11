@@ -223,18 +223,19 @@ fn lisp_reset(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 }
 
 fn lisp_swap(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
-    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    expect!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
     let val = eval(&args[0], env)?;
     let atom = val.expect_atom()?;
     let val = eval(&args[1], env)?;
-    let list = LispValue::List(vec![
+    let mut list = vec![
         val,
         LispValue::List(vec![
             LispValue::Symbol("deref".to_owned()),
             LispValue::Atom(atom.clone()),
         ]),
-    ]);
-    let out_val = eval(&list, env)?;
+    ];
+    list.extend_from_slice(&args[2..]);
+    let out_val = eval(&LispValue::List(list), env)?;
     *atom.write().unwrap() = out_val.clone();
     Ok(out_val)
 }
@@ -666,6 +667,30 @@ fn lisp_vals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::List(vals))
 }
 
+fn lisp_apply(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
+    let f = eval(&args[0], env)?;
+    let last_idx = args.len() - 1;
+    let list = eval(&args[last_idx], env)?;
+    let list = list.expect_list_or_vec()?;
+    let mut full_list = vec![f];
+    full_list.extend_from_slice(&args[1..last_idx]);
+    full_list.extend_from_slice(list);
+    eval(&LispValue::List(full_list), env)
+}
+
+fn lisp_map(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
+    let f = eval(&args[0], env)?;
+    let list = eval(&args[1], env)?;
+    let list = list.expect_list_or_vec()?;
+    let out = list.iter().map(|x| {
+        let list = LispValue::List(vec![f.clone(), x.clone()]);
+        eval(&list, env)
+    }).collect::<Result<Vec<LispValue>>>()?;
+    Ok(LispValue::List(out))
+}
+
 macro_rules! lisp_func {
     ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: ExternLispFunc($f) } }
 }
@@ -741,6 +766,8 @@ lazy_static! {
             "contains?".to_owned() => lisp_func!("contains?", lisp_containsq),
             "keys".to_owned() => lisp_func!("keys", lisp_keys),
             "vals".to_owned() => lisp_func!("vals", lisp_vals),
+            "apply".to_owned() => lisp_func!("apply", lisp_apply),
+            "map".to_owned() => lisp_func!("map", lisp_map),
         }
     };
 }
