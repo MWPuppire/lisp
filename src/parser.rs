@@ -27,14 +27,18 @@ impl LispParser {
         self.col = 1;
     }
     pub fn is_complete(&self) -> bool {
-        match self.peek() {
-            Ok(_) => true,
-            Err(LispError::UnbalancedDelim(_, _)) => false,
-            Err(_) => true,
+        if let Some(peek) = self.peek() {
+            match peek {
+                Ok(_) => true,
+                Err(LispError::UnbalancedDelim(_, _)) => false,
+                Err(_) => true,
+            }
+        } else {
+            true
         }
     }
     pub fn has_tokens(&self) -> bool {
-        self.tokens.len() > 0
+        self.tokens.len() > 0 && self.peek().is_some()
     }
     pub fn add_tokenize(&mut self, input: &str) {
         lazy_static! {
@@ -94,66 +98,70 @@ impl LispParser {
             unreachable!();
         }
     }
-    pub fn peek(&self) -> Result<LispValue> {
-        let (val, _) = Self::read_form(&self.tokens)?;
-        Ok(val)
+    pub fn peek(&self) -> Option<Result<LispValue>> {
+        match Self::read_form(&self.tokens) {
+            Err(LispError::ParseNoTokens) => None,
+            Err(x) => Some(Err(x)),
+            Ok((val, _)) => Some(Ok(val)),
+        }
     }
     fn read_form<'a>(tokens: &'a [LispToken]) -> Result<(LispValue, &'a [LispToken])> {
         if tokens.len() == 0 {
-            return Ok((LispValue::Nil, tokens));
+            return Err(LispError::ParseNoTokens);
         }
         // since we test for `tokens.len() == 0`, this has to be `Some`
         let (LispToken { token, row, col }, rest) = unsafe {
             tokens.split_first().unwrap_unchecked()
         };
-        match token.as_str() {
-            "(" => Self::read_list(rest),
-            ")" => Err(LispError::SyntaxError(*row, *col)),
-            "[" => Self::read_vec(rest),
-            "]" => Err(LispError::SyntaxError(*row, *col)),
-            "{" => Self::read_map(rest),
-            "}" => Err(LispError::SyntaxError(*row, *col)),
-            "@" => {
+        match token.as_str().chars().nth(0) {
+            Some('(') => Self::read_list(rest),
+            Some(')') => Err(LispError::SyntaxError(*row, *col)),
+            Some('[') => Self::read_vec(rest),
+            Some(']') => Err(LispError::SyntaxError(*row, *col)),
+            Some('{') => Self::read_map(rest),
+            Some('}') => Err(LispError::SyntaxError(*row, *col)),
+            Some('@') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
                     LispValue::Symbol("deref".to_owned()),
                     inner,
                 ]), new_rest))
             },
-            "'" => {
+            Some('\'') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
                     LispValue::Symbol("quote".to_owned()),
                     inner,
                 ]), new_rest))
             },
-            "`" => {
+            Some('`') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
                     LispValue::Symbol("quasiquote".to_owned()),
                     inner,
                 ]), new_rest))
             },
-            "~" => {
+            Some('~') => {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
-                    LispValue::Symbol("unquote".to_owned()),
+                    LispValue::Symbol(if token == "~@" {
+                        "splice-unquote".to_owned()
+                    } else {
+                        "unquote".to_owned()
+                    }),
                     inner,
                 ]), new_rest))
             },
-            "~@" => {
-                let (inner, new_rest) = Self::read_form(rest)?;
-                Ok((LispValue::List(vec![
-                    LispValue::Symbol("splice-unquote".to_owned()),
-                    inner,
-                ]), new_rest))
-            },
-            "&" => {
+            Some('&') => {
                 let (name, new_rest) = Self::read_form(rest)?;
                 match name {
                     LispValue::Symbol(s) => Ok((LispValue::VariadicSymbol(s), new_rest)),
                     _ => Err(LispError::SyntaxError(*row, *col)),
                 }
+            },
+            Some(';') => {
+                // skip comment to next token
+                Self::read_form(rest)
             },
             _ => Ok((Self::read_atom(token.clone(), *row, *col)?, rest)),
         }
@@ -211,10 +219,7 @@ impl LispParser {
         }
     }
     fn read_atom(token: String, row: usize, col: usize) -> Result<LispValue> {
-        if token.starts_with(";") {
-            // comment
-            Ok(LispValue::Nil)
-        } else if let Ok(f) = token.parse() {
+        if let Ok(f) = token.parse() {
             Ok(LispValue::Number(f))
         } else if token.starts_with("\"") {
             if token.len() > 1 && token.ends_with("\"") {

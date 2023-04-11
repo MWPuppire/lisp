@@ -60,11 +60,11 @@ fn lisp_def(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 fn lisp_let(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let mut new_env = env.new_nested();
-    let list = args[0].expect_list()?;
+    let list = args[0].expect_list_or_vec()?;
     expect!(list.len() & 1 == 0, LispError::MissingBinding);
     for pair in list.chunks_exact(2) {
         let name = pair[0].expect_symbol()?;
-        let val = eval(&pair[1], env)?;
+        let val = eval(&pair[1], &mut new_env)?;
         new_env.set(name.to_owned(), val);
     }
     eval(&args[1], &mut new_env)
@@ -95,7 +95,7 @@ fn lisp_do(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 fn lisp_fn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let args_list = args[0].expect_list()?;
+    let args_list = args[0].expect_list_or_vec()?;
     let variadic = if args_list.len() > 0 {
         let last = &args_list[args_list.len() - 1];
         match last {
@@ -126,14 +126,16 @@ fn lisp_equals(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 }
 
 fn lisp_prn(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
-    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
-    // args.len() != 0, so `split_list` isn't `None`
-    let (last, args) = unsafe { args.split_last().unwrap_unchecked() };
-    for val in args.iter() {
-        let val = eval(val, env)?;
-        print!("{} ", val);
+    if let Some((last, args)) = args.split_last() {
+        for val in args.iter() {
+            let val = eval(val, env)?;
+            print!("{} ", val.inspect());
+        }
+        let last_val = eval(last, env)?;
+        println!("{}", last_val.inspect());
+    } else {
+        println!();
     }
-    println!("{}", eval(last, env)?);
     Ok(LispValue::Nil)
 }
 
@@ -257,7 +259,13 @@ fn lisp_eval(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     eval(&arg, env)
 }
 
-fn lisp_readline(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_readline(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    if args.len() > 0 {
+        let val = eval(&args[0], env)?;
+        let s = val.expect_string()?;
+        print!("{}", s);
+        std::io::stdout().flush()?;
+    }
     let mut buffer = String::new();
     let len = std::io::stdin().read_line(&mut buffer)?;
     if len == 0 {
@@ -278,7 +286,6 @@ fn lisp_read_string(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> 
 }
 
 fn lisp_str(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
-    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
     let mut buffer = String::new();
     for arg in args.iter() {
         let x = eval(arg, env)?;
@@ -471,15 +478,9 @@ fn lisp_macroexpand(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> 
 }
 
 fn lisp_inspect(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
-    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
-    // args.len() != 0, so `split_list` isn't `None`
-    let (last, args) = unsafe { args.split_last().unwrap_unchecked() };
-    for val in args.iter() {
-        let val = eval(val, env)?;
-        print!("{} ", val.inspect());
-    }
-    println!("{}", eval(last, env)?.inspect());
-    Ok(LispValue::Nil)
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let val = eval(&args[0], env)?;
+    Ok(LispValue::String(val.inspect()))
 }
 
 fn lisp_try(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -702,6 +703,53 @@ fn lisp_map(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::List(out))
 }
 
+fn lisp_pr_str(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    let full_str = args.iter().map(|x| {
+        Ok(eval(x, env)?.inspect())
+    }).collect::<Result<Vec<String>>>()?;
+    Ok(LispValue::String(full_str.join(" ")))
+}
+
+fn lisp_println(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
+    // args.len() != 0, so `split_list` isn't `None`
+    let (last, args) = unsafe { args.split_last().unwrap_unchecked() };
+    for val in args.iter() {
+        let val = eval(val, env)?;
+        print!("{} ", val);
+    }
+    println!("{}", eval(last, env)?);
+    Ok(LispValue::Nil)
+}
+
+fn lisp_fnq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Func(_) => true,
+        LispValue::BuiltinFunc { .. } => true,
+        _ => false,
+    }))
+}
+
+fn lisp_stringq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::String(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_numberq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Number(_) => true,
+        _ => false,
+    }))
+}
+
 macro_rules! lisp_func {
     ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: ExternLispFunc($f) } }
 }
@@ -779,6 +827,11 @@ lazy_static! {
             "vals".to_owned() => lisp_func!("vals", lisp_vals),
             "apply".to_owned() => lisp_func!("apply", lisp_apply),
             "map".to_owned() => lisp_func!("map", lisp_map),
+            "pr-str".to_owned() => lisp_func!("pr-str", lisp_pr_str),
+            "println".to_owned() => lisp_func!("println", lisp_println),
+            "fn?".to_owned() => lisp_func!("fn?", lisp_fnq),
+            "string?".to_owned() => lisp_func!("string?", lisp_stringq),
+            "number?".to_owned() => lisp_func!("number?", lisp_numberq),
         }
     };
 }

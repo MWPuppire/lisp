@@ -124,14 +124,34 @@ impl LispValue {
     }
     pub fn inspect(&self) -> String {
         match self {
+            LispValue::Symbol(s) => format!("'{}", s),
+            LispValue::List(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("'({})", xs.join(" "))
+            },
+            LispValue::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.inspect_inner() + " " + &val.inspect_inner()
+                ).collect();
+                format!("'{{{}}}", xs.join(" "))
+            },
+            LispValue::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("'[{}]", xs.join(" "))
+            },
+            _ => self.inspect_inner(),
+        }
+    }
+    fn inspect_inner(&self) -> String {
+        match self {
             LispValue::Symbol(s) => format!("{}", s),
             LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
             LispValue::Number(n) => format!("{}", n),
             LispValue::Bool(b) => format!("{}", b),
             LispValue::Nil => format!("nil"),
             LispValue::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
-                format!("'({})", xs.join(" "))
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("({})", xs.join(" "))
             },
             LispValue::BuiltinFunc { name, .. } => format!("{}", name),
             LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
@@ -144,13 +164,13 @@ impl LispValue {
             LispValue::Keyword(s) => format!(":{}", s),
             LispValue::Map(m) => {
                 let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect() + " " + &val.inspect()
+                    key.inspect_inner() + " " + &val.inspect_inner()
                 ).collect();
-                format!("'{{{}}}", xs.join(" "))
+                format!("{{{}}}", xs.join(" "))
             },
             LispValue::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
-                format!("'[{}]", xs.join(" "))
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("[{}]", xs.join(" "))
             },
             LispValue::VariadicSymbol(s) => format!("&{}", s),
         }
@@ -285,4 +305,6 @@ pub enum LispError {
     TryNoCatch,
     #[error("cannot redefine variable in current scope")]
     AlreadyExists,
+    #[error("attempt to read while no tokens were waiting")]
+    ParseNoTokens,
 }
