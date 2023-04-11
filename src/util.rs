@@ -1,6 +1,8 @@
 use std::fmt;
+use std::hash;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
+use im::HashMap;
 use crate::env::LispEnv;
 
 #[macro_export]
@@ -41,6 +43,9 @@ pub enum LispValue {
         env: LispEnv,
         is_macro: bool,
     },
+    Keyword(String),
+    Map(HashMap<LispValue, LispValue>),
+    Vector(Vec<LispValue>),
 }
 
 impl LispValue {
@@ -55,6 +60,9 @@ impl LispValue {
             Self::Nil => "nil",
             Self::Func { .. } => "function",
             Self::Atom(_) => "atom",
+            Self::Keyword(_) => "keyword",
+            Self::Map(_) => "map",
+            Self::Vector(_) => "vector",
         }
     }
 
@@ -113,6 +121,17 @@ impl LispValue {
                 args.join(" "),
                 body.to_string()
             ),
+            LispValue::Keyword(s) => format!(":{}", s),
+            LispValue::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.inspect() + " " + &val.inspect()
+                ).collect();
+                format!("'{{{}}}", xs.join(" "))
+            },
+            LispValue::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect()).collect();
+                format!("'[{}]", xs.join(" "))
+            },
         }
     }
     pub fn truthiness(&self) -> bool {
@@ -135,10 +154,14 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::Nil, LispValue::Nil) => true,
             (LispValue::List(a), LispValue::List(b)) => a == b,
             (LispValue::Atom(a), LispValue::Atom(b)) => *a.read().unwrap() == *b.read().unwrap(),
+            (LispValue::BuiltinFunc { name: a_name, .. }, LispValue::BuiltinFunc { name: b_name, .. }) => a_name == b_name,
+            (LispValue::Vector(a), LispValue::Vector(b)) => a == b,
+            (LispValue::Keyword(a), LispValue::Keyword(b)) => a == b,
             _ => false,
         }
     }
 }
+impl std::cmp::Eq for LispValue { }
 
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -155,6 +178,51 @@ impl fmt::Display for LispValue {
             LispValue::BuiltinFunc { .. } => write!(f, "#<native function>"),
             LispValue::Atom(x) => write!(f, "{}", x.read().unwrap()),
             LispValue::Func { .. } => write!(f, "#<function>"),
+            LispValue::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
+                write!(f, "[{}]", xs.join(" "))
+            },
+            LispValue::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.to_string() + " " + &val.to_string()
+                ).collect();
+                write!(f, "{{{}}}", xs.join(" "))
+            },
+            LispValue::Keyword(s) => write!(f, ":{}", s),
+        }
+    }
+}
+
+impl hash::Hash for LispValue {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        match self {
+            LispValue::Symbol(s) => {
+                state.write_u8('_' as u8);
+                s.hash(state)
+            },
+            LispValue::String(s) => {
+                state.write_u8('"' as u8);
+                s.hash(state)
+            },
+            LispValue::Number(n) => state.write_u64(n.to_bits()),
+            LispValue::Bool(b) => b.hash(state),
+            LispValue::List(l) => {
+                state.write_u8(0x7F);
+                l.hash(state)
+            },
+            LispValue::BuiltinFunc { name, .. } => name.hash(state),
+            LispValue::Atom(x) => x.read().unwrap().hash(state),
+            LispValue::Func { body, .. } => body.hash(state),
+            LispValue::Vector(l) => {
+                state.write_u8(0xFF);
+                l.hash(state)
+            },
+            LispValue::Map(m) => m.hash(state),
+            LispValue::Keyword(s) => {
+                state.write_u8(':' as u8);
+                s.hash(state)
+            },
+            LispValue::Nil => state.write_u64(0),
         }
     }
 }
@@ -163,8 +231,8 @@ impl fmt::Display for LispValue {
 pub enum LispError {
     #[error("syntax error at line {0}, column {1}")]
     SyntaxError(usize, usize),
-    #[error("unbalanced parentheses (missing {0})")]
-    UnbalancedParens(usize),
+    #[error("missing delimiter '{1}' (expected {0} more)")]
+    UnbalancedDelim(usize, &'static str),
     #[error("undefined variable `{0}`")]
     UndefinedVariable(String),
     #[error("invalid data type. expected {0}, received {1}")]

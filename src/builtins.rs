@@ -243,9 +243,14 @@ fn lisp_eval(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
 
 fn lisp_readline(_args: &[LispValue], _env: &mut LispEnv) -> Result<LispValue> {
     let mut buffer = String::new();
-    std::io::stdin().read_line(&mut buffer)?;
-    buffer.pop(); // remove newline
-    Ok(LispValue::String(buffer))
+    let len = std::io::stdin().read_line(&mut buffer)?;
+    if len == 0 {
+        // eof
+        Ok(LispValue::Nil)
+    } else {
+        buffer.pop(); // remove newline
+        Ok(LispValue::String(buffer))
+    }
 }
 
 fn lisp_read_string(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
@@ -499,6 +504,46 @@ fn lisp_throw(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
     Err(LispError::UncaughtException(arg))
 }
 
+fn lisp_nilq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(arg.is_nil()))
+}
+
+fn lisp_trueq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Bool(b) => b,
+        _ => false,
+    }))
+}
+
+fn lisp_falseq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Bool(b) => !b,
+        _ => false,
+    }))
+}
+
+fn lisp_symbolq(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    Ok(LispValue::Bool(match arg {
+        LispValue::Symbol(_) => true,
+        _ => false,
+    }))
+}
+
+fn lisp_symbol(args: &[LispValue], env: &mut LispEnv) -> Result<LispValue> {
+    expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
+    let arg = eval(&args[0], env)?;
+    let s = arg.expect_string()?;
+    Ok(LispValue::Symbol(s.to_owned()))
+}
+
 macro_rules! lisp_func {
     ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: crate::util::LispFunc($f) } }
 }
@@ -556,6 +601,11 @@ lazy_static! {
             "try*".to_owned() => lisp_func!("try*", lisp_try),
             "catch*".to_owned() => lisp_func!("catch*", lisp_catch),
             "throw".to_owned() => lisp_func!("throw", lisp_throw),
+            "nil?".to_owned() => lisp_func!("nil?", lisp_nilq),
+            "true?".to_owned() => lisp_func!("true?", lisp_trueq),
+            "false?".to_owned() => lisp_func!("false?", lisp_falseq),
+            "symbol?".to_owned() => lisp_func!("symbol?", lisp_symbolq),
+            "symbol".to_owned() => lisp_func!("symbol", lisp_symbol),
         }
     };
 }

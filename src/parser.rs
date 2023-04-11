@@ -29,7 +29,7 @@ impl LispParser {
     pub fn is_complete(&self) -> bool {
         match self.peek() {
             Ok(_) => true,
-            Err(LispError::UnbalancedParens(_)) => false,
+            Err(LispError::UnbalancedDelim(_, _)) => false,
             Err(_) => true,
         }
     }
@@ -109,6 +109,10 @@ impl LispParser {
         match token.as_str() {
             "(" => Self::read_list(rest),
             ")" => Err(LispError::SyntaxError(*row, *col)),
+            "[" => Self::read_vec(rest),
+            "]" => Err(LispError::SyntaxError(*row, *col)),
+            "{" => Self::read_map(rest),
+            "}" => Err(LispError::SyntaxError(*row, *col)),
             "@" => {
                 let (inner, new_rest) = Self::read_form(rest)?;
                 Ok((LispValue::List(vec![
@@ -151,15 +155,51 @@ impl LispParser {
         let mut res: Vec<LispValue> = vec![];
         let mut xs = tokens;
         loop {
-            let (LispToken { token, .. }, rest) = xs.split_first().ok_or(LispError::UnbalancedParens(1))?;
+            let (LispToken { token, .. }, rest) = xs.split_first().ok_or(LispError::UnbalancedDelim(1, ")"))?;
             if token == ")" {
                 break Ok((LispValue::List(res), rest));
             }
             let (exp, new_xs) = Self::read_form(&xs).map_err(|err| match err {
-                LispError::UnbalancedParens(x) => LispError::UnbalancedParens(x + 1),
+                LispError::UnbalancedDelim(x, ")") => LispError::UnbalancedDelim(x + 1, ")"),
                 _ => err,
             })?;
             res.push(exp);
+            xs = new_xs;
+        }
+    }
+    fn read_vec<'a>(tokens: &'a [LispToken]) -> Result<(LispValue, &'a [LispToken])> {
+        let mut res: Vec<LispValue> = vec![];
+        let mut xs = tokens;
+        loop {
+            let (LispToken { token, .. }, rest) = xs.split_first().ok_or(LispError::UnbalancedDelim(1, "]"))?;
+            if token == "]" {
+                break Ok((LispValue::Vector(res), rest));
+            }
+            let (exp, new_xs) = Self::read_form(&xs).map_err(|err| match err {
+                LispError::UnbalancedDelim(x, "]") => LispError::UnbalancedDelim(x + 1, "]"),
+                _ => err,
+            })?;
+            res.push(exp);
+            xs = new_xs;
+        }
+    }
+    fn read_map<'a>(tokens: &'a [LispToken]) -> Result<(LispValue, &'a [LispToken])> {
+        let mut res: Vec<(LispValue, LispValue)> = vec![];
+        let mut xs = tokens;
+        loop {
+            let (LispToken { token, .. }, rest) = xs.split_first().ok_or(LispError::UnbalancedDelim(1, "}"))?;
+            if token == "}" {
+                break Ok((LispValue::Map(res.into()), rest));
+            }
+            let (key_exp, new_xs) = Self::read_form(&xs).map_err(|err| match err {
+                LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
+                _ => err,
+            })?;
+            let (val_exp, new_xs) = Self::read_form(&new_xs).map_err(|err| match err {
+                LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
+                _ => err,
+            })?;
+            res.push((key_exp, val_exp));
             xs = new_xs;
         }
     }
@@ -187,6 +227,8 @@ impl LispParser {
             Ok(LispValue::Bool(false))
         } else if token == "nil" {
             Ok(LispValue::Nil)
+        } else if token.starts_with(":") {
+            Ok(LispValue::Keyword(token[1..].to_owned()))
         } else if token.len() != 0 {
             Ok(LispValue::Symbol(token))
         } else {

@@ -28,6 +28,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let lisp_argv = args.iter().map(|x| LispValue::String(x.clone())).collect();
     env.set("*ARGV*".to_owned(), LispValue::List(lisp_argv));
+    env.set("*host-language*".to_owned(), LispValue::String("Rust".to_owned()));
 
     if args.len() > 1 && &args[1] != "--" {
         let mut file = File::open(&args[1])?;

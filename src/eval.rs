@@ -54,11 +54,6 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
             }
         },
         LispValue::BuiltinFunc { f, .. } => f.0(rest, env),
-        LispValue::String(_) => Err(LispError::InvalidDataType("function", "string")),
-        LispValue::Number(_) => Err(LispError::InvalidDataType("function", "number")),
-        LispValue::Bool(_) => Err(LispError::InvalidDataType("function", "bool")),
-        LispValue::Nil => Err(LispError::InvalidDataType("function", "nil")),
-        LispValue::Atom(_) => Err(LispError::InvalidDataType("function", "atom")),
         LispValue::Func { args, body, env: fn_env, .. } => {
             if rest.len() != args.len() {
                 Err(LispError::IncorrectArguments(args.len(), rest.len()))
@@ -71,6 +66,7 @@ fn eval_list(head: &LispValue, rest: &[LispValue], env: &mut LispEnv) -> Result<
                 eval(body, &mut fn_env)
             }
         },
+        _ => Err(LispError::InvalidDataType("function", head.type_of())),
     }
 }
 
@@ -85,6 +81,9 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 let head = &l[0];
                 eval_list(head, &l[1..], env)
             }
+        },
+        LispValue::Vector(l) => {
+            Ok(LispValue::Vector(l.iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?))
         },
         _ => Ok(value.clone()),
     }
