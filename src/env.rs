@@ -9,7 +9,6 @@ struct InnerEnv {
     data: HashMap<String, LispValue>,
     global: Option<LispEnv>,
     enclosing: Option<LispEnv>,
-    from_closure: Option<LispClosure>,
 }
 
 #[derive(Clone, Debug)]
@@ -22,7 +21,6 @@ impl LispClosure {
             data: args.into(),
             enclosing: Some(enclosing),
             global: Some(global),
-            from_closure: Some(self.clone()),
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -47,7 +45,6 @@ lazy_static! {
             data: BUILTINS.clone(),
             enclosing: None,
             global: None,
-            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
@@ -59,7 +56,6 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: None,
             global: None,
-            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -68,7 +64,6 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(BUILTIN_ENV.clone()),
             global: None,
-            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -77,7 +72,6 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(self.clone()),
             global: Some(self.global()),
-            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -89,19 +83,6 @@ impl LispEnv {
 
     pub fn make_closure(&self) -> LispClosure {
         LispClosure(self.clone())
-    }
-    pub fn is_from_closure(&self, closure: &LispClosure) -> bool {
-        let lock = self.0.read().unwrap();
-        if let Some(this_closure) = &lock.from_closure {
-            this_closure == closure
-        } else {
-            false
-        }
-    }
-    pub fn mass_set(&mut self, pairs: Vec<(String, LispValue)>) {
-        let newmap = HashMap::from(pairs);
-        let mut lock = self.0.write().unwrap();
-        lock.data = newmap.union(lock.data.clone());
     }
 
     pub fn global(&self) -> LispEnv {
