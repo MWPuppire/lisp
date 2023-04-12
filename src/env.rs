@@ -9,6 +9,7 @@ struct InnerEnv {
     data: HashMap<String, LispValue>,
     global: Option<LispEnv>,
     enclosing: Option<LispEnv>,
+    from_closure: Option<LispClosure>,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +22,7 @@ impl LispClosure {
             data: args.into(),
             enclosing: Some(enclosing),
             global: Some(global),
+            from_closure: Some(self.clone()),
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -28,6 +30,11 @@ impl LispClosure {
 impl hash::Hash for LispClosure {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.0.map().hash(state)
+    }
+}
+impl std::cmp::PartialEq for LispClosure {
+    fn eq(&self, other: &LispClosure) -> bool {
+        Arc::ptr_eq(&self.0.0, &other.0.0)
     }
 }
 
@@ -40,6 +47,7 @@ lazy_static! {
             data: BUILTINS.clone(),
             enclosing: None,
             global: None,
+            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
@@ -51,6 +59,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: None,
             global: None,
+            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -59,6 +68,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(BUILTIN_ENV.clone()),
             global: None,
+            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -67,6 +77,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(self.clone()),
             global: Some(self.global()),
+            from_closure: None,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -79,6 +90,20 @@ impl LispEnv {
     pub fn make_closure(&self) -> LispClosure {
         LispClosure(self.clone())
     }
+    pub fn is_from_closure(&self, closure: &LispClosure) -> bool {
+        let lock = self.0.read().unwrap();
+        if let Some(this_closure) = &lock.from_closure {
+            this_closure == closure
+        } else {
+            false
+        }
+    }
+    pub fn mass_set(&mut self, pairs: Vec<(String, LispValue)>) {
+        let newmap = HashMap::from(pairs);
+        let mut lock = self.0.write().unwrap();
+        lock.data = newmap.union(lock.data.clone());
+    }
+
     pub fn global(&self) -> LispEnv {
         let lock = self.0.read().unwrap();
         if let Some(env) = &lock.global {
@@ -117,7 +142,7 @@ impl LispEnv {
         lock.data.insert(key, val);
         true
     }
-    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>) {
+    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, &mut LispEnv) -> Result<(LispValue, bool)>) {
         let mut lock = self.0.write().unwrap();
         let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };
         lock.data.insert(name.to_owned(), val);

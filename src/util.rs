@@ -17,10 +17,10 @@ macro_rules! expect {
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Copy)]
-pub struct ExternLispFunc(pub fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>);
+pub struct ExternLispFunc(pub fn(Vector<LispValue>, &mut LispEnv) -> Result<(LispValue, bool)>);
 impl fmt::Debug for ExternLispFunc {
     fn fmt<'a>(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        (self.0 as fn(Vector<LispValue>, &'a mut LispEnv) -> Result<LispValue>).fmt(f)
+        (self.0 as fn(Vector<LispValue>, &'a mut LispEnv) -> Result<(LispValue, bool)>).fmt(f)
     }
 }
 
