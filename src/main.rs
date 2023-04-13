@@ -3,9 +3,11 @@ extern crate regex;
 extern crate thiserror;
 extern crate rustyline;
 extern crate unescape;
+extern crate im;
 
 use std::fs::File;
 use std::io::prelude::*;
+use im::Vector;
 
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};
@@ -26,7 +28,9 @@ fn main() -> Result<()> {
     let mut buffer = String::new();
 
     let args: Vec<String> = std::env::args().collect();
-    let lisp_argv = args.iter().map(|x| LispValue::String(x.clone())).collect();
+    // *ARGV* symbol doesn't include the program name
+    let mut lisp_argv: Vector<LispValue> = args.iter().skip(1).map(|x| LispValue::String(x.clone())).collect();
+    lisp_argv.push_front(LispValue::Symbol("list".to_owned()));
     env.set("*ARGV*".to_owned(), LispValue::List(lisp_argv));
     env.set("*host-language*".to_owned(), LispValue::String("Rust".to_owned()));
     parser.add_tokenize("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))");

@@ -76,7 +76,7 @@ fn lisp_let(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue
     while let Some(name) = list_iter.next() {
         let Some(val_expr) = list_iter.next() else { unreachable!() };
         let name = name.expect_symbol()?;
-        let val = eval(val_expr, env)?;
+        let val = eval(val_expr, &mut new_env)?;
         new_env.set(name.to_owned(), val);
     }
     Ok((eval(&args[0], &mut new_env)?, false))
@@ -90,7 +90,8 @@ fn lisp_if(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue,
         let Some(then) = args.pop_front() else { unreachable!() };
         Ok((then, true))
     } else {
-        if let Some(arg) = args.pop_back() {
+        if args.len() > 1 {
+            let Some(arg) = args.pop_back() else { unreachable!() };
             Ok((arg, true))
         } else {
             Ok((LispValue::Nil, false))
@@ -767,14 +768,15 @@ fn lisp_pr_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue,
 }
 
 fn lisp_println(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, bool)> {
-    expect!(args.len() > 0, LispError::IncorrectArguments(1, 0));
-    // args.len() != 0, so `split_list` isn't `None`
-    let Some(last) = args.pop_back() else { unreachable!() };
-    for val in args.iter() {
-        let val = eval(val, env)?;
-        print!("{} ", val);
+    if let Some(last) = args.pop_back() {
+        for val in args.iter() {
+            let val = eval(val, env)?;
+            print!("{} ", val);
+        }
+        println!("{}", eval(&last, env)?);
+    } else {
+        println!();
     }
-    println!("{}", eval(&last, env)?);
     Ok((LispValue::Nil, false))
 }
 

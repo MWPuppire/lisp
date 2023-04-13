@@ -24,7 +24,7 @@ impl fmt::Debug for ExternLispFunc {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct LispFunc {
     pub args: Vec<String>,
     pub body: LispValue,
@@ -205,6 +205,9 @@ impl std::cmp::PartialEq for LispValue {
             (LispValue::VariadicSymbol(a), LispValue::VariadicSymbol(b)) => a == b,
             (LispValue::Symbol(a), LispValue::VariadicSymbol(b)) => a == b,
             (LispValue::VariadicSymbol(a), LispValue::Symbol(b)) => a == b,
+            (LispValue::Func(a), LispValue::Func(b)) => a == b,
+            (LispValue::List(a), LispValue::Vector(b)) => a == &Vector::from(b),
+            (LispValue::Vector(a), LispValue::List(b)) => &Vector::from(a) == b,
             _ => false,
         }
     }

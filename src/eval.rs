@@ -49,7 +49,8 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
     let evaluator = if f.is_macro { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
-        let last_vals = vals.split_off(f.args.len() - 1);
+        let mut last_vals = vals.split_off(f.args.len() - 1);
+        last_vals.push_front(LispValue::Symbol("list".to_owned()));
         let variadic_idx = f.args.len() - 1;
         let arg_names = f.args[0..variadic_idx].iter().map(|x| x.to_owned());
         let mut params: Vec<(String, LispValue)> = zip(arg_names, vals).collect();
