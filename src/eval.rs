@@ -36,13 +36,13 @@ pub fn expand_macros(val: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, &env)?;
         let LispValue::Func(f) = var else { unreachable!() };
-        (out, env) = apply(f, &list, &mut env)?;
+        (out, env) = apply(f, true, &list, &mut env)?;
     }
     Ok(out)
 }
 
-fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
-    let evaluator = if f.is_macro { expand_macros } else { eval };
+fn apply(f: Box<LispFunc>, just_macros: bool, args: &Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
+    let evaluator = if just_macros { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let mut last_vals = vals.split_off(f.args.len() - 1);
@@ -111,7 +111,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::Func(f) => {
                     if let Some(args) = tail.take() {
-                        let (new_head, new_env) = apply(f, &args, &mut env)?;
+                        let (new_head, new_env) = apply(f, false, &args, &mut env)?;
                         queued.push((None, None, env));
                         head = new_head;
                         env = new_env;

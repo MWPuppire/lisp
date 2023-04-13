@@ -57,7 +57,7 @@ impl LispValue {
             Self::Number(_) => "number",
             Self::Bool(_) => "bool",
             Self::Nil => "nil",
-            Self::Func { .. } => "function",
+            Self::Func(_) => "function",
             Self::Atom(_) => "atom",
             Self::Keyword(_) => "keyword",
             Self::Map(_) => "map",
@@ -220,7 +220,7 @@ impl fmt::Display for LispValue {
             },
             LispValue::BuiltinFunc { .. } => write!(f, "#<native function>"),
             LispValue::Atom(x) => write!(f, "{}", x.read().unwrap()),
-            LispValue::Func { .. } => write!(f, "#<function>"),
+            LispValue::Func(_) => write!(f, "#<function>"),
             LispValue::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "[{}]", xs.join(" "))
@@ -305,4 +305,6 @@ pub enum LispError {
     AlreadyExists,
     #[error("attempt to read while no tokens were waiting")]
     ParseNoTokens,
+    #[error("`meta` and `with-meta` are not implemented for this version")]
+    NoMeta,
 }

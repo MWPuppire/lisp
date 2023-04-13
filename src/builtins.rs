@@ -877,11 +877,11 @@ fn lisp_conj(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
 }
 
 fn lisp_meta(_args: Vector<LispValue>, _env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
-    unimplemented!();
+    Err(LispError::NoMeta)
 }
 
 fn lisp_with_meta(_args: Vector<LispValue>, _env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
-    unimplemented!();
+    Err(LispError::NoMeta)
 }
 
 macro_rules! lisp_func {
