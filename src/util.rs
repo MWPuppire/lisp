@@ -16,14 +16,6 @@ macro_rules! expect {
 
 pub type Result<T> = std::result::Result<T, LispError>;
 
-#[derive(Clone, Copy)]
-pub struct ExternLispFunc(pub fn(Vector<LispValue>, &mut LispEnv) -> Result<(LispValue, bool)>);
-impl fmt::Debug for ExternLispFunc {
-    fn fmt<'a>(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        (self.0 as fn(Vector<LispValue>, &'a mut LispEnv) -> Result<(LispValue, bool)>).fmt(f)
-    }
-}
-
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct LispFunc {
     pub args: Vec<String>,
@@ -46,7 +38,7 @@ pub enum LispValue {
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
-        f: ExternLispFunc,
+        f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>,
     },
     Func(Box<LispFunc>),
     Keyword(String),
@@ -249,11 +241,11 @@ impl hash::Hash for LispValue {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         match self {
             LispValue::Symbol(s) => {
-                state.write_u8('_' as u8);
+                state.write_u8(b'_');
                 s.hash(state)
             },
             LispValue::String(s) => {
-                state.write_u8('"' as u8);
+                state.write_u8(b'"');
                 s.hash(state)
             },
             LispValue::Number(n) => state.write_u64(n.to_bits()),
@@ -271,12 +263,12 @@ impl hash::Hash for LispValue {
             },
             LispValue::Map(m) => m.hash(state),
             LispValue::Keyword(s) => {
-                state.write_u8(':' as u8);
+                state.write_u8(b':');
                 s.hash(state)
             },
             LispValue::Nil => state.write_u64(0),
             LispValue::VariadicSymbol(s) => {
-                state.write_u8('_' as u8);
+                state.write_u8(b'_');
                 s.hash(state)
             },
         }

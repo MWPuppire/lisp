@@ -6,13 +6,6 @@ fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
     env.get(&val).ok_or(LispError::UndefinedVariable(val))
 }
 
-fn is_macro(val: &LispValue) -> bool {
-    match val {
-        LispValue::Func(f) => f.is_macro,
-        _ => false,
-    }
-}
-
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> Result<bool> {
     match val {
         LispValue::List(list) => {
@@ -20,7 +13,10 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> Result<bool> {
                 Ok(false)
             } else {
                 if let Ok(sym) = list[0].expect_symbol() {
-                    Ok(is_macro(&lookup_variable(sym.to_owned(), env)?))
+                    match lookup_variable(sym.to_owned(), env)? {
+                        LispValue::Func(f) => Ok(f.is_macro),
+                        _ => Ok(false),
+                    }
                 } else {
                     Ok(false)
                 }
@@ -102,9 +98,10 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::BuiltinFunc { f, name } => {
                     if let Some(args) = tail.take() {
-                        let (new_head, cont) = f.0(args, &mut env)?;
+                        let (new_head, new_env, cont) = f(args, env)?;
                         if cont {
                             head = new_head;
+                            env = new_env;
                         } else {
                             break Ok(new_head);
                         }

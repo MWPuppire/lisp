@@ -123,9 +123,9 @@ impl LispEnv {
         lock.data.insert(key, val);
         true
     }
-    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, &mut LispEnv) -> Result<(LispValue, bool)>) {
+    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>) {
         let mut lock = self.0.write().unwrap();
-        let val = LispValue::BuiltinFunc { name, f: crate::util::ExternLispFunc(f) };
+        let val = LispValue::BuiltinFunc { name, f };
         lock.data.insert(name.to_owned(), val);
     }
 }
