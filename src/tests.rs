@@ -18,6 +18,7 @@ lazy_static! {
             "#,
             "incA.mal".to_string() => r#"
                 (def! inc4 (fn* (a) (+ 4 a)))
+                (prn (inc4 5))
             "#,
             "incB.mal".to_string() => r#"
                 ;; A comment in a file
@@ -66,7 +67,7 @@ fn lisp_test_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(Lis
 }
 
 fn testing_env() -> LispEnv {
-    let mut env = LispEnv::new_stdlib();
+    let mut env = LispEnv::new_stdlib_protected();
     // mock filesystem; other functionality could be mocked later as needed
     env.bind_func("slurp", lisp_test_slurp);
     env.bind_func("load-file", lisp_test_load_file);

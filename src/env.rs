@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 use std::hash;
 use im::{HashMap, Vector};
 use lazy_static::lazy_static;
-use crate::{LispValue, Result, builtins::BUILTINS};
+use crate::{LispValue, Result, builtins::{BUILTINS, BUILTINS_NO_IO}};
 
 #[derive(Clone, Debug)]
 struct InnerEnv {
@@ -51,6 +51,15 @@ lazy_static! {
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
+    static ref BUILTIN_NO_IO_ENV: LispEnv = {
+        let inner = InnerEnv {
+            data: BUILTINS_NO_IO.clone(),
+            enclosing: None,
+            global: None,
+            constant: true,
+        };
+        LispEnv(Arc::new(RwLock::new(inner)))
+    };
 }
 
 impl LispEnv {
@@ -67,6 +76,15 @@ impl LispEnv {
         let inner = InnerEnv {
             data: HashMap::new(),
             enclosing: Some(BUILTIN_ENV.clone()),
+            global: None,
+            constant: false,
+        };
+        LispEnv(Arc::new(RwLock::new(inner)))
+    }
+    pub fn new_stdlib_protected() -> Self {
+        let inner = InnerEnv {
+            data: HashMap::new(),
+            enclosing: Some(BUILTIN_NO_IO_ENV.clone()),
             global: None,
             constant: false,
         };

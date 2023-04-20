@@ -891,10 +891,7 @@ lazy_static! {
     static ref START_TIME: Instant = {
         Instant::now()
     };
-    pub static ref BUILTINS: HashMap<String, LispValue> = {
-        // dummy to make `time-ms` count from environment (so probably program)
-        // initialization rather than since the first `time-ms` call
-        let _ = *START_TIME;
+    pub static ref BUILTINS_NO_IO: HashMap<String, LispValue> = {
         hashmap!{
             "+".to_owned() => lisp_func!("+", lisp_plus),
             "-".to_owned() => lisp_func!("-", lisp_minus),
@@ -907,7 +904,6 @@ lazy_static! {
             "do".to_owned() => lisp_func!("do", lisp_do),
             "fn*".to_owned() => lisp_func!("fn*", lisp_fn),
             "=".to_owned() => lisp_func!("=", lisp_equals),
-            "prn".to_owned() => lisp_func!("prn", lisp_prn),
             "list".to_owned() => lisp_func!("list", lisp_list),
             "list?".to_owned() => lisp_func!("list?", lisp_listq),
             "empty?".to_owned() => lisp_func!("empty?", lisp_emptyq),
@@ -923,11 +919,8 @@ lazy_static! {
             "reset!".to_owned() => lisp_func!("reset!", lisp_reset),
             "swap!".to_owned() => lisp_func!("swap!", lisp_swap),
             "eval".to_owned() => lisp_func!("eval", lisp_eval),
-            "readline".to_owned() => lisp_func!("readline", lisp_readline),
             "read-string".to_owned() => lisp_func!("read-string", lisp_read_string),
             "str".to_owned() => lisp_func!("str", lisp_str),
-            "slurp".to_owned() => lisp_func!("slurp", lisp_slurp),
-            "load-file".to_owned() => lisp_func!("load-file", lisp_load_file),
             "typeof".to_owned() => lisp_func!("typeof", lisp_typeof),
             "quote".to_owned() => lisp_func!("quote", lisp_quote),
             "quasiquote".to_owned() => lisp_func!("quasiquote", lisp_quasiquote),
@@ -968,16 +961,27 @@ lazy_static! {
             "apply".to_owned() => lisp_func!("apply", lisp_apply),
             "map".to_owned() => lisp_func!("map", lisp_map),
             "pr-str".to_owned() => lisp_func!("pr-str", lisp_pr_str),
-            "println".to_owned() => lisp_func!("println", lisp_println),
             "fn?".to_owned() => lisp_func!("fn?", lisp_fnq),
             "string?".to_owned() => lisp_func!("string?", lisp_stringq),
             "number?".to_owned() => lisp_func!("number?", lisp_numberq),
             "vec".to_owned() => lisp_func!("vec", lisp_vec),
-            "time-ms".to_owned() => lisp_func!("time-ms", lisp_time_ms),
             "seq".to_owned() => lisp_func!("seq", lisp_seq),
             "conj".to_owned() => lisp_func!("conj", lisp_conj),
             "meta".to_owned() => lisp_func!("meta", lisp_meta),
             "with-meta".to_owned() => lisp_func!("with-meta", lisp_with_meta),
         }
+    };
+    pub static ref BUILTINS: HashMap<String, LispValue> = {
+        // dummy to make `time-ms` count from environment (so probably program)
+        // initialization rather than since the first `time-ms` call
+        let _ = *START_TIME;
+        hashmap!{
+            "prn".to_owned() => lisp_func!("prn", lisp_prn),
+            "readline".to_owned() => lisp_func!("readline", lisp_readline),
+            "slurp".to_owned() => lisp_func!("slurp", lisp_slurp),
+            "load-file".to_owned() => lisp_func!("load-file", lisp_load_file),
+            "println".to_owned() => lisp_func!("println", lisp_println),
+            "time-ms".to_owned() => lisp_func!("time-ms", lisp_time_ms),
+        }.union(BUILTINS_NO_IO.clone())
     };
 }
