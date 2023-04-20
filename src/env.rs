@@ -9,6 +9,7 @@ struct InnerEnv {
     data: HashMap<String, LispValue>,
     global: Option<LispEnv>,
     enclosing: Option<LispEnv>,
+    constant: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +22,7 @@ impl LispClosure {
             data: args.into(),
             enclosing: Some(enclosing),
             global: Some(global),
+            constant: false,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -45,6 +47,7 @@ lazy_static! {
             data: BUILTINS.clone(),
             enclosing: None,
             global: None,
+            constant: true,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
@@ -56,6 +59,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: None,
             global: None,
+            constant: false,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -64,6 +68,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(BUILTIN_ENV.clone()),
             global: None,
+            constant: false,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -72,6 +77,7 @@ impl LispEnv {
             data: HashMap::new(),
             enclosing: Some(self.clone()),
             global: Some(self.global()),
+            constant: false,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -106,9 +112,9 @@ impl LispEnv {
         }
         None
     }
-    pub fn insert(&mut self, key: String, val: LispValue) -> bool {
+    pub fn set(&mut self, key: String, val: LispValue) -> bool {
         let lock = self.0.read().unwrap();
-        if lock.data.contains_key(&key) {
+        if lock.constant && lock.data.contains_key(&key) {
             false
         } else {
             drop(lock);
@@ -116,12 +122,6 @@ impl LispEnv {
             lock.data.insert(key, val);
             true
         }
-    }
-    pub fn set(&mut self, key: String, val: LispValue) -> bool {
-        // can't assign to an outer value
-        let mut lock = self.0.write().unwrap();
-        lock.data.insert(key, val);
-        true
     }
     pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>) {
         let mut lock = self.0.write().unwrap();
