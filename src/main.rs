@@ -18,6 +18,8 @@ use crate::eval::eval;
 pub mod env;
 use crate::env::LispEnv;
 pub mod builtins;
+#[cfg(test)]
+mod tests;
 
 fn main() -> Result<()> {
     let mut rl = rustyline::DefaultEditor::new().unwrap();
