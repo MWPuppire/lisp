@@ -33,8 +33,8 @@ fn main() -> Result<()> {
     lisp_argv.push_front(LispValue::Symbol("list".to_owned()));
     env.set("*ARGV*".to_owned(), LispValue::List(lisp_argv));
     env.set("*host-language*".to_owned(), LispValue::String("Rust".to_owned()));
-    parser.add_tokenize("(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))");
-    eval(&parser.next()?, &mut env)?;
+    let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
+    eval(&LispParser::parse(cond)?, &mut env)?;
 
     if args.len() > 1 && &args[1] != "--" {
         let mut file = File::open(&args[1])?;

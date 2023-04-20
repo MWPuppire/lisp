@@ -23,6 +23,12 @@ impl LispParser {
             col: 1,
         }
     }
+    pub fn parse(input: &str) -> Result<LispValue> {
+        let mut tokens = vec![];
+        Self::tokenize(&mut tokens, input, 1, 1);
+        let (form, _) = Self::read_form(&tokens)?;
+        Ok(form)
+    }
     pub fn next_line(&mut self) {
         self.row += 1;
         self.col = 1;
@@ -42,48 +48,11 @@ impl LispParser {
         self.tokens.len() > 0 && self.peek().is_some()
     }
     pub fn add_tokenize(&mut self, input: &str) {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
-        }
-        if input.len() == 0 {
-            return;
-        }
-        let mut row = self.row;
-        let mut col = self.col;
-        let mut last_idx = 0;
-        for found in RE.find_iter(input) {
-            let start = found.start();
-            let end = found.end();
-            for ch in input[last_idx..start].chars() {
-                if ch == '\n' {
-                    col = 1;
-                    row += 1;
-                } else {
-                    col += 1;
-                }
-            }
-            let found = &input[start..end];
-            self.tokens.push(LispToken {
-                token: found.trim_start().to_owned(),
-                row,
-                col
-            });
-            col += end - start;
-            last_idx = end;
-        }
-        let last_ch = input.len() - 1;
-        if last_ch >= last_idx {
-            for ch in input[last_idx..last_ch].chars() {
-                if ch == '\n' {
-                    col = 1;
-                    row += 1;
-                } else {
-                    col += 1;
-                }
-            }
-        }
-        self.row = row;
-        self.col = col;
+        let row = self.row;
+        let col = self.col;
+        let (new_row, new_col) = Self::tokenize(&mut self.tokens, input, row, col);
+        self.row = new_row;
+        self.col = new_col;
     }
     pub fn next(&mut self) -> Result<LispValue> {
         let read = Self::read_form(&self.tokens);
@@ -107,6 +76,51 @@ impl LispParser {
             Ok((val, _)) => Some(Ok(val)),
         }
     }
+
+    fn tokenize(tokens: &mut Vec<LispToken>, input: &str, mut row: usize, mut col: usize) -> (usize, usize) {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
+        }
+        if input.len() == 0 {
+            return (row, col);
+        }
+        let mut last_idx = 0;
+        for found in RE.find_iter(input) {
+            let start = found.start();
+            let end = found.end();
+            for ch in input[last_idx..start].chars() {
+                if ch == '\n' {
+                    col = 1;
+                    row += 1;
+                } else {
+                    col += 1;
+                }
+            }
+            let found = &input[start..end];
+            tokens.push(LispToken {
+                token: found.trim_start_matches(|c: char| {
+                    c.is_whitespace() || c == ','
+                }).to_owned(),
+                row,
+                col
+            });
+            col += end - start;
+            last_idx = end;
+        }
+        let last_ch = input.len() - 1;
+        if last_ch >= last_idx {
+            for ch in input[last_idx..last_ch].chars() {
+                if ch == '\n' {
+                    col = 1;
+                    row += 1;
+                } else {
+                    col += 1;
+                }
+            }
+        }
+        (row, col)
+    }
+
     fn read_form<'a>(tokens: &'a [LispToken]) -> Result<(LispValue, &'a [LispToken])> {
         if tokens.len() == 0 {
             return Err(LispError::ParseNoTokens);
