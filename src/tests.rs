@@ -1,11 +1,10 @@
+use im::{Vector, vector, HashMap, hashmap};
+use lazy_static::lazy_static;
 use crate::util::{LispValue, LispError, Result};
 use crate::parser::LispParser;
 use crate::eval::eval;
 use crate::env::LispEnv;
 use crate::expect;
-
-use im::{Vector, vector, HashMap, hashmap};
-use lazy_static::lazy_static;
 
 lazy_static! {
     static ref MOCK_FS: HashMap<String, &'static str> = {
