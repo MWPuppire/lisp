@@ -1,48 +1,57 @@
 use std::iter::zip;
-use im::Vector;
+use im::{Vector, vector};
 use crate::{LispValue, LispError, Result, env::LispEnv, util::LispFunc};
 
 fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
     env.get(&val).ok_or(LispError::UndefinedVariable(val))
 }
 
-fn is_macro_call(val: &LispValue, env: &LispEnv) -> Result<bool> {
+fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     match val {
         LispValue::List(list) => {
             if list.len() == 0 {
-                Ok(false)
+                false
             } else {
                 if let Ok(sym) = list[0].expect_symbol() {
-                    match lookup_variable(sym.to_owned(), env)? {
-                        LispValue::Func(f) => Ok(f.is_macro),
-                        _ => Ok(false),
+                    match lookup_variable(sym.to_owned(), env) {
+                        Ok(LispValue::Func(f)) => f.is_macro,
+                        _ => false,
                     }
                 } else {
-                    Ok(false)
+                    false
                 }
             }
         },
-        _ => Ok(false),
+        _ => false,
     }
 }
 
 pub fn expand_macros(val: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    let mut out = val.clone();
-    let mut env = env.clone();
-    while is_macro_call(&out, &env)? {
-        let mut list = out.into_list()?;
-        // unreachable, since `is_macro_call` is true
+    if is_macro_call(val, env) {
+        let mut list = val.clone().into_list()?;
         let Some(head) = list.pop_front() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, &env)?;
         let LispValue::Func(f) = var else { unreachable!() };
-        (out, env) = apply(f, true, &list, &mut env)?;
+        let (out, _) = apply(f, &list, env)?;
+        Ok(out)
+    } else {
+        Ok(val.clone())
     }
-    Ok(out)
 }
 
-fn apply(f: Box<LispFunc>, just_macros: bool, args: &Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
-    let evaluator = if just_macros { expand_macros } else { eval };
+fn wrap_macro(mut f: Box<LispFunc>, env: &mut LispEnv) -> Result<LispValue> {
+    f.closure = env.make_closure();
+    f.args.clear();
+    f.name.take();
+    f.is_macro = false;
+    f.variadic = false;
+    f.body = expand_macros(&f.body, env)?;
+    Ok(LispValue::List(vector![LispValue::Func(f)]))
+}
+
+fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
+    let evaluator = if f.is_macro { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let mut last_vals = vals.split_off(f.args.len() - 1);
@@ -54,8 +63,12 @@ fn apply(f: Box<LispFunc>, just_macros: bool, args: &Vector<LispValue>, env: &mu
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
         }
-        let fn_env = f.closure.make_env(&params);
-        Ok((f.body.clone(), fn_env))
+        let mut fn_env = f.closure.make_env(&params);
+        if f.is_macro {
+            Ok((wrap_macro(f, &mut fn_env)?, fn_env))
+        } else {
+            Ok((f.body.clone(), fn_env))
+        }
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
@@ -65,8 +78,12 @@ fn apply(f: Box<LispFunc>, just_macros: bool, args: &Vector<LispValue>, env: &mu
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
         }
-        let fn_env = f.closure.make_env(&params);
-        Ok((f.body.clone(), fn_env))
+        let mut fn_env = f.closure.make_env(&params);
+        if f.is_macro {
+            Ok((wrap_macro(f, &mut fn_env)?, fn_env))
+        } else {
+            Ok((f.body.clone(), fn_env))
+        }
     }
 }
 
@@ -111,7 +128,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::Func(f) => {
                     if let Some(args) = tail.take() {
-                        let (new_head, new_env) = apply(f, false, &args, &mut env)?;
+                        let (new_head, new_env) = apply(f, &args, &mut env)?;
                         queued.push((None, None, env));
                         head = new_head;
                         env = new_env;
