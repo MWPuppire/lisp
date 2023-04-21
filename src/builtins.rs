@@ -6,7 +6,7 @@ use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use crate::{LispValue, LispError, Result, expect};
 use crate::env::LispEnv;
-use crate::eval::{eval, expand_macros};
+use crate::eval::{eval, eval_top, expand_macros};
 use crate::parser::LispParser;
 use crate::util::LispFunc;
 
@@ -373,10 +373,10 @@ fn inner_quasiquote(arg: LispValue, env: &mut LispEnv) -> Result<(LispValue, boo
                 Ok((LispValue::List(l), false))
             } else if l[0] == LispValue::Symbol("unquote".to_owned()) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
-                Ok((eval(&l[1], env)?, false))
+                Ok((eval_top(&l[1], env)?, false))
             } else if l[0] == LispValue::Symbol("splice-unquote".to_owned()) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
-                Ok((eval(&l[1], env)?, true))
+                Ok((eval_top(&l[1], env)?, true))
             } else {
                 let mut out = Vector::new();
                 for val in l.into_iter() {

@@ -12,11 +12,12 @@ use im::Vector;
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};
 pub mod parser;
-use crate::parser::LispParser;
+pub use crate::parser::LispParser;
 pub mod eval;
-use crate::eval::eval;
+pub use crate::eval::eval;
+use crate::eval::eval_top;
 pub mod env;
-use crate::env::LispEnv;
+pub use crate::env::LispEnv;
 pub mod builtins;
 #[cfg(test)]
 mod tests;
@@ -57,7 +58,7 @@ fn main() -> Result<()> {
                 buffer = String::new();
                 while parser.has_tokens() {
                     match parser.next() {
-                        Ok(tok) => match eval(&tok, &mut env) {
+                        Ok(tok) => match eval_top(&tok, &mut env) {
                             Ok(out) => println!("{}", out.inspect()),
                             Err(err) => println!("Err: {}", err),
                         },

@@ -150,3 +150,10 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     }
     Ok(LispValue::Nil)
 }
+
+pub fn eval_top(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
+    match value {
+        LispValue::Symbol(s) => lookup_variable(s.to_string(), &env),
+        x => eval(x, env),
+    }
+}
