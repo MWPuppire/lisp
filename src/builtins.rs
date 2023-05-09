@@ -889,6 +889,7 @@ macro_rules! make_lisp_funcs {
         }
     }
 }
+
 lazy_static! {
     pub static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
         let mut strs = LispEnv::interner_mut();
@@ -971,8 +972,10 @@ lazy_static! {
             "with-meta" => lisp_with_meta,
         )
     };
+}
 
-    #[cfg(feature = "io-stdlib")]
+#[cfg(feature = "io-stdlib")]
+lazy_static! {
     pub static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
         // dummy to make `time-ms` count from environment (so probably program)
         // initialization rather than since the first `time-ms` call

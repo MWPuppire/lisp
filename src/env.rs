@@ -72,8 +72,10 @@ lazy_static! {
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
+}
 
-    #[cfg(feature = "io-stdlib")]
+#[cfg(feature = "io-stdlib")]
+lazy_static! {
     static ref BUILTIN_ENV: LispEnv = {
         let inner = InnerEnv {
             data: builtins::BUILTINS.clone(),
