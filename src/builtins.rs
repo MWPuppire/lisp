@@ -5,7 +5,7 @@ use std::time::Instant;
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use crate::{LispValue, LispError, Result, expect};
-use crate::env::LispEnv;
+use crate::env::{LispEnv, LispSymbol};
 use crate::eval::{eval, eval_top, expand_macros};
 use crate::parser::LispParser;
 use crate::util::LispFunc;
@@ -54,12 +54,12 @@ fn lisp_def(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     let val = eval(&args[1], &mut env)?;
     let val = match val {
         LispValue::Func(mut f) => {
-            f.name = Some(name.to_owned());
+            f.name = Some(name);
             LispValue::Func(f)
         },
         x => x,
     };
-    if !env.set(name.to_owned(), val.clone()) {
+    if !env.set(name, val.clone()) {
         Err(LispError::AlreadyExists)
     } else {
         Ok((val, env, false))
@@ -77,7 +77,7 @@ fn lisp_let(mut args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, Lis
         let Some(val_expr) = list_iter.next() else { unreachable!() };
         let name = name.expect_symbol()?;
         let val = eval(val_expr, &mut new_env)?;
-        new_env.set(name.to_owned(), val);
+        new_env.set(name, val);
     }
     let Some(head) = args.pop_front() else { unreachable!() };
     Ok((head, new_env, true))
@@ -123,7 +123,7 @@ fn lisp_fn(mut args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, Lisp
     } else {
         false
     };
-    let arg_names = args_list.into_iter().map(|x| x.into_symbol()).collect::<Result<Vec<String>>>()?;
+    let arg_names = args_list.into_iter().map(|x| x.expect_symbol()).collect::<Result<Vec<LispSymbol>>>()?;
     let Some(body) = args.pop_front() else { unreachable!() };
     let closure = env.make_closure();
     Ok((LispValue::Func(Box::new(LispFunc {
@@ -268,10 +268,11 @@ fn lisp_swap(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
     let val = eval(&first, &mut env)?;
     let atom = val.expect_atom()?;
     let val = eval(&second, &mut env)?;
+    let deref_sym = LispEnv::symbol_for_static("deref");
     let mut list = vector![
         val,
         LispValue::List(vector![
-            LispValue::Symbol("deref".to_owned()),
+            LispValue::Symbol(deref_sym),
             LispValue::Atom(atom.clone()),
         ]),
     ];
@@ -367,14 +368,16 @@ fn lisp_quote(mut args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, L
 }
 
 fn inner_quasiquote(arg: LispValue, env: &mut LispEnv) -> Result<(LispValue, bool)> {
+    let unquote_sym = LispEnv::symbol_for_static("unquote");
+    let splice_sym = LispEnv::symbol_for_static("splice-unquote");
     match arg {
         LispValue::List(l) => {
             if l.len() == 0 {
                 Ok((LispValue::List(l), false))
-            } else if l[0] == LispValue::Symbol("unquote".to_owned()) {
+            } else if l[0] == LispValue::Symbol(unquote_sym) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
                 Ok((eval_top(&l[1], env)?, false))
-            } else if l[0] == LispValue::Symbol("splice-unquote".to_owned()) {
+            } else if l[0] == LispValue::Symbol(splice_sym) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
                 Ok((eval_top(&l[1], env)?, true))
             } else {
@@ -402,7 +405,9 @@ fn lisp_quasiquote(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(Lis
             if list.len() == 0 {
                 return Ok((LispValue::List(Vector::new()), env, false));
             }
-            if list[0] == LispValue::Symbol("unquote".to_owned()) || list[0] == LispValue::Symbol("splice-unquote".to_owned()) {
+            let unquote_sym = LispEnv::symbol_for_static("unquote");
+            let splice_sym = LispEnv::symbol_for_static("splice-unquote");
+            if list[0] == LispValue::Symbol(unquote_sym) || list[0] == LispValue::Symbol(splice_sym) {
                 expect!(list.len() == 2, LispError::IncorrectArguments(1, list.len() - 1));
                 let Some(val) = list.pop_back() else { unreachable!() };
                 return Ok((val, env, true));
@@ -526,11 +531,12 @@ fn lisp_try(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue,
     if let Ok(mut catch) = catch.into_list() {
         expect!(catch.len() == 3, LispError::IncorrectArguments(2, args.len() - 1));
         let Some(catch_sym) = catch.pop_front() else { unreachable!() };
-        if catch_sym != LispValue::Symbol("catch*".to_owned()) {
+        let base_catch_sym = LispValue::Symbol(LispEnv::symbol_for_static("catch*"));
+        if catch_sym != base_catch_sym {
             return Err(LispError::TryNoCatch);
         }
         let Some(err_name) = catch.pop_front() else { unreachable!() };
-        let err_name = err_name.into_symbol()?;
+        let err_name = err_name.expect_symbol()?;
         let mut caught_env = env.new_nested();
         let Some(catch) = catch.pop_front() else { unreachable!() };
         match eval(&args[0], &mut env) {
@@ -599,7 +605,7 @@ fn lisp_symbol(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, 
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval(&args[0], &mut env)?;
     let s = arg.expect_string()?;
-    Ok((LispValue::Symbol(s.to_owned()), env, false))
+    Ok((LispValue::Symbol(LispEnv::symbol_for(s)), env, false))
 }
 
 fn lisp_vector(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -622,7 +628,7 @@ fn lisp_keyword(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue,
     Ok((match arg {
         LispValue::Keyword(s) => Ok(LispValue::Keyword(s)),
         LispValue::String(s) => Ok(LispValue::Keyword(s)),
-        LispValue::Symbol(s) => Ok(LispValue::Keyword(s)),
+        LispValue::Symbol(s) => Ok(LispValue::Keyword(LispEnv::symbol_string(s).unwrap().to_owned())),
         x => Err(LispError::InvalidDataType("string", x.type_of())),
     }?, env, false))
 }
@@ -819,6 +825,9 @@ fn lisp_vec(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     }
 }
 
+lazy_static! {
+    static ref START_TIME: Instant = Instant::now();
+}
 fn lisp_time_ms(_args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     Ok((LispValue::Number(START_TIME.elapsed().as_secs_f64() * 1000.0), env, false))
 }
@@ -884,104 +893,113 @@ fn lisp_with_meta(_args: Vector<LispValue>, _env: LispEnv) -> Result<(LispValue,
     Err(LispError::NoMeta)
 }
 
-macro_rules! lisp_func {
-    ($name:expr, $f:expr) => { LispValue::BuiltinFunc { name: $name, f: $f } }
+macro_rules! make_lisp_funcs {
+    ($interner:expr, $($name:literal => $f:path,)*) => {
+        hashmap! {
+            $($interner.get_or_intern_static($name) => LispValue::BuiltinFunc {
+                name: $name,
+                f: $f,
+            }),*
+        }
+    }
 }
 lazy_static! {
-    static ref START_TIME: Instant = {
-        Instant::now()
+    pub static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
+        let mut strs = LispEnv::interner_mut();
+        make_lisp_funcs!(strs,
+            "+" => lisp_plus,
+            "-" => lisp_minus,
+            "*" => lisp_times,
+            "/" => lisp_divide,
+            "//" => lisp_int_divide,
+            "def!" => lisp_def,
+            "let*" => lisp_let,
+            "if" => lisp_if,
+            "do" => lisp_do,
+            "fn*" => lisp_fn,
+            "=" => lisp_equals,
+            "list" => lisp_list,
+            "list?" => lisp_listq,
+            "empty?" => lisp_emptyq,
+            "count" => lisp_count,
+            "<" => lisp_lt,
+            "<=" => lisp_lte,
+            ">" => lisp_gt,
+            ">=" => lisp_gte,
+            "not" => lisp_not,
+            "atom" => lisp_atom,
+            "atom?" => lisp_atomq,
+            "deref" => lisp_deref,
+            "reset!" => lisp_reset,
+            "swap!" => lisp_swap,
+            "eval" => lisp_eval,
+            "read-string" => lisp_read_string,
+            "str" => lisp_str,
+            "typeof" => lisp_typeof,
+            "quote" => lisp_quote,
+            "quasiquote" => lisp_quasiquote,
+            "unquote" => lisp_unquote,
+            "splice-unquote" => lisp_unquote,
+            "cons" => lisp_cons,
+            "concat" => lisp_concat,
+            "nth" => lisp_nth,
+            "first" => lisp_first,
+            "head" => lisp_first,
+            "rest" => lisp_rest,
+            "tail" => lisp_rest,
+            "macro?" => lisp_macroq,
+            "defmacro!" => lisp_defmacro,
+            "macroexpand" => lisp_macroexpand,
+            "inspect" => lisp_inspect,
+            "try*" => lisp_try,
+            "catch*" => lisp_catch,
+            "throw" => lisp_throw,
+            "nil?" => lisp_nilq,
+            "true?" => lisp_trueq,
+            "false?" => lisp_falseq,
+            "symbol?" => lisp_symbolq,
+            "symbol" => lisp_symbol,
+            "vector" => lisp_vector,
+            "vector?" => lisp_vectorq,
+            "keyword" => lisp_keyword,
+            "keyword?" => lisp_keywordq,
+            "hash-map" => lisp_hashmap,
+            "map?" => lisp_mapq,
+            "sequential?" => lisp_sequentialq,
+            "assoc" => lisp_assoc,
+            "dissoc" => lisp_dissoc,
+            "get" => lisp_get,
+            "contains?" => lisp_containsq,
+            "keys" => lisp_keys,
+            "vals" => lisp_vals,
+            "apply" => lisp_apply,
+            "map" => lisp_map,
+            "pr-str" => lisp_pr_str,
+            "fn?" => lisp_fnq,
+            "string?" => lisp_stringq,
+            "number?" => lisp_numberq,
+            "vec" => lisp_vec,
+            "seq" => lisp_seq,
+            "conj" => lisp_conj,
+            "meta" => lisp_meta,
+            "with-meta" => lisp_with_meta,
+        )
     };
-    pub static ref BUILTINS_NO_IO: HashMap<String, LispValue> = {
-        hashmap!{
-            "+".to_owned() => lisp_func!("+", lisp_plus),
-            "-".to_owned() => lisp_func!("-", lisp_minus),
-            "*".to_owned() => lisp_func!("*", lisp_times),
-            "/".to_owned() => lisp_func!("/", lisp_divide),
-            "//".to_owned() => lisp_func!("//", lisp_int_divide),
-            "def!".to_owned() => lisp_func!("def!", lisp_def),
-            "let*".to_owned() => lisp_func!("let*", lisp_let),
-            "if".to_owned() => lisp_func!("if", lisp_if),
-            "do".to_owned() => lisp_func!("do", lisp_do),
-            "fn*".to_owned() => lisp_func!("fn*", lisp_fn),
-            "=".to_owned() => lisp_func!("=", lisp_equals),
-            "list".to_owned() => lisp_func!("list", lisp_list),
-            "list?".to_owned() => lisp_func!("list?", lisp_listq),
-            "empty?".to_owned() => lisp_func!("empty?", lisp_emptyq),
-            "count".to_owned() => lisp_func!("count", lisp_count),
-            "<".to_owned() => lisp_func!("<", lisp_lt),
-            "<=".to_owned() => lisp_func!("<=", lisp_lte),
-            ">".to_owned() => lisp_func!(">", lisp_gt),
-            ">=".to_owned() => lisp_func!(">=", lisp_gte),
-            "not".to_owned() => lisp_func!("not", lisp_not),
-            "atom".to_owned() => lisp_func!("atom", lisp_atom),
-            "atom?".to_owned() => lisp_func!("atom?", lisp_atomq),
-            "deref".to_owned() => lisp_func!("deref", lisp_deref),
-            "reset!".to_owned() => lisp_func!("reset!", lisp_reset),
-            "swap!".to_owned() => lisp_func!("swap!", lisp_swap),
-            "eval".to_owned() => lisp_func!("eval", lisp_eval),
-            "read-string".to_owned() => lisp_func!("read-string", lisp_read_string),
-            "str".to_owned() => lisp_func!("str", lisp_str),
-            "typeof".to_owned() => lisp_func!("typeof", lisp_typeof),
-            "quote".to_owned() => lisp_func!("quote", lisp_quote),
-            "quasiquote".to_owned() => lisp_func!("quasiquote", lisp_quasiquote),
-            "unquote".to_owned() => lisp_func!("unquote", lisp_unquote),
-            "splice-unquote".to_owned() => lisp_func!("splice-unquote", lisp_unquote),
-            "cons".to_owned() => lisp_func!("cons", lisp_cons),
-            "concat".to_owned() => lisp_func!("concat", lisp_concat),
-            "nth".to_owned() => lisp_func!("nth", lisp_nth),
-            "first".to_owned() => lisp_func!("first", lisp_first),
-            "head".to_owned() => lisp_func!("head", lisp_first),
-            "rest".to_owned() => lisp_func!("rest", lisp_rest),
-            "tail".to_owned() => lisp_func!("tail", lisp_rest),
-            "macro?".to_owned() => lisp_func!("macro?", lisp_macroq),
-            "defmacro!".to_owned() => lisp_func!("defmacro!", lisp_defmacro),
-            "macroexpand".to_owned() => lisp_func!("macroexpand", lisp_macroexpand),
-            "inspect".to_owned() => lisp_func!("inspect", lisp_inspect),
-            "try*".to_owned() => lisp_func!("try*", lisp_try),
-            "catch*".to_owned() => lisp_func!("catch*", lisp_catch),
-            "throw".to_owned() => lisp_func!("throw", lisp_throw),
-            "nil?".to_owned() => lisp_func!("nil?", lisp_nilq),
-            "true?".to_owned() => lisp_func!("true?", lisp_trueq),
-            "false?".to_owned() => lisp_func!("false?", lisp_falseq),
-            "symbol?".to_owned() => lisp_func!("symbol?", lisp_symbolq),
-            "symbol".to_owned() => lisp_func!("symbol", lisp_symbol),
-            "vector".to_owned() => lisp_func!("vector", lisp_vector),
-            "vector?".to_owned() => lisp_func!("vector?", lisp_vectorq),
-            "keyword".to_owned() => lisp_func!("keyword", lisp_keyword),
-            "keyword?".to_owned() => lisp_func!("keyword?", lisp_keywordq),
-            "hash-map".to_owned() => lisp_func!("hash-map", lisp_hashmap),
-            "map?".to_owned() => lisp_func!("map?", lisp_mapq),
-            "sequential?".to_owned() => lisp_func!("sequential?", lisp_sequentialq),
-            "assoc".to_owned() => lisp_func!("assoc", lisp_assoc),
-            "dissoc".to_owned() => lisp_func!("dissoc", lisp_dissoc),
-            "get".to_owned() => lisp_func!("get", lisp_get),
-            "contains?".to_owned() => lisp_func!("contains?", lisp_containsq),
-            "keys".to_owned() => lisp_func!("keys", lisp_keys),
-            "vals".to_owned() => lisp_func!("vals", lisp_vals),
-            "apply".to_owned() => lisp_func!("apply", lisp_apply),
-            "map".to_owned() => lisp_func!("map", lisp_map),
-            "pr-str".to_owned() => lisp_func!("pr-str", lisp_pr_str),
-            "fn?".to_owned() => lisp_func!("fn?", lisp_fnq),
-            "string?".to_owned() => lisp_func!("string?", lisp_stringq),
-            "number?".to_owned() => lisp_func!("number?", lisp_numberq),
-            "vec".to_owned() => lisp_func!("vec", lisp_vec),
-            "seq".to_owned() => lisp_func!("seq", lisp_seq),
-            "conj".to_owned() => lisp_func!("conj", lisp_conj),
-            "meta".to_owned() => lisp_func!("meta", lisp_meta),
-            "with-meta".to_owned() => lisp_func!("with-meta", lisp_with_meta),
-        }
-    };
-    pub static ref BUILTINS: HashMap<String, LispValue> = {
+    pub static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
         // dummy to make `time-ms` count from environment (so probably program)
         // initialization rather than since the first `time-ms` call
         let _ = *START_TIME;
-        hashmap!{
-            "prn".to_owned() => lisp_func!("prn", lisp_prn),
-            "readline".to_owned() => lisp_func!("readline", lisp_readline),
-            "slurp".to_owned() => lisp_func!("slurp", lisp_slurp),
-            "load-file".to_owned() => lisp_func!("load-file", lisp_load_file),
-            "println".to_owned() => lisp_func!("println", lisp_println),
-            "time-ms".to_owned() => lisp_func!("time-ms", lisp_time_ms),
-        }.union(BUILTINS_NO_IO.clone())
+
+        let mut strs = LispEnv::interner_mut();
+        let base = BUILTINS.clone();
+        let ext = make_lisp_funcs!(strs,
+            "prn" => lisp_prn,
+            "readline" => lisp_readline,
+            "slurp" => lisp_slurp,
+            "load-file" => lisp_load_file,
+            "println" => lisp_println,
+            "time-ms" => lisp_time_ms,
+        );
+        base.union(ext)
     };
 }

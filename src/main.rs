@@ -33,9 +33,9 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     // *ARGV* symbol doesn't include the program name
     let mut lisp_argv: Vector<LispValue> = args.iter().skip(1).map(|x| LispValue::String(x.clone())).collect();
-    lisp_argv.push_front(LispValue::Symbol("list".to_owned()));
-    env.set("*ARGV*".to_owned(), LispValue::List(lisp_argv));
-    env.set("*host-language*".to_owned(), LispValue::String("Rust".to_owned()));
+    lisp_argv.push_front(LispValue::Symbol(LispEnv::symbol_for("list")));
+    env.set_by_str("*ARGV*", LispValue::List(lisp_argv));
+    env.set_by_str("*host-language*", LispValue::String("Rust".to_owned()));
     let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
     eval(&LispParser::parse(cond)?, &mut env)?;
 

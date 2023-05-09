@@ -1,9 +1,11 @@
 use std::iter::zip;
 use im::{Vector, vector};
-use crate::{LispValue, LispError, Result, env::LispEnv, util::LispFunc};
+use crate::{LispValue, LispError, Result};
+use crate::env::{LispEnv, LispSymbol};
+use crate::util::LispFunc;
 
-fn lookup_variable(val: String, env: &LispEnv) -> Result<LispValue> {
-    env.get(&val).ok_or(LispError::UndefinedVariable(val))
+fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
+    env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
 }
 
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
@@ -13,7 +15,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
                 false
             } else {
                 if let Ok(sym) = list[0].expect_symbol() {
-                    match lookup_variable(sym.to_owned(), env) {
+                    match lookup_variable(sym, env) {
                         Ok(LispValue::Func(f)) => f.is_macro,
                         _ => false,
                     }
@@ -55,10 +57,11 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let mut last_vals = vals.split_off(f.args.len() - 1);
-        last_vals.push_front(LispValue::Symbol("list".to_owned()));
+        let list_sym = LispEnv::symbol_for_static("list");
+        last_vals.push_front(LispValue::Symbol(list_sym));
         let variadic_idx = f.args.len() - 1;
         let arg_names = f.args[0..variadic_idx].iter().map(|x| x.to_owned());
-        let mut params: Vec<(String, LispValue)> = zip(arg_names, vals).collect();
+        let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         params.push((f.args[variadic_idx].to_owned(), LispValue::List(last_vals)));
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
@@ -75,7 +78,7 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
     } else {
         let vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
         let arg_names = f.args.iter().map(|x| x.to_owned());
-        let mut params: Vec<(String, LispValue)> = zip(arg_names, vals).collect();
+        let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
         }
@@ -172,7 +175,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
 
 pub fn eval_top(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     match value {
-        LispValue::Symbol(s) => lookup_variable(s.to_string(), &env),
+        LispValue::Symbol(s) => lookup_variable(*s, &env),
         x => eval(x, env),
     }
 }

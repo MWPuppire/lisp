@@ -1,12 +1,16 @@
 use std::sync::{Arc, RwLock};
 use std::hash;
+use std::ops::DerefMut;
 use im::{HashMap, Vector};
 use lazy_static::lazy_static;
+use string_interner::{StringInterner, DefaultSymbol};
 use crate::{LispValue, Result, builtins::{BUILTINS, BUILTINS_NO_IO}};
+
+pub type LispSymbol = DefaultSymbol;
 
 #[derive(Clone, Debug)]
 struct InnerEnv {
-    data: HashMap<String, LispValue>,
+    data: HashMap<LispSymbol, LispValue>,
     global: Option<LispEnv>,
     enclosing: Option<LispEnv>,
     constant: bool,
@@ -15,7 +19,7 @@ struct InnerEnv {
 #[derive(Clone, Debug)]
 pub struct LispClosure(LispEnv);
 impl LispClosure {
-    pub fn make_env(&self, args: &[(String, LispValue)]) -> LispEnv {
+    pub fn make_env(&self, args: &[(LispSymbol, LispValue)]) -> LispEnv {
         let enclosing = self.0.clone();
         let global = enclosing.global();
         let inner = InnerEnv {
@@ -26,7 +30,7 @@ impl LispClosure {
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
-    pub fn make_macro_env(&self, args: &[(String, LispValue)], surrounding: &LispEnv) -> LispEnv {
+    pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> LispEnv {
         let enclosing = self.0.union(surrounding);
         let global = enclosing.global();
         let inner = InnerEnv {
@@ -53,6 +57,9 @@ impl std::cmp::PartialEq for LispClosure {
 pub struct LispEnv(Arc<RwLock<InnerEnv>>);
 
 lazy_static! {
+    static ref INTERNER: RwLock<StringInterner> = {
+        RwLock::new(StringInterner::new())
+    };
     static ref BUILTIN_ENV: LispEnv = {
         let inner = InnerEnv {
             data: BUILTINS.clone(),
@@ -111,7 +118,7 @@ impl LispEnv {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
 
-    fn map(&self) -> HashMap<String, LispValue> {
+    fn map(&self) -> HashMap<LispSymbol, LispValue> {
         let lock = self.0.read().unwrap();
         lock.data.clone()
     }
@@ -129,11 +136,27 @@ impl LispEnv {
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<LispValue> {
+    pub(crate) fn interner_mut() -> impl DerefMut<Target = StringInterner> {
+        INTERNER.write().unwrap()
+    }
+    pub fn symbol_for(s: &str) -> LispSymbol {
+        let mut interner = INTERNER.write().unwrap();
+        interner.get_or_intern(s)
+    }
+    pub fn symbol_for_static(s: &'static str) -> LispSymbol {
+        let mut interner = INTERNER.write().unwrap();
+        interner.get_or_intern_static(s)
+    }
+    pub fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
+        let interner = INTERNER.read().unwrap();
+        unsafe { std::mem::transmute(interner.resolve(sym).map(|x| x)) }
+    }
+
+    pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {
         let mut env = Some(self.clone());
         while let Some(inner) = env {
             let lock = inner.0.read().unwrap();
-            if let Some(val) = lock.data.get(key) {
+            if let Some(val) = lock.data.get(&sym) {
                 return Some(val.clone());
             } else {
                 env = lock.enclosing.clone();
@@ -141,21 +164,30 @@ impl LispEnv {
         }
         None
     }
-    pub fn set(&mut self, key: String, val: LispValue) -> bool {
+    pub fn set(&mut self, sym: LispSymbol, val: LispValue) -> bool {
         let lock = self.0.read().unwrap();
-        if lock.constant && lock.data.contains_key(&key) {
+        if lock.constant && lock.data.contains_key(&sym) {
             false
         } else {
             drop(lock);
             let mut lock = self.0.write().unwrap();
-            lock.data.insert(key, val);
+            lock.data.insert(sym, val);
             true
         }
     }
+    pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
+        let sym = Self::symbol_for(key);
+        self.get(sym)
+    }
+    pub fn set_by_str(&mut self, key: &str, val: LispValue) -> bool {
+        let sym = Self::symbol_for(key);
+        self.set(sym, val)
+    }
     pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>) {
+        let sym = Self::symbol_for_static(name);
         let mut lock = self.0.write().unwrap();
         let val = LispValue::BuiltinFunc { name, f };
-        lock.data.insert(name.to_owned(), val);
+        lock.data.insert(sym, val);
     }
     pub fn union(&self, other: &LispEnv) -> LispEnv {
         let lock = self.0.read().unwrap();

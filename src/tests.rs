@@ -115,18 +115,18 @@ mod step1_tests {
 
     #[test]
     fn read_symbols() {
-        assert_eq!(parse("+"), LispValue::Symbol("+".to_string()));
-        assert_eq!(parse("abc"), LispValue::Symbol("abc".to_string()));
-        assert_eq!(parse("abc5"), LispValue::Symbol("abc5".to_string()));
-        assert_eq!(parse("abc-def"), LispValue::Symbol("abc-def".to_string()));
-        assert_eq!(parse("-"), LispValue::Symbol("-".to_string()));
-        assert_eq!(parse("-abc"), LispValue::Symbol("-abc".to_string()));
+        assert_eq!(parse("+"), LispValue::symbol_for_static("+"));
+        assert_eq!(parse("abc"), LispValue::symbol_for_static("abc"));
+        assert_eq!(parse("abc5"), LispValue::symbol_for_static("abc5"));
+        assert_eq!(parse("abc-def"), LispValue::symbol_for_static("abc-def"));
+        assert_eq!(parse("-"), LispValue::symbol_for_static("-"));
+        assert_eq!(parse("-abc"), LispValue::symbol_for_static("-abc"));
     }
 
     #[test]
     fn read_lists() {
         assert_eq!(parse("(+ 1 2)"), LispValue::List(vector![
-            LispValue::Symbol("+".to_string()),
+            LispValue::symbol_for_static("+"),
             LispValue::Number(1.0),
             LispValue::Number(2.0),
         ]));
@@ -146,10 +146,10 @@ mod step1_tests {
             ]),
         ]));
         assert_eq!(parse("(+ 1 (+ 2 3))"), LispValue::List(vector![
-            LispValue::Symbol("+".to_string()),
+            LispValue::symbol_for_static("+"),
             LispValue::Number(1.0),
             LispValue::List(vector![
-                LispValue::Symbol("+".to_string()),
+                LispValue::symbol_for_static("+"),
                 LispValue::Number(2.0),
                 LispValue::Number(3.0),
             ]),
@@ -511,7 +511,7 @@ mod step6_tests {
         ]));
         assert_eq!(eval!("(read-string \"nil\")"), LispValue::Nil);
         assert_eq!(eval!("(read-string \"(+ 2 3)\")"), LispValue::List(vector![
-            LispValue::Symbol("+".to_string()),
+            LispValue::symbol_for_static("+"),
             LispValue::Number(2.0),
             LispValue::Number(3.0),
         ]));
@@ -671,7 +671,7 @@ mod step7_tests {
                 LispValue::Number(4.0),
             ]),
         ]));
-        assert_eq!(eval!("(quote a)"), LispValue::Symbol("a".to_string()));
+        assert_eq!(eval!("(quote a)"), LispValue::symbol_for_static("a"));
         assert_eq!(eval!("'7"), LispValue::Number(7.0));
         assert_eq!(eval!("'(1 2 3)"), LispValue::List(vector![
             LispValue::Number(1.0),
@@ -717,11 +717,11 @@ mod step7_tests {
     fn unquote() {
         let mut env = testing_env();
         eval!("(def! a 8)", &mut env);
-        assert_eq!(eval!("(quasiquote a)", &mut env), LispValue::Symbol("a".to_string()));
+        assert_eq!(eval!("(quasiquote a)", &mut env), LispValue::symbol_for_static("a"));
         assert_eq!(eval!("(quasiquote (unquote a))", &mut env), LispValue::Number(8.0));
         assert_eq!(eval!("(quasiquote (1 a 3))", &mut env), LispValue::List(vector![
             LispValue::Number(1.0),
-            LispValue::Symbol("a".to_string()),
+            LispValue::symbol_for_static("a"),
             LispValue::Number(3.0),
         ]));
         assert_eq!(eval!("(quasiquote (1 (unquote a) 3))", &mut env), LispValue::List(vector![
@@ -732,7 +732,7 @@ mod step7_tests {
         eval!("(def! b (quote (1 \"b\" \"d\")))", &mut env);
         assert_eq!(eval!("(quasiquote (1 b 3))", &mut env), LispValue::List(vector![
             LispValue::Number(1.0),
-            LispValue::Symbol("b".to_string()),
+            LispValue::symbol_for_static("b"),
             LispValue::Number(3.0),
         ]));
         assert_eq!(eval!("(quasiquote (1 (unquote b) 3))", &mut env), LispValue::List(vector![
@@ -772,7 +772,7 @@ mod step7_tests {
         eval!("(def! c (quote (1 \"b\" \"d\")))", &mut env);
         assert_eq!(eval!("(quasiquote (1 c 3))", &mut env), LispValue::List(vector![
             LispValue::Number(1.0),
-            LispValue::Symbol("c".to_string()),
+            LispValue::symbol_for_static("c"),
             LispValue::Number(3.0),
         ]));
         assert_eq!(eval!("(quasiquote (1 (splice-unquote c) 3))", &mut env), LispValue::List(vector![
@@ -859,31 +859,31 @@ mod step8_tests {
         let mut env = basic_macros();
         assert_eq!(eval!("(macroexpand (one))", &mut env), LispValue::Number(1.0));
         assert_eq!(eval!("(macroexpand (unless PRED A B))", &mut env), LispValue::List(vector![
-            LispValue::Symbol("if".to_string()),
-            LispValue::Symbol("PRED".to_string()),
-            LispValue::Symbol("B".to_string()),
-            LispValue::Symbol("A".to_string()),
+            LispValue::symbol_for_static("if"),
+            LispValue::symbol_for_static("PRED"),
+            LispValue::symbol_for_static("B"),
+            LispValue::symbol_for_static("A"),
         ]));
         assert_eq!(eval!("(macroexpand (unless2 PRED A B))", &mut env), LispValue::List(vector![
-            LispValue::Symbol("if".to_string()),
+            LispValue::symbol_for_static("if"),
             LispValue::List(vector![
-                LispValue::Symbol("not".to_string()),
-                LispValue::Symbol("PRED".to_string()),
+                LispValue::symbol_for_static("not"),
+                LispValue::symbol_for_static("PRED"),
             ]),
-            LispValue::Symbol("A".to_string()),
-            LispValue::Symbol("B".to_string()),
+            LispValue::symbol_for_static("A"),
+            LispValue::symbol_for_static("B"),
         ]));
         assert_eq!(eval!("(macroexpand (unless2 2 3 4))", &mut env), LispValue::List(vector![
-            LispValue::Symbol("if".to_string()),
+            LispValue::symbol_for_static("if"),
             LispValue::List(vector![
-                LispValue::Symbol("not".to_string()),
+                LispValue::symbol_for_static("not"),
                 LispValue::Number(2.0),
             ]),
             LispValue::Number(3.0),
             LispValue::Number(4.0),
         ]));
         assert_eq!(eval!("(let* (a 123) (macroexpand (identity a)))", &mut env),
-            LispValue::Symbol("a".to_string())
+            LispValue::symbol_for_static("a"),
         );
     }
 

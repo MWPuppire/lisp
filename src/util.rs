@@ -3,7 +3,7 @@ use std::hash;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use im::{HashMap, Vector};
-use crate::env::{LispEnv, LispClosure};
+use crate::env::{LispEnv, LispClosure, LispSymbol};
 
 #[macro_export]
 macro_rules! expect {
@@ -18,18 +18,18 @@ pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct LispFunc {
-    pub args: Vec<String>,
+    pub args: Vec<LispSymbol>,
     pub body: LispValue,
     pub closure: LispClosure,
     pub variadic: bool,
     pub is_macro: bool,
     // used for self-recursive functions
-    pub name: Option<String>,
+    pub name: Option<LispSymbol>,
 }
 
 #[derive(Clone, Debug)]
 pub enum LispValue {
-    Symbol(String),
+    Symbol(LispSymbol),
     String(String),
     Number(f64),
     Bool(bool),
@@ -44,10 +44,17 @@ pub enum LispValue {
     Keyword(String),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
-    VariadicSymbol(String),
+    VariadicSymbol(LispSymbol),
 }
 
 impl LispValue {
+    pub fn symbol_for(s: &str) -> Self {
+        Self::Symbol(LispEnv::symbol_for(s))
+    }
+    pub fn symbol_for_static(s: &'static str) -> Self {
+        Self::Symbol(LispEnv::symbol_for_static(s))
+    }
+
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::Symbol(_) => "symbol",
@@ -66,10 +73,10 @@ impl LispValue {
         }
     }
 
-    pub fn expect_symbol(&self) -> Result<&str> {
+    pub fn expect_symbol(&self) -> Result<LispSymbol> {
         match self {
-            Self::Symbol(s) => Ok(s),
-            Self::VariadicSymbol(s) => Ok(s),
+            Self::Symbol(s) => Ok(*s),
+            Self::VariadicSymbol(s) => Ok(*s),
             _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
         }
     }
@@ -105,7 +112,7 @@ impl LispValue {
     }
     pub fn inspect(&self) -> String {
         match self {
-            LispValue::Symbol(s) => format!("'{}", s),
+            LispValue::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
             LispValue::List(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("'({})", xs.join(" "))
@@ -125,7 +132,7 @@ impl LispValue {
     }
     fn inspect_inner(&self) -> String {
         match self {
-            LispValue::Symbol(s) => format!("{}", s),
+            LispValue::Symbol(s) => format!("{}", LispEnv::symbol_string(*s).unwrap()),
             LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
             LispValue::Number(n) => format!("{}", n),
             LispValue::Bool(b) => format!("{}", b),
@@ -139,7 +146,7 @@ impl LispValue {
             LispValue::Func(f) => format!(
                 "({} ({}) {})",
                 if f.is_macro { "#<macro-fn>" } else { "fn*" },
-                f.args.join(" "),
+                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
                 f.body.to_string()
             ),
             LispValue::Keyword(s) => format!(":{}", s),
@@ -153,7 +160,7 @@ impl LispValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("[{}]", xs.join(" "))
             },
-            LispValue::VariadicSymbol(s) => format!("&{}", s),
+            LispValue::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
         }
     }
     pub fn truthiness(&self) -> bool {
@@ -169,13 +176,6 @@ impl LispValue {
             Self::List(l) => Ok(l),
             Self::Vector(l) => Ok(Vector::from(l)),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
-        }
-    }
-    pub fn into_symbol(self) -> Result<String> {
-        match self {
-            Self::Symbol(s) => Ok(s),
-            Self::VariadicSymbol(s) => Ok(s),
-            x => Err(LispError::InvalidDataType("symbol", x.type_of())),
         }
     }
 }
@@ -209,7 +209,7 @@ impl std::cmp::Eq for LispValue { }
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LispValue::Symbol(s) => write!(f, "{}", s),
+            LispValue::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
             LispValue::String(s) => write!(f, "{}", s),
             LispValue::Number(n) => write!(f, "{}", n),
             LispValue::Bool(b) => write!(f, "{}", b),
@@ -232,7 +232,7 @@ impl fmt::Display for LispValue {
                 write!(f, "{{{}}}", xs.join(" "))
             },
             LispValue::Keyword(s) => write!(f, ":{}", s),
-            LispValue::VariadicSymbol(s) => write!(f, "{}", s),
+            LispValue::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
         }
     }
 }
@@ -282,7 +282,7 @@ pub enum LispError {
     #[error("missing delimiter '{1}' (expected {0} more)")]
     UnbalancedDelim(usize, &'static str),
     #[error("undefined variable `{0}`")]
-    UndefinedVariable(String),
+    UndefinedVariable(&'static str),
     #[error("invalid data type. expected {0}, received {1}")]
     InvalidDataType(&'static str, &'static str),
     #[error("unexpected arguments. expected {0}, received {1}")]
