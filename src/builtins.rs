@@ -679,7 +679,7 @@ fn lisp_dissoc(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispVal
     let keys = args.iter().map(|x| {
         Ok((eval(x, &mut env)?, LispValue::Nil))
     }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
-    Ok((LispValue::Map(base_map.clone().difference(keys.into())), env, false))
+    Ok((LispValue::Map(base_map.difference(keys.into())), env, false))
 }
 
 fn lisp_get(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
