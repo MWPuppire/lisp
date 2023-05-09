@@ -15,10 +15,10 @@ fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
 }
 
 macro_rules! token_prefix {
-    ($prefix:literal, $name:expr, $rest:expr, $interner:expr $(,)?) => {
+    ($prefix:expr, $name:expr, $rest:expr, $interner:expr $(,)?) => {
         some_or_err(
             LispParser::read_form($rest, $interner),
-            LispError::MissingToken,
+            LispError::MissingToken($prefix),
         ).map(|(inner, rest)| {
             (LispValue::List(vector![
                 LispValue::Symbol($interner.get_or_intern_static($name)),
@@ -65,7 +65,7 @@ impl LispParser {
             match peek {
                 Ok(_) => true,
                 Err(LispError::UnbalancedDelim(_, _)) => false,
-                Err(LispError::MissingToken) => false,
+                Err(LispError::MissingToken(_)) => false,
                 Err(_) => true,
             }
         } else {
@@ -143,11 +143,11 @@ impl LispParser {
             Some(']') => Err(LispError::SyntaxError(*row, *col)),
             Some('{') => Self::read_map(rest, strs),
             Some('}') => Err(LispError::SyntaxError(*row, *col)),
-            Some('@') => token_prefix!('@', "deref", rest, strs),
-            Some('\'') => token_prefix!('\'', "quote", rest, strs),
-            Some('`') => token_prefix!('`', "quasiquote", rest, strs),
+            Some('@') => token_prefix!("@", "deref", rest, strs),
+            Some('\'') => token_prefix!("'", "quote", rest, strs),
+            Some('`') => token_prefix!("`", "quasiquote", rest, strs),
             Some('~') => token_prefix!(
-                '~',
+                if token == "~@" { "~@" } else { "~" },
                 if token == "~@" { "splice-unquote" } else { "unquote" },
                 rest,
                 strs,
@@ -155,7 +155,7 @@ impl LispParser {
             Some('&') => {
                 match some_or_err(
                     Self::read_form(rest, strs),
-                    LispError::MissingToken,
+                    LispError::MissingToken("&"),
                 ) {
                     Ok((LispValue::Symbol(s), rest)) => Ok((LispValue::VariadicSymbol(s), rest)),
                     Ok(_) => Err(LispError::SyntaxError(*row, *col)),

@@ -60,7 +60,7 @@ fn lisp_def(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
         x => x,
     };
     if !env.set(name, val.clone()) {
-        Err(LispError::AlreadyExists)
+        Err(LispError::AlreadyExists(LispEnv::symbol_string(name).unwrap()))
     } else {
         Ok((val, env, false))
     }
@@ -502,8 +502,8 @@ fn lisp_defmacro(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
         },
         _ => return Err(LispError::InvalidDataType("function", val.type_of())),
     }
-    if !env.set(name.to_owned(), val.clone()) {
-        Err(LispError::AlreadyExists)
+    if !env.set(name, val.clone()) {
+        Err(LispError::AlreadyExists(LispEnv::symbol_string(name).unwrap()))
     } else {
         Ok((val, env, false))
     }
@@ -953,8 +953,8 @@ lazy_static! {
         // initialization rather than since the first `time-ms` call
         let _ = *START_TIME;
 
+        let base = BUILTINS_NO_IO.clone();
         let mut strs = LispEnv::interner_mut();
-        let base = BUILTINS.clone();
         let ext = make_lisp_funcs!(strs,
             "prn" => lisp_prn,
             "readline" => lisp_readline,
