@@ -65,3 +65,34 @@ fn map() {
     ]));
     assert_eq!(eval!("(= () (map str ()))"), LispValue::Bool(true));
 }
+
+#[test]
+fn hashmap_functions() {
+    assert_eq!(eval!(r#"{"a" 1}"#), LispValue::Map(hashmap!{
+        LispValue::String("a".to_owned()) => LispValue::Number(1.0),
+    }));
+    assert_eq!(eval!(r#"(assoc {} "a" 1)"#), LispValue::Map(hashmap!{
+        LispValue::String("a".to_owned()) => LispValue::Number(1.0),
+    }));
+    assert_eq!(
+        eval!(r#"(get (assoc (assoc {"a" 1} "b" 2) "c" 3) "a")"#),
+        LispValue::Number(1.0),
+    );
+    assert_eq!(
+        eval!(r#"(get (assoc (assoc {"a" 1} "b" 2) "a" 3) "a")"#),
+        LispValue::Number(3.0),
+    );
+    assert_eq!(eval!("(keys {})"), LispValue::List(vector![]));
+
+    let tested = eval!(r#"(keys {"1" 1 "2" 2})"#);
+    // order of hash-map keys isn't guaranteed, so either is acceptable
+    assert!(
+        tested == LispValue::List(vector![
+            LispValue::String("1".to_owned()),
+            LispValue::String("2".to_owned()),
+        ]) || tested == LispValue::List(vector![
+            LispValue::String("2".to_owned()),
+            LispValue::String("1".to_owned()),
+        ])
+    );
+}

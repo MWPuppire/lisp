@@ -82,12 +82,6 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
         }
     }
-    pub fn expect_hashmap(&self) -> Result<&HashMap<LispValue, LispValue>> {
-        match self {
-            Self::Map(m) => Ok(m),
-            _ => Err(LispError::InvalidDataType("map", self.type_of())),
-        }
-    }
     pub fn expect_atom(&self) -> Result<Arc<RwLock<LispValue>>> {
         match self {
             Self::Atom(x) => Ok(x.clone()),
@@ -175,6 +169,12 @@ impl LispValue {
             Self::List(l) => Ok(l),
             Self::Vector(l) => Ok(Vector::from(l)),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
+        }
+    }
+    pub fn into_hashmap(self) -> Result<HashMap<LispValue, LispValue>> {
+        match self {
+            Self::Map(m) => Ok(m),
+            _ => Err(LispError::InvalidDataType("map", self.type_of())),
         }
     }
 }

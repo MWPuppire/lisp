@@ -650,25 +650,23 @@ fn lisp_sequentialq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispVa
 fn lisp_assoc(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() & 1 == 1, LispError::MissingBinding);
     let Some(first) = args.pop_front() else { unreachable!() };
-    let base_map = eval(&first, &mut env)?;
-    let base_map = base_map.expect_hashmap()?;
-    let mut pairs = vec![];
+    let map = eval(&first, &mut env)?;
+    let mut map = map.into_hashmap()?;
     let mut arg_iter = args.iter();
     while let Some(key_expr) = arg_iter.next() {
         let Some(val_expr) = arg_iter.next() else { unreachable!() };
         let k = eval(key_expr, &mut env)?;
         let v = eval(val_expr, &mut env)?;
-        pairs.push((k, v))
+        map.insert(k, v);
     }
-    let new_map: HashMap<LispValue, LispValue> = pairs.into();
-    Ok((LispValue::Map(new_map.union(base_map.clone())), env, false))
+    Ok((LispValue::Map(map), env, false))
 }
 
 fn lisp_dissoc(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let Some(first) = args.pop_front() else { unreachable!() };
     let base_map = eval(&first, &mut env)?;
-    let base_map = base_map.expect_hashmap()?;
+    let base_map = base_map.into_hashmap()?;
     let keys = args.iter().map(|x| {
         Ok((eval(x, &mut env)?, LispValue::Nil))
     }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
@@ -682,7 +680,7 @@ fn lisp_get(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     if map.is_nil() {
         Ok((LispValue::Nil, env, false))
     } else {
-        let map = map.expect_hashmap()?;
+        let map = map.into_hashmap()?;
         if let Some(val) = map.get(&key) {
             Ok((val.clone(), env, false))
         } else {
@@ -694,7 +692,7 @@ fn lisp_get(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
 fn lisp_containsq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let map = eval(&args[0], &mut env)?;
-    let map = map.expect_hashmap()?;
+    let map = map.into_hashmap()?;
     let key = eval(&args[1], &mut env)?;
     Ok((LispValue::Bool(map.contains_key(&key)), env, false))
 }
@@ -702,7 +700,7 @@ fn lisp_containsq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValu
 fn lisp_keys(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let map = eval(&args[0], &mut env)?;
-    let map = map.expect_hashmap()?;
+    let map = map.into_hashmap()?;
     let keys = map.keys().cloned().collect();
     Ok((LispValue::List(keys), env, false))
 }
@@ -710,7 +708,7 @@ fn lisp_keys(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Li
 fn lisp_vals(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let map = eval(&args[0], &mut env)?;
-    let map = map.expect_hashmap()?;
+    let map = map.into_hashmap()?;
     let vals = map.values().cloned().collect();
     Ok((LispValue::List(vals), env, false))
 }
