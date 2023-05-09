@@ -301,11 +301,11 @@ fn lisp_readline(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
 
 fn lisp_read_string(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let mut parser = LispParser::new();
     let arg = eval(&args[0], &mut env)?;
-    parser.add_tokenize(arg.expect_string()?);
-    if parser.has_tokens() {
-        Ok((parser.next()?, env, false))
+    let code_expr = arg.expect_string()?;
+    let parsed = LispParser::parse(code_expr);
+    if let Some(parsed) = parsed {
+        Ok((parsed?, env, false))
     } else {
         Ok((LispValue::Nil, env, false))
     }
@@ -323,8 +323,9 @@ fn lisp_str(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
 fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
+    let file_name = x.expect_string()?;
+    let mut f = File::open(file_name)?;
     let mut buffer = String::new();
-    let mut f = File::open(x.expect_string()?)?;
     f.read_to_string(&mut buffer)?;
     Ok((LispValue::String(buffer), env, false))
 }
@@ -332,14 +333,16 @@ fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
 fn lisp_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
+    let file_name = x.expect_string()?;
+    let mut f = File::open(file_name)?;
     let mut buffer = String::new();
-    let mut f = File::open(x.expect_string()?)?;
-    let mut parser = LispParser::new();
     f.read_to_string(&mut buffer)?;
+
+    let mut parser = LispParser::new();
     parser.add_tokenize(&buffer);
     let mut global = env.global();
-    while parser.has_tokens() {
-        eval(&parser.next()?, &mut global)?;
+    for val in parser {
+        eval(&val?, &mut global)?;
     }
     Ok((LispValue::Nil, env, false))
 }

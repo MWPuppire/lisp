@@ -6,12 +6,36 @@ use im::{vector, Vector};
 use string_interner::StringInterner;
 use crate::{LispValue, LispError, Result, LispEnv};
 
+fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
+    match opt {
+        None => Err(err),
+        Some(Ok(x)) => Ok(x),
+        Some(Err(x)) => Err(x),
+    }
+}
+
+macro_rules! token_prefix {
+    ($prefix:literal, $name:expr, $rest:expr, $interner:expr $(,)?) => {
+        some_or_err(
+            LispParser::read_form($rest, $interner),
+            LispError::MissingToken,
+        ).map(|(inner, rest)| {
+            (LispValue::List(vector![
+                LispValue::Symbol($interner.get_or_intern_static($name)),
+                inner,
+            ]), rest)
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 struct LispToken {
     token: String,
     row: usize,
     col: usize,
 }
 
+#[derive(Clone, Debug)]
 pub struct LispParser {
     tokens: Vec<LispToken>,
     row: usize,
@@ -25,21 +49,23 @@ impl LispParser {
             col: 1,
         }
     }
-    pub fn parse(input: &str) -> Result<LispValue> {
+    pub fn parse(input: &str) -> Option<Result<LispValue>> {
         let mut tokens = vec![];
         Self::tokenize(&mut tokens, input, 1, 1);
-        let (form, _) = Self::read_form(&tokens, LispEnv::interner_mut().deref_mut())?;
-        Ok(form)
+        // map to drop the leftover tokens from the result
+        Self::read_form(&tokens, LispEnv::interner_mut().deref_mut())
+            .map(|x| x.map(|(val, _)| val))
     }
-    pub fn next_line(&mut self) {
+    pub fn advance_line(&mut self) {
         self.row += 1;
         self.col = 1;
     }
-    pub fn is_complete(&self) -> bool {
+    pub fn is_parse_complete(&self) -> bool {
         if let Some(peek) = self.peek() {
             match peek {
                 Ok(_) => true,
                 Err(LispError::UnbalancedDelim(_, _)) => false,
+                Err(LispError::MissingToken) => false,
                 Err(_) => true,
             }
         } else {
@@ -56,27 +82,10 @@ impl LispParser {
         self.row = new_row;
         self.col = new_col;
     }
-    pub fn next(&mut self) -> Result<LispValue> {
-        let read = Self::read_form(&self.tokens, LispEnv::interner_mut().deref_mut());
-        if let Ok((val, rest)) = read {
-            let idx = self.tokens.len() - rest.len();
-            let _ = self.tokens.drain(0..idx);
-            Ok(val)
-        } else if let Err(err) = read {
-            // just forget all processed tokens to clear the error
-            self.tokens.clear();
-            Err(err)
-        } else {
-            // we used both `Ok` and `Err` test cases
-            unreachable!();
-        }
-    }
     pub fn peek(&self) -> Option<Result<LispValue>> {
-        match Self::read_form(&self.tokens, LispEnv::interner_mut().deref_mut()) {
-            Err(LispError::ParseNoTokens) => None,
-            Err(x) => Some(Err(x)),
-            Ok((val, _)) => Some(Ok(val)),
-        }
+        // map to drop the leftover tokens from the result
+        Self::read_form(&self.tokens, LispEnv::interner_mut().deref_mut())
+            .map(|x| x.map(|(val, _)| val))
     }
 
     fn tokenize(tokens: &mut Vec<LispToken>, input: &str, mut row: usize, mut col: usize) -> (usize, usize) {
@@ -123,67 +132,43 @@ impl LispParser {
         (row, col)
     }
 
-    fn read_form<'a>(tokens: &'a [LispToken], strs: &mut StringInterner) -> Result<(LispValue, &'a [LispToken])> {
-        if tokens.is_empty() {
-            return Err(LispError::ParseNoTokens);
-        }
-        // since we test for `tokens.len() == 0`, this has to be `Some`
-        let Some((LispToken { token, row, col }, rest)) = tokens.split_first()
-            else { unreachable!() };
-        match token.as_str().chars().next() {
+    fn read_form<'a>(tokens: &'a [LispToken], strs: &mut StringInterner) -> Option<Result<(LispValue, &'a [LispToken])>> {
+        let Some((LispToken { token, row, col }, rest)) = tokens.split_first() else {
+            return None;
+        };
+        Some(match token.as_str().chars().next() {
             Some('(') => Self::read_list(rest, strs),
             Some(')') => Err(LispError::SyntaxError(*row, *col)),
             Some('[') => Self::read_vec(rest, strs),
             Some(']') => Err(LispError::SyntaxError(*row, *col)),
             Some('{') => Self::read_map(rest, strs),
             Some('}') => Err(LispError::SyntaxError(*row, *col)),
-            Some('@') => {
-                let (inner, new_rest) = Self::read_form(rest, strs)?;
-                Ok((LispValue::List(vector![
-                    LispValue::Symbol(strs.get_or_intern_static("deref")),
-                    inner,
-                ]), new_rest))
-            },
-            Some('\'') => {
-                let (inner, new_rest) = Self::read_form(rest, strs)?;
-                Ok((LispValue::List(vector![
-                    LispValue::Symbol(strs.get_or_intern_static("quote")),
-                    inner,
-                ]), new_rest))
-            },
-            Some('`') => {
-                let (inner, new_rest) = Self::read_form(rest, strs)?;
-                Ok((LispValue::List(vector![
-                    LispValue::Symbol(strs.get_or_intern_static("quasiquote")),
-                    inner,
-                ]), new_rest))
-            },
-            Some('~') => {
-                let (inner, new_rest) = Self::read_form(rest, strs)?;
-                Ok((LispValue::List(vector![
-                    LispValue::Symbol(strs.get_or_intern_static(
-                        if token == "~@" {
-                            "splice-unquote"
-                        } else {
-                            "unquote"
-                        }
-                    )),
-                    inner,
-                ]), new_rest))
-            },
+            Some('@') => token_prefix!('@', "deref", rest, strs),
+            Some('\'') => token_prefix!('\'', "quote", rest, strs),
+            Some('`') => token_prefix!('`', "quasiquote", rest, strs),
+            Some('~') => token_prefix!(
+                '~',
+                if token == "~@" { "splice-unquote" } else { "unquote" },
+                rest,
+                strs,
+            ),
             Some('&') => {
-                let (name, new_rest) = Self::read_form(rest, strs)?;
-                match name {
-                    LispValue::Symbol(s) => Ok((LispValue::VariadicSymbol(s), new_rest)),
-                    _ => Err(LispError::SyntaxError(*row, *col)),
+                match some_or_err(
+                    Self::read_form(rest, strs),
+                    LispError::MissingToken,
+                ) {
+                    Ok((LispValue::Symbol(s), rest)) => Ok((LispValue::VariadicSymbol(s), rest)),
+                    Ok(_) => Err(LispError::SyntaxError(*row, *col)),
+                    Err(x) => Err(x),
                 }
             },
             Some(';') => {
                 // skip comment to next token
-                Self::read_form(rest, strs)
+                return Self::read_form(rest, strs);
             },
-            _ => Ok((Self::read_atom(token.clone(), strs, *row, *col)?, rest)),
-        }
+            _ => Self::read_atom(token.clone(), strs, *row, *col)
+                .map(move |x| (x, rest)),
+        })
     }
     fn read_list<'a>(tokens: &'a [LispToken], strs: &mut StringInterner) -> Result<(LispValue, &'a [LispToken])> {
         let mut res = Vector::new();
@@ -193,7 +178,10 @@ impl LispParser {
             if token == ")" {
                 break Ok((LispValue::List(res), rest));
             }
-            let (exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
+            let (exp, new_xs) = some_or_err(
+                Self::read_form(xs, strs),
+                LispError::UnbalancedDelim(0, ")"),
+            ).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, ")") => LispError::UnbalancedDelim(x + 1, ")"),
                 _ => err,
             })?;
@@ -209,7 +197,10 @@ impl LispParser {
             if token == "]" {
                 break Ok((LispValue::Vector(res), rest));
             }
-            let (exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
+            let (exp, new_xs) = some_or_err(
+                Self::read_form(xs, strs),
+                LispError::UnbalancedDelim(0, "]"),
+            ).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "]") => LispError::UnbalancedDelim(x + 1, "]"),
                 _ => err,
             })?;
@@ -225,11 +216,17 @@ impl LispParser {
             if token == "}" {
                 break Ok((LispValue::Map(res.into()), rest));
             }
-            let (key_exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
+            let (key_exp, new_xs) = some_or_err(
+                Self::read_form(xs, strs),
+                LispError::UnbalancedDelim(0, "}"),
+            ).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                 _ => err,
             })?;
-            let (val_exp, new_xs) = Self::read_form(new_xs, strs).map_err(|err| match err {
+            let (val_exp, new_xs) = some_or_err(
+                Self::read_form(new_xs, strs),
+                LispError::UnbalancedDelim(0, "}"),
+            ).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                 _ => err,
             })?;
@@ -270,5 +267,24 @@ impl LispParser {
 impl Default for LispParser {
     fn default() -> Self {
         Self::new()
+    }
+}
+impl Iterator for LispParser {
+    type Item = Result<LispValue>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut interner = LispEnv::interner_mut();
+        match Self::read_form(&self.tokens, interner.deref_mut()) {
+            None => None,
+            Some(Ok((val, rest))) => {
+                let idx = self.tokens.len() - rest.len();
+                let _ = self.tokens.drain(0..idx);
+                Some(Ok(val))
+            },
+            Some(Err(err)) => {
+                // forget all processed tokens to clear the error
+                self.tokens.clear();
+                Some(Err(err))
+            },
+        }
     }
 }

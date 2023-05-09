@@ -49,18 +49,21 @@ lazy_static! {
 fn lisp_test_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let f = MOCK_FS.get(x.expect_string()?).unwrap();
+    let file_name = x.expect_string()?;
+    let f = MOCK_FS.get(file_name).unwrap();
     Ok((LispValue::String(f.to_string()), env, false))
 }
 fn lisp_test_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let f = MOCK_FS.get(x.expect_string()?).unwrap();
+    let file_name = x.expect_string()?;
+    let f = MOCK_FS.get(file_name).unwrap();
+
     let mut parser = LispParser::new();
     parser.add_tokenize(f);
     let mut global = env.global();
-    while parser.has_tokens() {
-        eval(&parser.next()?, &mut global)?;
+    for val in parser {
+        eval(&val?, &mut global)?;
     }
     Ok((LispValue::Nil, env, false))
 }
@@ -73,20 +76,20 @@ fn testing_env() -> LispEnv {
 
     // add `cond` built-in macro
     let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
-    eval(&LispParser::parse(cond).unwrap(), &mut env).unwrap();
+    eval(&LispParser::parse(cond).unwrap().unwrap(), &mut env).unwrap();
 
     // TODO mock println and family?
     env
 }
 
 fn eval_str(input: &str) -> Result<LispValue> {
-    let parsed = LispParser::parse(input)?;
+    let parsed = LispParser::parse(input).unwrap()?;
     let mut env = testing_env();
     eval(&parsed, &mut env)
 }
 
 fn eval_str_in_env(input: &str, env: &mut LispEnv) -> Result<LispValue> {
-    let parsed = LispParser::parse(input)?;
+    let parsed = LispParser::parse(input).unwrap()?;
     eval(&parsed, env)
 }
 
@@ -103,7 +106,7 @@ mod step1_tests {
     use super::*;
 
     fn parse(input: &str) -> LispValue {
-        LispParser::parse(input).unwrap()
+        LispParser::parse(input).unwrap().unwrap()
     }
 
     #[test]
@@ -820,7 +823,7 @@ mod step7_tests {
         ) (quote (fn* (q)
             (quasiquote ((unquote q) (quote (unquote q))))
         )))
-        "#).unwrap();
+        "#).unwrap().unwrap();
         let mut env = testing_env();
         assert_eq!(&eval(&expr, &mut env).unwrap(), &expr);
     }

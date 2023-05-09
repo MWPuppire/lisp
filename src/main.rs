@@ -37,14 +37,14 @@ fn main() -> Result<()> {
     env.set_by_str("*ARGV*", LispValue::List(lisp_argv));
     env.set_by_str("*host-language*", LispValue::String("Rust".to_owned()));
     let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
-    eval(&LispParser::parse(cond)?, &mut env)?;
+    eval(&LispParser::parse(cond).unwrap().unwrap(), &mut env)?;
 
     if args.len() > 1 && &args[1] != "--" {
         let mut file = File::open(&args[1])?;
         file.read_to_string(&mut buffer)?;
         parser.add_tokenize(&buffer);
-        while parser.has_tokens() {
-            eval(&parser.next()?, &mut env)?;
+        for val in parser {
+            eval_top(&val?, &mut env)?;
         }
         return Ok(());
     }
@@ -52,12 +52,12 @@ fn main() -> Result<()> {
     loop {
         if let Ok(line) = rl.readline(if complete { "> " } else { "... " }) {
             parser.add_tokenize(&line);
-            complete = parser.is_complete();
+            complete = parser.is_parse_complete();
             if complete {
                 rl.add_history_entry(buffer + &line).unwrap();
                 buffer = String::new();
-                while parser.has_tokens() {
-                    match parser.next() {
+                for val in &mut parser {
+                    match val {
                         Ok(tok) => match eval_top(&tok, &mut env) {
                             Ok(out) => println!("{}", out.inspect()),
                             Err(err) => println!("Err: {}", err),
@@ -65,7 +65,7 @@ fn main() -> Result<()> {
                         Err(err) => println!("Err: {}", err),
                     }
                 }
-                parser.next_line();
+                parser.advance_line();
             } else {
                 buffer = buffer + &line + "\n";
             }

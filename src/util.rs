@@ -302,8 +302,8 @@ pub enum LispError {
     TryNoCatch,
     #[error("cannot redefine variable in current scope")]
     AlreadyExists,
-    #[error("attempt to read while no tokens were waiting")]
-    ParseNoTokens,
+    #[error("prefix symbol (e.g. `@`) not followed by any tokens")]
+    MissingToken,
     #[error("`meta` and `with-meta` are not implemented for this version")]
     NoMeta,
 }
