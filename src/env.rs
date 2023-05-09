@@ -1,10 +1,12 @@
 use std::sync::{Arc, RwLock};
 use std::hash;
 use std::ops::DerefMut;
-use im::{HashMap, Vector};
+use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
-use crate::{LispValue, Result, builtins::{BUILTINS, BUILTINS_NO_IO}};
+use crate::LispValue;
+use crate::builtins::{BUILTINS, BUILTINS_NO_IO};
+use crate::util::LispBuiltinFunc;
 
 pub type LispSymbol = DefaultSymbol;
 
@@ -149,7 +151,7 @@ impl LispEnv {
     }
     pub fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
         let interner = INTERNER.read().unwrap();
-        unsafe { std::mem::transmute(interner.resolve(sym).map(|x| x)) }
+        unsafe { std::mem::transmute(interner.resolve(sym)) }
     }
 
     pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {
@@ -183,7 +185,7 @@ impl LispEnv {
         let sym = Self::symbol_for(key);
         self.set(sym, val)
     }
-    pub fn bind_func(&mut self, name: &'static str, f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>) {
+    pub fn bind_func(&mut self, name: &'static str, f: LispBuiltinFunc) {
         let sym = Self::symbol_for_static(name);
         let mut lock = self.0.write().unwrap();
         let val = LispValue::BuiltinFunc { name, f };

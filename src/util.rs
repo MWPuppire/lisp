@@ -27,6 +27,8 @@ pub struct LispFunc {
     pub name: Option<LispSymbol>,
 }
 
+pub type LispBuiltinFunc = fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>;
+
 #[derive(Clone, Debug)]
 pub enum LispValue {
     Symbol(LispSymbol),
@@ -38,7 +40,7 @@ pub enum LispValue {
     Atom(Arc<RwLock<LispValue>>),
     BuiltinFunc {
         name: &'static str,
-        f: fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>,
+        f: LispBuiltinFunc,
     },
     Func(Box<LispFunc>),
     Keyword(String),
@@ -105,10 +107,7 @@ impl LispValue {
         }
     }
     pub fn is_nil(&self) -> bool {
-        match self {
-            Self::Nil => true,
-            _ => false,
-        }
+        matches!(self, Self::Nil)
     }
     pub fn inspect(&self) -> String {
         match self {
@@ -136,7 +135,7 @@ impl LispValue {
             LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
             LispValue::Number(n) => format!("{}", n),
             LispValue::Bool(b) => format!("{}", b),
-            LispValue::Nil => format!("nil"),
+            LispValue::Nil => "nil".to_string(),
             LispValue::List(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("({})", xs.join(" "))

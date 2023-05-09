@@ -11,17 +11,15 @@ fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     match val {
         LispValue::List(list) => {
-            if list.len() == 0 {
+            if list.is_empty() {
                 false
-            } else {
-                if let Ok(sym) = list[0].expect_symbol() {
-                    match lookup_variable(sym, env) {
-                        Ok(LispValue::Func(f)) => f.is_macro,
-                        _ => false,
-                    }
-                } else {
-                    false
+            } else if let Ok(sym) = list[0].expect_symbol() {
+                match lookup_variable(sym, env) {
+                    Ok(LispValue::Func(f)) => f.is_macro,
+                    _ => false,
                 }
+            } else {
+                false
             }
         },
         _ => false,
@@ -33,7 +31,7 @@ pub fn expand_macros(val: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
         let mut list = val.clone().into_list()?;
         let Some(head) = list.pop_front() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
-        let var = lookup_variable(name, &env)?;
+        let var = lookup_variable(name, env)?;
         let LispValue::Func(f) = var else { unreachable!() };
         let (out, _) = apply(f, &list, env)?;
         Ok(out)
@@ -64,7 +62,7 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         params.push((f.args[variadic_idx].to_owned(), LispValue::List(last_vals)));
         if let Some(name) = &f.name {
-            params.push((name.clone(), LispValue::Func(f.clone())));
+            params.push((*name, LispValue::Func(f.clone())));
         }
         if f.is_macro {
             let mut fn_env = f.closure.make_macro_env(&params, env);
@@ -80,7 +78,7 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
         let arg_names = f.args.iter().map(|x| x.to_owned());
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         if let Some(name) = &f.name {
-            params.push((name.clone(), LispValue::Func(f.clone())));
+            params.push((*name, LispValue::Func(f.clone())));
         }
         if f.is_macro {
             let mut fn_env = f.closure.make_macro_env(&params, env);
@@ -103,19 +101,17 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 LispValue::VariadicSymbol(s) => head = lookup_variable(s, &env)?,
                 LispValue::List(mut l) => {
                     if tail.is_some() {
-                        if l.len() > 0 {
+                        if !l.is_empty() {
                             queued.push((None, tail.take(), env.clone()));
                             head = LispValue::List(l);
                         } else {
                             break Err(LispError::InvalidDataType("function", "list"));
                         }
+                    } else if let Some(inner_head) = l.pop_front() {
+                        head = inner_head;
+                        tail = Some(l);
                     } else {
-                        if let Some(inner_head) = l.pop_front() {
-                            head = inner_head;
-                            tail = Some(l);
-                        } else {
-                            break Ok(LispValue::List(l));
-                        }
+                        break Ok(LispValue::List(l));
                     }
                 },
                 LispValue::BuiltinFunc { f, name } => {
@@ -175,7 +171,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
 
 pub fn eval_top(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     match value {
-        LispValue::Symbol(s) => lookup_variable(*s, &env),
+        LispValue::Symbol(s) => lookup_variable(*s, env),
         x => eval(x, env),
     }
 }

@@ -47,7 +47,7 @@ impl LispParser {
         }
     }
     pub fn has_tokens(&self) -> bool {
-        self.tokens.len() > 0 && self.peek().is_some()
+        !self.tokens.is_empty() && self.peek().is_some()
     }
     pub fn add_tokenize(&mut self, input: &str) {
         let row = self.row;
@@ -83,7 +83,7 @@ impl LispParser {
         lazy_static! {
             static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
         }
-        if input.len() == 0 {
+        if input.is_empty() {
             return (row, col);
         }
         let mut last_idx = 0;
@@ -124,13 +124,13 @@ impl LispParser {
     }
 
     fn read_form<'a>(tokens: &'a [LispToken], strs: &mut StringInterner) -> Result<(LispValue, &'a [LispToken])> {
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             return Err(LispError::ParseNoTokens);
         }
         // since we test for `tokens.len() == 0`, this has to be `Some`
         let Some((LispToken { token, row, col }, rest)) = tokens.split_first()
             else { unreachable!() };
-        match token.as_str().chars().nth(0) {
+        match token.as_str().chars().next() {
             Some('(') => Self::read_list(rest, strs),
             Some(')') => Err(LispError::SyntaxError(*row, *col)),
             Some('[') => Self::read_vec(rest, strs),
@@ -193,7 +193,7 @@ impl LispParser {
             if token == ")" {
                 break Ok((LispValue::List(res), rest));
             }
-            let (exp, new_xs) = Self::read_form(&xs, strs).map_err(|err| match err {
+            let (exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, ")") => LispError::UnbalancedDelim(x + 1, ")"),
                 _ => err,
             })?;
@@ -209,7 +209,7 @@ impl LispParser {
             if token == "]" {
                 break Ok((LispValue::Vector(res), rest));
             }
-            let (exp, new_xs) = Self::read_form(&xs, strs).map_err(|err| match err {
+            let (exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "]") => LispError::UnbalancedDelim(x + 1, "]"),
                 _ => err,
             })?;
@@ -225,11 +225,11 @@ impl LispParser {
             if token == "}" {
                 break Ok((LispValue::Map(res.into()), rest));
             }
-            let (key_exp, new_xs) = Self::read_form(&xs, strs).map_err(|err| match err {
+            let (key_exp, new_xs) = Self::read_form(xs, strs).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                 _ => err,
             })?;
-            let (val_exp, new_xs) = Self::read_form(&new_xs, strs).map_err(|err| match err {
+            let (val_exp, new_xs) = Self::read_form(new_xs, strs).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                 _ => err,
             })?;
@@ -240,8 +240,8 @@ impl LispParser {
     fn read_atom(token: String, strs: &mut StringInterner, row: usize, col: usize) -> Result<LispValue> {
         if let Ok(f) = token.parse() {
             Ok(LispValue::Number(f))
-        } else if token.starts_with("\"") {
-            if token.len() > 1 && token.ends_with("\"") {
+        } else if token.starts_with('\"') {
+            if token.len() > 1 && token.ends_with('\"') {
                 let last = token.len() - 1;
                 let unescaped = unescape(&token[1..last]);
                 if let Some(s) = unescaped {
@@ -258,12 +258,17 @@ impl LispParser {
             Ok(LispValue::Bool(false))
         } else if token == "nil" {
             Ok(LispValue::Nil)
-        } else if token.starts_with(":") {
-            Ok(LispValue::Keyword(token[1..].to_owned()))
-        } else if token.len() != 0 {
+        } else if let Some(stripped) = token.strip_prefix(':') {
+            Ok(LispValue::Keyword(stripped.to_owned()))
+        } else if !token.is_empty() {
             Ok(LispValue::Symbol(strs.get_or_intern(token)))
         } else {
             Ok(LispValue::Nil)
         }
+    }
+}
+impl Default for LispParser {
+    fn default() -> Self {
+        Self::new()
     }
 }
