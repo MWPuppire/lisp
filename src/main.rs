@@ -1,26 +1,10 @@
-extern crate lazy_static;
-extern crate regex;
-extern crate thiserror;
 extern crate rustyline;
-extern crate unescape;
-extern crate im;
 
 use std::fs::File;
 use std::io::prelude::*;
 use im::Vector;
 
-pub mod util;
-pub use crate::util::{LispError, LispValue, Result};
-pub mod parser;
-pub use crate::parser::LispParser;
-pub mod eval;
-pub use crate::eval::eval;
-use crate::eval::eval_top;
-pub mod env;
-pub use crate::env::LispEnv;
-pub mod builtins;
-#[cfg(test)]
-mod tests;
+use lisp::{Result, LispParser, LispEnv, LispValue, eval_top};
 
 fn main() -> Result<()> {
     let mut rl = rustyline::DefaultEditor::new().unwrap();
@@ -37,7 +21,7 @@ fn main() -> Result<()> {
     env.set_by_str("*ARGV*", LispValue::List(lisp_argv));
     env.set_by_str("*host-language*", LispValue::String("Rust".to_owned()));
     let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
-    eval(&LispParser::parse(cond).unwrap().unwrap(), &mut env)?;
+    eval_top(&LispParser::parse(cond).unwrap().unwrap(), &mut env)?;
 
     if args.len() > 1 && &args[1] != "--" {
         let mut file = File::open(&args[1])?;
