@@ -4,6 +4,7 @@ extern crate thiserror;
 extern crate unescape;
 extern crate im;
 extern crate string_interner;
+extern crate ordered_float;
 
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};

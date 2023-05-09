@@ -4,20 +4,23 @@ use std::io::prelude::*;
 use std::time::Instant;
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
+use ordered_float::OrderedFloat;
 use crate::{LispValue, LispError, Result, expect};
 use crate::env::{LispEnv, LispSymbol};
 use crate::eval::{eval, eval_top, expand_macros};
 use crate::parser::LispParser;
 use crate::util::LispFunc;
 
-fn eval_list_to_numbers(args: &Vector<LispValue>, env: &mut LispEnv) -> Result<Vec<f64>> {
+fn eval_list_to_numbers(args: &Vector<LispValue>, env: &mut LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
     args.iter().map(|x| eval(x, env)?.expect_number()).collect()
 }
 
 fn lisp_plus(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(&args, &mut env)?;
-    Ok((LispValue::Number(nums.iter().fold(0.0, |acc, x| acc + x)), env, false))
+    Ok((LispValue::Number(
+        nums.iter().fold(OrderedFloat(0.0), |acc, x| acc + x)
+    ), env, false))
 }
 
 fn lisp_minus(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -25,13 +28,17 @@ fn lisp_minus(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValu
     let Some(first) = args.pop_front() else { unreachable!() };
     let first = eval(&first, &mut env)?.expect_number()?;
     let nums = eval_list_to_numbers(&args, &mut env)?;
-    Ok((LispValue::Number(first - nums.iter().fold(0.0, |acc, x| acc + x)), env, false))
+    Ok((LispValue::Number(
+        first - nums.iter().fold(OrderedFloat(0.0), |acc, x| acc + x)
+    ), env, false))
 }
 
 fn lisp_times(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(&args, &mut env)?;
-    Ok((LispValue::Number(nums.iter().fold(1.0, |acc, x| acc * x)), env, false))
+    Ok((LispValue::Number(
+        nums.iter().fold(OrderedFloat(1.0), |acc, x| acc * x)
+    ), env, false))
 }
 
 fn lisp_divide(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -45,7 +52,9 @@ fn lisp_int_divide(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispVal
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let numerator = eval(&args[0], &mut env)?.expect_number()?;
     let denominator = eval(&args[1], &mut env)?.expect_number()?;
-    Ok((LispValue::Number((numerator / denominator).trunc()), env, false))
+    Ok((LispValue::Number(OrderedFloat(
+        (numerator / denominator).trunc()
+    )), env, false))
 }
 
 fn lisp_def(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -180,13 +189,13 @@ fn lisp_count(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval(&args[0], &mut env)?;
     if val.is_nil() {
-        Ok((LispValue::Number(0.0), env, false))
+        Ok((LispValue::Number(OrderedFloat(0.0)), env, false))
     } else {
-        Ok((LispValue::Number(match val {
+        Ok((LispValue::Number(OrderedFloat(match val {
             LispValue::List(l) => Ok(l.len() as f64),
             LispValue::Vector(l) => Ok(l.len() as f64),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
-        }?), env, false))
+        }?)), env, false))
     }
 }
 
@@ -452,7 +461,7 @@ fn lisp_nth(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     let arg1 = eval(&args[0], &mut env)?;
     let arg2 = eval(&args[1], &mut env)?;
     let mut list = arg1.into_list()?;
-    let idx = arg2.expect_number()? as usize;
+    let idx = arg2.expect_number()?.into_inner() as usize;
     expect!(idx < list.len(), LispError::IndexOutOfRange(idx));
     Ok((list.remove(idx), env, false))
 }
@@ -790,7 +799,9 @@ lazy_static! {
     static ref START_TIME: Instant = Instant::now();
 }
 fn lisp_time_ms(_args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
-    Ok((LispValue::Number(START_TIME.elapsed().as_secs_f64() * 1000.0), env, false))
+    Ok((LispValue::Number(OrderedFloat(
+        START_TIME.elapsed().as_secs_f64() * 1000.0
+    )), env, false))
 }
 
 fn lisp_seq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -815,7 +826,7 @@ fn lisp_seq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
             Ok((if s.is_empty() {
                 LispValue::Nil
             } else {
-                LispValue::List(s.chars().map(|x| LispValue::String(x.to_string())).collect())
+                LispValue::List(s.chars().map(|x| x.to_string().into()).collect())
             }, env, false))
         },
         LispValue::Nil => Ok((LispValue::Nil, env, false)),

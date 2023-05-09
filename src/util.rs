@@ -2,6 +2,7 @@ use std::fmt;
 use std::hash;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
+use ordered_float::OrderedFloat;
 use im::{HashMap, Vector};
 use crate::env::{LispEnv, LispClosure, LispSymbol};
 
@@ -33,7 +34,7 @@ pub type LispBuiltinFunc = fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, 
 pub enum LispValue {
     Symbol(LispSymbol),
     String(String),
-    Number(f64),
+    Number(OrderedFloat<f64>),
     Bool(bool),
     Nil,
     List(Vector<LispValue>),
@@ -88,7 +89,7 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("atom", self.type_of())),
         }
     }
-    pub fn expect_number(&self) -> Result<f64> {
+    pub fn expect_number(&self) -> Result<OrderedFloat<f64>> {
         match self {
             Self::Number(f) => Ok(*f),
             _ => Err(LispError::InvalidDataType("number", self.type_of())),
@@ -129,7 +130,7 @@ impl LispValue {
             LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
             LispValue::Number(n) => format!("{}", n),
             LispValue::Bool(b) => format!("{}", b),
-            LispValue::Nil => "nil".to_string(),
+            LispValue::Nil => "nil".to_owned(),
             LispValue::List(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("({})", xs.join(" "))
@@ -176,6 +177,32 @@ impl LispValue {
             Self::Map(m) => Ok(m),
             _ => Err(LispError::InvalidDataType("map", self.type_of())),
         }
+    }
+}
+
+impl From<f64> for LispValue {
+    fn from(item: f64) -> Self {
+        Self::Number(OrderedFloat(item))
+    }
+}
+impl From<OrderedFloat<f64>> for LispValue {
+    fn from(item: OrderedFloat<f64>) -> Self {
+        Self::Number(item)
+    }
+}
+impl From<bool> for LispValue {
+    fn from(item: bool) -> Self {
+        Self::Bool(item)
+    }
+}
+impl From<String> for LispValue {
+    fn from(item: String) -> Self {
+        Self::String(item)
+    }
+}
+impl From<LispSymbol> for LispValue {
+    fn from(item: LispSymbol) -> Self {
+        Self::Symbol(item)
     }
 }
 

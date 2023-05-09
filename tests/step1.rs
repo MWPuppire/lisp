@@ -7,9 +7,9 @@ fn parse(input: &str) -> LispValue {
 
 #[test]
 fn read_numbers() {
-    assert_eq!(parse("1"), LispValue::Number(1.0));
-    assert_eq!(parse("7"), LispValue::Number(7.0));
-    assert_eq!(parse("-123"), LispValue::Number(-123.0));
+    assert_eq!(parse("1"), 1.0.into());
+    assert_eq!(parse("7"), 7.0.into());
+    assert_eq!(parse("-123"), (-123.0).into());
 }
 
 #[test]
@@ -26,8 +26,8 @@ fn read_symbols() {
 fn read_lists() {
     assert_eq!(parse("(+ 1 2)"), LispValue::List(vector![
         LispValue::symbol_for_static("+"),
-        LispValue::Number(1.0),
-        LispValue::Number(2.0),
+        1.0.into(),
+        2.0.into(),
     ]));
     assert_eq!(parse("()"), LispValue::List(vector![]));
     assert_eq!(parse("( )"), LispValue::List(vector![]));
@@ -40,17 +40,17 @@ fn read_lists() {
 fn nested_lists() {
     assert_eq!(parse("((3 4))"), LispValue::List(vector![
         LispValue::List(vector![
-            LispValue::Number(3.0),
-            LispValue::Number(4.0),
+            3.0.into(),
+            4.0.into(),
         ]),
     ]));
     assert_eq!(parse("(+ 1 (+ 2 3))"), LispValue::List(vector![
         LispValue::symbol_for_static("+"),
-        LispValue::Number(1.0),
+        1.0.into(),
         LispValue::List(vector![
             LispValue::symbol_for_static("+"),
-            LispValue::Number(2.0),
-            LispValue::Number(3.0),
+            2.0.into(),
+            3.0.into(),
         ]),
     ]));
     assert_eq!(parse("(()())"), LispValue::List(vector![
@@ -62,15 +62,15 @@ fn nested_lists() {
 #[test]
 fn ignore_commas() {
     assert_eq!(parse("(1 2, 3,,,,),,"), LispValue::List(vector![
-        LispValue::Number(1.0),
-        LispValue::Number(2.0),
-        LispValue::Number(3.0),
+        1.0.into(),
+        2.0.into(),
+        3.0.into(),
     ]));
 }
 
 #[test]
 fn builtin_values() {
     assert_eq!(parse("nil"), LispValue::Nil);
-    assert_eq!(parse("true"), LispValue::Bool(true));
-    assert_eq!(parse("false"), LispValue::Bool(false));
+    assert_eq!(parse("true"), true.into());
+    assert_eq!(parse("false"), false.into());
 }

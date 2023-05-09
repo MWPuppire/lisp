@@ -3,13 +3,13 @@ use common::*;
 
 #[test]
 fn arithmetic() {
-    assert_eq!(eval!("(+ 1 2)"), LispValue::Number(3.0));
-    assert_eq!(eval!("(+ 5 (* 2 3))"), LispValue::Number(11.0));
-    assert_eq!(eval!("(- (+ 5 (* 2 3)) 3)"), LispValue::Number(8.0));
-    assert_eq!(eval!("(/ (- (+ 5 (* 2 3)) 3) 4)"), LispValue::Number(2.0));
-    assert_eq!(eval!("(/ (- (+ 515 (* 87 311)) 302) 27)"), LispValue::Number(1010.0));
-    assert_eq!(eval!("(* -3 6)"), LispValue::Number(-18.0));
-    assert_eq!(eval!("(/ (- (+ 515 (* -87 311)) 296) 27)"), LispValue::Number(-994.0));
+    assert_eq!(eval!("(+ 1 2)"), 3.0.into());
+    assert_eq!(eval!("(+ 5 (* 2 3))"), 11.0.into());
+    assert_eq!(eval!("(- (+ 5 (* 2 3)) 3)"), 8.0.into());
+    assert_eq!(eval!("(/ (- (+ 5 (* 2 3)) 3) 4)"), 2.0.into());
+    assert_eq!(eval!("(/ (- (+ 515 (* 87 311)) 302) 27)"), 1010.0.into());
+    assert_eq!(eval!("(* -3 6)"), (-18.0).into());
+    assert_eq!(eval!("(/ (- (+ 515 (* -87 311)) 296) 27)"), (-994.0).into());
 }
 
 #[test]
@@ -28,20 +28,14 @@ fn empty_collection_nop() {
 #[test]
 fn evaluate_in_collections() {
     assert_eq!(eval!("[1 2 (+ 1 2)]"), LispValue::Vector(vec![
-        LispValue::Number(1.0),
-        LispValue::Number(2.0),
-        LispValue::Number(3.0),
+        1.0.into(),
+        2.0.into(),
+        3.0.into(),
     ]));
-    assert_eq!(eval!("{\"a\" (+ 7 8)}"), LispValue::Map(
-        HashMap::unit(
-            LispValue::String("a".to_string()),
-            LispValue::Number(15.0),
-        )
-    ));
-    assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::Map(
-        HashMap::unit(
-            LispValue::Keyword("a".to_string()),
-            LispValue::Number(15.0),
-        )
-    ));
+    assert_eq!(eval!("{\"a\" (+ 7 8)}"), LispValue::Map(hashmap!{
+        "a".to_owned().into() => 15.0.into(),
+    }));
+    assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::Map(hashmap!{
+        LispValue::Keyword("a".to_owned()) => 15.0.into(),
+    }));
 }
