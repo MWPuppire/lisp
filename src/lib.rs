@@ -1,3 +1,4 @@
+extern crate cfg_if;
 extern crate lazy_static;
 extern crate regex;
 extern crate thiserror;

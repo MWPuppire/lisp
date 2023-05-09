@@ -313,8 +313,6 @@ pub enum LispError {
     InvalidDataType(&'static str, &'static str),
     #[error("unexpected arguments. expected {0}, received {1}")]
     IncorrectArguments(usize, usize),
-    #[error("error calling into native function: {0}")]
-    OSFailure(#[from] std::io::Error),
     #[error("`unquote` and `splice-unquote` can only be used inside `quasiquote`")]
     OnlyInQuasiquote,
     #[error("index {0} out of range")]
@@ -333,4 +331,8 @@ pub enum LispError {
     MissingToken(&'static str),
     #[error("`meta` and `with-meta` are not implemented for this version")]
     NoMeta,
+
+    #[cfg(feature = "io-stdlib")]
+    #[error("error calling into native function: {0}")]
+    OSFailure(#[from] std::io::Error),
 }

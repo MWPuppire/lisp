@@ -208,6 +208,7 @@ checksum = "d59d8c75012853d2e872fb56bc8a2e53718e2cafe1a4c823143141c6d90c322f"
 name = "lisp"
 version = "0.1.0"
 dependencies = [
+ "cfg-if",
  "im",
  "lazy_static",
  "ordered-float",

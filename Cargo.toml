@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cfg-if = "1.0"
 regex = "1.7"
 thiserror = "1.0"
 lazy_static = "1.4"
@@ -14,3 +15,8 @@ im = "15.1"
 string-interner = "0.14"
 ordered-float = "3.0"
 rustyline = "11.0"
+
+[features]
+default = ["io-stdlib"]
+# Enable functions in the Lisp standard library which require I/O
+io-stdlib = []

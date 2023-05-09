@@ -5,7 +5,7 @@ use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
 use crate::LispValue;
-use crate::builtins::{BUILTINS, BUILTINS_NO_IO};
+use crate::builtins;
 use crate::util::LispBuiltinFunc;
 
 pub type LispSymbol = DefaultSymbol;
@@ -62,18 +62,21 @@ lazy_static! {
     static ref INTERNER: RwLock<StringInterner> = {
         RwLock::new(StringInterner::new())
     };
-    static ref BUILTIN_ENV: LispEnv = {
+
+    static ref BUILTIN_NO_IO_ENV: LispEnv = {
         let inner = InnerEnv {
-            data: BUILTINS.clone(),
+            data: builtins::BUILTINS_NO_IO.clone(),
             enclosing: None,
             global: None,
             constant: true,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     };
-    static ref BUILTIN_NO_IO_ENV: LispEnv = {
+
+    #[cfg(feature = "io-stdlib")]
+    static ref BUILTIN_ENV: LispEnv = {
         let inner = InnerEnv {
-            data: BUILTINS_NO_IO.clone(),
+            data: builtins::BUILTINS.clone(),
             enclosing: None,
             global: None,
             constant: true,
@@ -92,6 +95,7 @@ impl LispEnv {
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
+    #[cfg(feature = "io-stdlib")]
     pub fn new_stdlib() -> Self {
         let inner = InnerEnv {
             data: HashMap::new(),
@@ -201,5 +205,21 @@ impl LispEnv {
             constant: lock.constant,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "io-stdlib")] {
+        impl Default for LispEnv {
+            fn default() -> Self {
+                Self::new_stdlib()
+            }
+        }
+    } else {
+        impl Default for LispEnv {
+            fn default() -> Self {
+                Self::new_stdlib_protected()
+            }
+        }
     }
 }

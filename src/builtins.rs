@@ -1,7 +1,4 @@
 use std::sync::{Arc, RwLock};
-use std::fs::File;
-use std::io::prelude::*;
-use std::time::Instant;
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
@@ -10,6 +7,14 @@ use crate::env::{LispEnv, LispSymbol};
 use crate::eval::{eval, eval_top, expand_macros};
 use crate::parser::LispParser;
 use crate::util::LispFunc;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "io-stdlib")] {
+        use std::fs::File;
+        use std::io::prelude::*;
+        use std::time::Instant;
+    }
+}
 
 fn eval_list_to_numbers(args: &Vector<LispValue>, env: &mut LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
     args.iter().map(|x| eval(x, env)?.expect_number()).collect()
@@ -150,6 +155,7 @@ fn lisp_equals(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, 
     Ok((LispValue::Bool(x == y), env, false))
 }
 
+#[cfg(feature = "io-stdlib")]
 fn lisp_prn(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     if let Some(last) = args.pop_back() {
         for val in args.iter() {
@@ -290,6 +296,7 @@ fn lisp_eval(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Li
     Ok((arg, global, true))
 }
 
+#[cfg(feature = "io-stdlib")]
 fn lisp_readline(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     if !args.is_empty() {
         let val = eval(&args[0], &mut env)?;
@@ -329,6 +336,7 @@ fn lisp_str(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     Ok((LispValue::String(buffer), env, false))
 }
 
+#[cfg(feature = "io-stdlib")]
 fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
@@ -339,6 +347,7 @@ fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
     Ok((LispValue::String(buffer), env, false))
 }
 
+#[cfg(feature = "io-stdlib")]
 fn lisp_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
@@ -754,6 +763,7 @@ fn lisp_pr_str(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, 
     Ok((LispValue::String(full_str.join(" ")), env, false))
 }
 
+#[cfg(feature = "io-stdlib")]
 fn lisp_println(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     if let Some(last) = args.pop_back() {
         for val in args.iter() {
@@ -795,13 +805,17 @@ fn lisp_vec(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
     }
 }
 
-lazy_static! {
-    static ref START_TIME: Instant = Instant::now();
-}
-fn lisp_time_ms(_args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
-    Ok((LispValue::Number(OrderedFloat(
-        START_TIME.elapsed().as_secs_f64() * 1000.0
-    )), env, false))
+cfg_if::cfg_if! {
+    if #[cfg(feature = "io-stdlib")] {
+        lazy_static! {
+            static ref START_TIME: Instant = Instant::now();
+        }
+        fn lisp_time_ms(_args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
+            Ok((LispValue::Number(OrderedFloat(
+                START_TIME.elapsed().as_secs_f64() * 1000.0
+            )), env, false))
+        }
+    }
 }
 
 fn lisp_seq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -957,6 +971,8 @@ lazy_static! {
             "with-meta" => lisp_with_meta,
         )
     };
+
+    #[cfg(feature = "io-stdlib")]
     pub static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
         // dummy to make `time-ms` count from environment (so probably program)
         // initialization rather than since the first `time-ms` call
