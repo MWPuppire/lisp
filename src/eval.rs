@@ -63,10 +63,11 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
         }
-        let mut fn_env = f.closure.make_env(&params);
         if f.is_macro {
+            let mut fn_env = f.closure.make_macro_env(&params, env);
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
+            let fn_env = f.closure.make_env(&params);
             Ok((f.body.clone(), fn_env))
         }
     } else if args.len() != f.args.len() {
@@ -78,10 +79,11 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
         if let Some(name) = &f.name {
             params.push((name.clone(), LispValue::Func(f.clone())));
         }
-        let mut fn_env = f.closure.make_env(&params);
         if f.is_macro {
+            let mut fn_env = f.closure.make_macro_env(&params, env);
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
+            let fn_env = f.closure.make_env(&params);
             Ok((f.body.clone(), fn_env))
         }
     }
@@ -154,7 +156,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                     Err(LispError::InvalidDataType("function", x.type_of()))
                 } else {
                     Ok(x)
-                }
+                },
             }
         }?;
         if let Some(last) = queued.last_mut() {

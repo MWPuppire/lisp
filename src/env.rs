@@ -26,6 +26,17 @@ impl LispClosure {
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
+    pub fn make_macro_env(&self, args: &[(String, LispValue)], surrounding: &LispEnv) -> LispEnv {
+        let enclosing = self.0.union(surrounding);
+        let global = enclosing.global();
+        let inner = InnerEnv {
+            data: args.into(),
+            enclosing: Some(enclosing.union(surrounding)),
+            global: Some(global),
+            constant: false,
+        };
+        LispEnv(Arc::new(RwLock::new(inner)))
+    }
 }
 impl hash::Hash for LispClosure {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -145,5 +156,16 @@ impl LispEnv {
         let mut lock = self.0.write().unwrap();
         let val = LispValue::BuiltinFunc { name, f };
         lock.data.insert(name.to_owned(), val);
+    }
+    pub fn union(&self, other: &LispEnv) -> LispEnv {
+        let lock = self.0.read().unwrap();
+        let reader = other.0.read().unwrap();
+        let inner = InnerEnv {
+            data: lock.data.clone().union(reader.data.clone()),
+            enclosing: lock.enclosing.clone(),
+            global: lock.global.clone(),
+            constant: lock.constant,
+        };
+        LispEnv(Arc::new(RwLock::new(inner)))
     }
 }
