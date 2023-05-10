@@ -357,7 +357,7 @@ fn lisp_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValu
     f.read_to_string(&mut buffer)?;
 
     let mut parser = LispParser::new();
-    parser.add_tokenize(&buffer);
+    parser.add_tokenize(&buffer)?;
     let mut global = env.global();
     for val in parser {
         eval(&val?, &mut global)?;

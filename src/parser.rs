@@ -1,10 +1,221 @@
 use std::ops::DerefMut;
-use regex::Regex;
-use lazy_static::lazy_static;
-use unescape::unescape;
 use im::{vector, Vector};
 use string_interner::StringInterner;
+use nom::{
+    IResult,
+    Finish,
+    branch::alt,
+    multi::{many0_count, many0, many1_count},
+    combinator::{value, opt, recognize, map_opt, map_res, map},
+    sequence::{preceded, tuple, pair, terminated, delimited},
+    bytes::complete::{tag, take_while_m_n},
+    character::complete::{multispace1, line_ending, char, none_of, one_of},
+};
 use crate::{LispValue, LispError, Result, LispEnv};
+
+// numbers can't start an identifier, but they're valid in one
+const IDEN_INVALID_CHARS_START: &str = "~@^{}()[]'\"&`\\,;0123456789 \t\r\n";
+const IDEN_INVALID_CHARS: &str = "~@^{}()[]'\"&`\\,; \t\r\n";
+// strings can't contain uenscaped newlines, backslashes, or quotes
+const INVALID_STRING_CHARS: &str = "\r\n\\\"";
+
+fn line_comment(i: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        char(';'),
+        many0_count(none_of("\r\n")),
+        // in case the input ends without a newline
+        opt(line_ending),
+    )))(i)
+}
+
+fn identifier(input: &str) -> IResult<&str, &str> {
+    recognize(
+        pair(
+            none_of(IDEN_INVALID_CHARS_START),
+            many0_count(none_of(IDEN_INVALID_CHARS)),
+        ),
+    )(input)
+}
+
+fn number(input: &str) -> IResult<&str, &str> {
+    alt((
+        recognize( // Case one: .42
+            tuple((
+                char('.'),
+                decimal,
+                opt(tuple((
+                    one_of("eE"),
+                    opt(one_of("+-")),
+                    decimal
+                )))
+            ))
+        ),
+        recognize( // Case two: 42e42 and 42.42e42
+            tuple((
+                decimal,
+                opt(preceded(
+                    char('.'),
+                    decimal,
+                )),
+                one_of("eE"),
+                opt(one_of("+-")),
+                decimal
+            ))
+        ),
+        recognize( // Case three: 42. and 42.42
+            tuple((
+                decimal,
+                char('.'),
+                opt(decimal)
+            ))
+        ),
+        // Integers
+        recognize(decimal),
+        recognize( // Binary integers
+            preceded(
+                alt((tag("0b"), tag("0B"))),
+                many1_count(
+                    terminated(
+                        one_of("01"),
+                        opt(pair(
+                            many1_count(char('_')),
+                            one_of("01"),
+                        )),
+                    ),
+                ),
+            )
+        ),
+        recognize( // Octal integers
+            preceded(
+                alt((tag("0o"), tag("0o"))),
+                many1_count(
+                    terminated(
+                        one_of("01234567"),
+                        opt(pair(
+                            many1_count(char('_')),
+                            one_of("01234567"),
+                        )),
+                    ),
+                ),
+            )
+        ),
+        recognize( // Hexadecimal integers
+            preceded(
+                alt((tag("0x"), tag("0X"))),
+                many1_count(
+                    terminated(
+                        one_of("0123456789abcdefABCDEF"),
+                        opt(pair(
+                            many1_count(char('_')),
+                            one_of("0123456789abcdefABCDEF"),
+                        )),
+                    ),
+                ),
+            )
+        ),
+    ))(input)
+}
+
+fn decimal(input: &str) -> IResult<&str, &str> {
+    recognize(
+        many1_count(
+            terminated(
+                one_of("0123456789"),
+                opt(pair(
+                    many1_count(char('_')),
+                    one_of("0123456789"),
+                )),
+            ),
+        )
+    )(input)
+}
+
+fn parse_unicode(input: &str) -> IResult<&str, char> {
+    let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
+    let parse_delimited_hex = preceded(
+        char('u'),
+        delimited(
+            char('{'),
+            parse_hex,
+            char('}'),
+        ),
+    );
+    let parse_u32 = map_res(parse_delimited_hex, move |hex| {
+        u32::from_str_radix(hex, 16)
+    });
+    map_opt(parse_u32, std::char::from_u32)(input)
+}
+
+fn parse_escape_sequence(input: &str) -> IResult<&str, char> {
+    preceded(
+        char('\\'),
+        alt((
+            parse_unicode,
+            value('\n', line_ending),
+            value('\n', char('n')),
+            value('\r', char('r')),
+            value('\t', char('t')),
+            value('\u{08}', char('b')),
+            value('\u{0C}', char('f')),
+            value('\\', char('\\')),
+            value('"', char('"')),
+            value('\'', char('\'')),
+        )),
+    )(input)
+}
+
+fn parse_string(input: &str) -> IResult<&str, String> {
+    map(delimited(
+        char('"'),
+        many0(alt((
+            parse_escape_sequence,
+            none_of(INVALID_STRING_CHARS)
+        ))),
+        char('"'),
+    ), |x| x.into_iter().collect())(input)
+}
+
+fn recognize_string(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        char('"'),
+        many0_count(alt((
+            parse_escape_sequence,
+            none_of(INVALID_STRING_CHARS),
+        ))),
+        char('"'),
+    )))(input)
+}
+
+fn parse_lisp(input: &str) -> IResult<&str, &str> {
+    delimited(
+        many0_count(alt((
+            value((), multispace1),
+            value((), char(',')),
+        ))),
+        recognize(alt((
+            line_comment,
+            number,
+            recognize_string,
+            value("(", char('(')),
+            value(")", char(')')),
+            tag("~@"),
+            value("~", char('~')),
+            value("{", char('{')),
+            value("}", char('}')),
+            value("[", char('[')),
+            value("]", char(']')),
+            value("'", char('\'')),
+            value("&", char('&')),
+            value("@", char('@')),
+            value("`", char('`')),
+            identifier,
+        ))),
+        many0_count(alt((
+            value((), multispace1),
+            value((), char(',')),
+        ))),
+    )(input)
+}
 
 fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
     match opt {
@@ -51,7 +262,10 @@ impl LispParser {
     }
     pub fn parse(input: &str) -> Option<Result<LispValue>> {
         let mut tokens = vec![];
-        Self::tokenize(&mut tokens, input, 1, 1);
+        match Self::tokenize(&mut tokens, input, 1, 1) {
+            Ok(_) => (),
+            Err(e) => return Some(Err(e)),
+        }
         // map to drop the leftover tokens from the result
         Self::read_form(&tokens, LispEnv::interner_mut().deref_mut())
             .map(|x| x.map(|(val, _)| val))
@@ -75,31 +289,55 @@ impl LispParser {
     pub fn has_tokens(&self) -> bool {
         !self.tokens.is_empty() && self.peek().is_some()
     }
-    pub fn add_tokenize(&mut self, input: &str) {
+    pub fn add_tokenize(&mut self, input: &str) -> Result<()> {
         let row = self.row;
         let col = self.col;
-        let (new_row, new_col) = Self::tokenize(&mut self.tokens, input, row, col);
+        let (new_row, new_col) = Self::tokenize(&mut self.tokens, input, row, col)?;
         self.row = new_row;
         self.col = new_col;
+        Ok(())
     }
     pub fn peek(&self) -> Option<Result<LispValue>> {
         // map to drop the leftover tokens from the result
         Self::read_form(&self.tokens, LispEnv::interner_mut().deref_mut())
             .map(|x| x.map(|(val, _)| val))
     }
+    pub fn clear_tokens(&mut self) {
+        self.tokens.clear();
+    }
 
-    fn tokenize(tokens: &mut Vec<LispToken>, input: &str, mut row: usize, mut col: usize) -> (usize, usize) {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"?|;.*|[^\s\[\]{}('"`,;)]*)"#).unwrap();
+    fn tokenize(tokens: &mut Vec<LispToken>, mut input: &str, mut row: usize, mut col: usize) -> Result<(usize, usize)> {
+        loop {
+            if input.is_empty() {
+                break;
+            }
+            let parsed = parse_lisp(input);
+            match parsed.finish() {
+                Ok((new_input, parsed)) => {
+                    let start_pos = unsafe {
+                        new_input.as_ptr().offset_from(input.as_ptr()) as usize
+                    };
+                    for ch in input[..start_pos].chars() {
+                        if ch == '\n' {
+                            col = 1;
+                            row += 1;
+                        } else {
+                            col += 1;
+                        }
+                    }
+                    input = new_input;
+                    tokens.push(LispToken {
+                        token: parsed.to_owned(),
+                        row,
+                        col,
+                    });
+                    col += parsed.len();
+                },
+                Err(_) => return Err(LispError::SyntaxError(row, col)),
+            }
         }
-        if input.is_empty() {
-            return (row, col);
-        }
-        let mut last_idx = 0;
-        for found in RE.find_iter(input) {
-            let start = found.start();
-            let end = found.end();
-            for ch in input[last_idx..start].chars() {
+        if input.len() > 0 {
+            for ch in input.chars() {
                 if ch == '\n' {
                     col = 1;
                     row += 1;
@@ -107,29 +345,8 @@ impl LispParser {
                     col += 1;
                 }
             }
-            let found = &input[start..end];
-            tokens.push(LispToken {
-                token: found.trim_start_matches(|c: char| {
-                    c.is_whitespace() || c == ','
-                }).to_owned(),
-                row,
-                col
-            });
-            col += end - start;
-            last_idx = end;
         }
-        let last_ch = input.len() - 1;
-        if last_ch >= last_idx {
-            for ch in input[last_idx..last_ch].chars() {
-                if ch == '\n' {
-                    col = 1;
-                    row += 1;
-                } else {
-                    col += 1;
-                }
-            }
-        }
-        (row, col)
+        Ok((row, col))
     }
 
     fn read_form<'a>(tokens: &'a [LispToken], strs: &mut StringInterner) -> Option<Result<(LispValue, &'a [LispToken])>> {
@@ -238,17 +455,10 @@ impl LispParser {
         if let Ok(f) = token.parse() {
             Ok(LispValue::Number(f))
         } else if token.starts_with('\"') {
-            if token.len() > 1 && token.ends_with('\"') {
-                let last = token.len() - 1;
-                let unescaped = unescape(&token[1..last]);
-                if let Some(s) = unescaped {
-                    Ok(LispValue::String(s))
-                } else {
-                    Err(LispError::SyntaxError(row, col))
-                }
-            } else {
-                Err(LispError::SyntaxError(row, col))
-            }
+            parse_string(&token)
+                .finish()
+                .map_err(|_| LispError::SyntaxError(row, col))
+                .map(|(_, s)| LispValue::String(s))
         } else if token == "true" {
             Ok(LispValue::Bool(true))
         } else if token == "false" {

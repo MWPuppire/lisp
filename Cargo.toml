@@ -7,13 +7,12 @@ edition = "2021"
 
 [dependencies]
 cfg-if = "1.0"
-regex = "1.7"
 thiserror = "1.0"
 lazy_static = "1.4"
-unescape = "0.1"
 im = "15.1"
 string-interner = "0.14"
 ordered-float = "3.0"
+nom = "7.1"
 rustyline = { version = "11.0", optional = true }
 
 [features]

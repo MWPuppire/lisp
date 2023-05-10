@@ -1,11 +1,10 @@
 extern crate cfg_if;
 extern crate lazy_static;
-extern crate regex;
 extern crate thiserror;
-extern crate unescape;
 extern crate im;
 extern crate string_interner;
 extern crate ordered_float;
+extern crate nom;
 
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};

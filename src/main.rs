@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     if args.len() > 1 && &args[1] != "--" {
         let mut file = File::open(&args[1])?;
         file.read_to_string(&mut buffer)?;
-        parser.add_tokenize(&buffer);
+        parser.add_tokenize(&buffer)?;
         for val in parser {
             eval_top(&val?, &mut env)?;
         }
@@ -35,7 +35,12 @@ fn main() -> Result<()> {
 
     loop {
         if let Ok(line) = rl.readline(if complete { "> " } else { "... " }) {
-            parser.add_tokenize(&line);
+            if let Err(err) = parser.add_tokenize(&line) {
+                println!("Err: {}", err);
+                parser.clear_tokens();
+                parser.advance_line();
+                continue;
+            }
             complete = parser.is_parse_complete();
             if complete {
                 rl.add_history_entry(buffer + &line).unwrap();
