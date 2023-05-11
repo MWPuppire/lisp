@@ -12,7 +12,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
         use std::fs::File;
         use std::io::prelude::*;
-        use std::time::Instant;
+        use std::time::{SystemTime, UNIX_EPOCH};
     }
 }
 
@@ -807,12 +807,12 @@ fn lisp_vec(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
-        lazy_static! {
-            static ref START_TIME: Instant = Instant::now();
-        }
         fn lisp_time_ms(_args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
             Ok((LispValue::Number(OrderedFloat(
-                START_TIME.elapsed().as_secs_f64() * 1000.0
+                match SystemTime::now().duration_since(UNIX_EPOCH) {
+                    Ok(d) => d.as_secs_f64() * 1000.0,
+                    Err(d) => d.duration().as_secs_f64() * 1000.0,
+                }
             )), env, false))
         }
     }
@@ -977,10 +977,6 @@ lazy_static! {
 #[cfg(feature = "io-stdlib")]
 lazy_static! {
     pub static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
-        // dummy to make `time-ms` count from environment (so probably program)
-        // initialization rather than since the first `time-ms` call
-        let _ = *START_TIME;
-
         let base = BUILTINS_NO_IO.clone();
         let mut strs = LispEnv::interner_mut();
         let ext = make_lisp_funcs!(strs,
