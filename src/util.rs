@@ -139,7 +139,7 @@ impl LispValue {
             LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             LispValue::Func(f) => format!(
                 "({} ({}) {})",
-                if f.is_macro { "#<macro-fn>" } else { "fn*" },
+                if f.is_macro { "macro-fn*" } else { "fn*" },
                 f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
                 f.body.to_string()
             ),

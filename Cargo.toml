@@ -22,5 +22,5 @@ io-stdlib = []
 
 [[bin]]
 name = "lisp-repl"
-required-features = ["io-stdlib", "rustyline"]
+required-features = ["rustyline"]
 path = "src/main.rs"

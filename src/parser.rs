@@ -18,8 +18,8 @@ use crate::{LispValue, LispError, Result, LispEnv};
 // numbers can't start an identifier, but they're valid in one
 const IDEN_INVALID_CHARS_START: &str = "~@^{}()[]'\"&`\\,;:0123456789 \t\r\n\u{0}";
 const IDEN_INVALID_CHARS: &str = "~@^{}()[]'\"&`\\,;: \t\r\n\u{0}";
-// strings can't contain uenscaped newlines, backslashes, or quotes
-const INVALID_STRING_CHARS: &str = "\r\n\\\"\u{0}";
+// strings can't contain uenscaped backslashes or quotes
+const INVALID_STRING_CHARS: &str = "\\\"\u{0}";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum LispTokenType<'a> {
@@ -341,6 +341,17 @@ impl LispParser {
         }
         // map to drop the leftover tokens from the result
         Self::read_form(&tokens, LispEnv::interner_mut().deref_mut())
+            .map(|x| x.map(|(val, _)| val))
+    }
+    pub(crate) fn parse_with_interner(strs: &mut StringInterner, input: &str) -> Option<Result<LispValue>> {
+        let mut tokens = vec![];
+        let mut buffer = String::with_capacity(input.len());
+        match Self::tokenize(&mut tokens, &mut buffer, input, 1, 1) {
+            Ok(_) => (),
+            Err(e) => return Some(Err(e)),
+        }
+        // map to drop the leftover tokens from the result
+        Self::read_form(&tokens, strs)
             .map(|x| x.map(|(val, _)| val))
     }
     pub fn advance_line(&mut self) {
