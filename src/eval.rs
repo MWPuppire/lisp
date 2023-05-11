@@ -107,10 +107,10 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
 }
 
 pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    let expanded = expand_macros(value, env)?;
-    let mut queued = vec![(Some(expanded), None, env.clone())];
+    let mut queued = vec![(Some(value), None, env.clone())];
     while let Some((head, mut tail, mut env)) = queued.pop() {
-        let Some(mut head) = head else { unreachable!() };
+        let Some(head) = head else { unreachable!() };
+        let mut head = expand_macros(head, &mut env)?;
         let new_head = loop {
             match head {
                 LispValue::Symbol(s) => head = lookup_variable(s, &env)?,

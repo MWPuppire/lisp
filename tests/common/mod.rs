@@ -2,7 +2,7 @@
 
 pub use im::{Vector, vector, HashMap, hashmap};
 pub use lazy_static::lazy_static;
-pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval, expect};
+pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval_top, eval, expect};
 pub use lisp::util::LispBuiltinResult;
 
 lazy_static! {
@@ -84,12 +84,12 @@ pub fn testing_env() -> LispEnv {
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
     let mut env = testing_env();
-    eval(parsed, &mut env)
+    eval_top(parsed, &mut env)
 }
 
 pub fn eval_str_in_env(input: &str, env: &mut LispEnv) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
-    eval(parsed, env)
+    eval_top(parsed, env)
 }
 
 #[macro_export]
