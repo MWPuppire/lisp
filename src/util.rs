@@ -21,13 +21,13 @@ pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct LispFunc {
-    pub args: Vec<LispSymbol>,
-    pub body: LispValue,
-    pub closure: Option<LispClosure>,
-    pub variadic: bool,
-    pub is_macro: bool,
+    pub(crate) args: Vec<LispSymbol>,
+    pub(crate) body: LispValue,
+    pub(crate) closure: Option<LispClosure>,
+    pub(crate) variadic: bool,
+    pub(crate) is_macro: bool,
     // used for self-recursive functions
-    pub name: Option<LispSymbol>,
+    pub(crate) name: Option<LispSymbol>,
 }
 
 pub enum LispBuiltinResult {
