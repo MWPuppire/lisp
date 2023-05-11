@@ -41,7 +41,7 @@ pub fn expand_macros(val: LispValue, env: &mut LispEnv) -> Result<LispValue> {
 }
 
 fn wrap_macro(mut f: Box<LispFunc>, env: &mut LispEnv) -> Result<LispValue> {
-    f.closure = env.make_closure();
+    f.closure = Some(env.make_closure());
     f.args.clear();
     f.name.take();
     f.is_macro = false;
@@ -65,10 +65,18 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
             params.push((*name, LispValue::Func(f.clone())));
         }
         if f.is_macro {
-            let mut fn_env = f.closure.make_macro_env(&params, env);
+            let mut fn_env = if let Some(closure) = &f.closure {
+                closure.make_macro_env(&params, env)
+            } else {
+                env.global()
+            };
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
-            let fn_env = f.closure.make_env(&params);
+            let fn_env = if let Some(closure) = &f.closure {
+                closure.make_env(&params)
+            } else {
+                env.global()
+            };
             Ok((f.body, fn_env))
         }
     } else if args.len() != f.args.len() {
@@ -81,10 +89,18 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
             params.push((*name, LispValue::Func(f.clone())));
         }
         if f.is_macro {
-            let mut fn_env = f.closure.make_macro_env(&params, env);
+            let mut fn_env = if let Some(closure) = &f.closure {
+                closure.make_macro_env(&params, env)
+            } else {
+                env.global()
+            };
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
-            let fn_env = f.closure.make_env(&params);
+            let fn_env = if let Some(closure) = &f.closure {
+                closure.make_env(&params)
+            } else {
+                env.global()
+            };
             Ok((f.body, fn_env))
         }
     }

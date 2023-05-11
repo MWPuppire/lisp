@@ -21,7 +21,7 @@ pub type Result<T> = std::result::Result<T, LispError>;
 pub struct LispFunc {
     pub args: Vec<LispSymbol>,
     pub body: LispValue,
-    pub closure: LispClosure,
+    pub closure: Option<LispClosure>,
     pub variadic: bool,
     pub is_macro: bool,
     // used for self-recursive functions
@@ -111,7 +111,7 @@ impl LispValue {
             LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             LispValue::Func(f) => format!(
                 "({} ({}) {})",
-                if f.is_macro { "macro-fn*" } else { "fn*" },
+                if f.is_macro { "#<macro-fn*>" } else { "fn*" },
                 f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
                 f.body.to_string()
             ),

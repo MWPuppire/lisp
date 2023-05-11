@@ -137,40 +137,13 @@ fn lisp_fn(mut args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, Lisp
     };
     let arg_names = args_list.into_iter().map(|x| x.expect_symbol()).collect::<Result<Vec<LispSymbol>>>()?;
     let Some(body) = args.pop_front() else { unreachable!() };
-    let closure = env.make_closure();
+    let closure = Some(env.make_closure());
     Ok((LispValue::Func(Box::new(LispFunc {
         args: arg_names,
         body,
         closure,
         variadic,
         is_macro: false,
-        name: None,
-    })), env, false))
-}
-
-fn lisp_macro_fn(mut args: Vector<LispValue>, env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
-    expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let Some(args_list) = args.pop_front() else { unreachable!() };
-    let args_list = args_list.into_list()?;
-    let variadic = if !args_list.is_empty() {
-        let last = &args_list[args_list.len() - 1];
-        match last {
-            LispValue::VariadicSymbol(_) => Ok(true),
-            LispValue::Symbol(_) => Ok(false),
-            _ => Err(LispError::InvalidDataType("symbol", last.type_of())),
-        }?
-    } else {
-        false
-    };
-    let arg_names = args_list.into_iter().map(|x| x.expect_symbol()).collect::<Result<Vec<LispSymbol>>>()?;
-    let Some(body) = args.pop_front() else { unreachable!() };
-    let closure = env.make_closure();
-    Ok((LispValue::Func(Box::new(LispFunc {
-        args: arg_names,
-        body,
-        closure,
-        variadic,
-        is_macro: true,
         name: None,
     })), env, false))
 }
@@ -917,7 +890,7 @@ macro_rules! make_lisp_funcs {
     }
 }
 
-const COND_STR: &str = "(macro-fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs))))))";
+const COND_BODY_STR: &str = "(if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))";
 lazy_static! {
     pub static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
         let mut strs = LispEnv::interner_mut();
@@ -998,17 +971,23 @@ lazy_static! {
             "conj" => lisp_conj,
             "meta" => lisp_meta,
             "with-meta" => lisp_with_meta,
-            "macro-fn*" => lisp_macro_fn,
         );
 
-        let parsed_cond = LispParser::parse_with_interner(&mut strs, COND_STR).unwrap().unwrap();
-        funcs.insert(
-            strs.get_or_intern_static("cond"),
-            LispValue::List(vector![
-                LispValue::Symbol(strs.get_or_intern_static("eval")),
-                parsed_cond,
-            ]),
-        );
+        let xs_symbol = strs.get_or_intern_static("xs");
+        let cond_name = strs.get_or_intern_static("cond");
+        let parsed_cond_body = LispParser::parse_with_interner(
+            &mut strs,
+            COND_BODY_STR,
+        ).unwrap().unwrap();
+        let cond = LispValue::Func(Box::new(LispFunc {
+            args: vec![xs_symbol],
+            body: parsed_cond_body,
+            closure: None,
+            variadic: true,
+            is_macro: true,
+            name: Some(cond_name)
+        }));
+        funcs.insert(cond_name, cond);
         funcs.insert(
             strs.get_or_intern_static("*host-language*"),
             LispValue::String("Rust".to_owned()),

@@ -89,15 +89,6 @@ lazy_static! {
 }
 
 impl LispEnv {
-    pub fn new_empty() -> Self {
-        let inner = InnerEnv {
-            data: HashMap::new(),
-            enclosing: None,
-            global: None,
-            constant: false,
-        };
-        LispEnv(Arc::new(RwLock::new(inner)))
-    }
     #[cfg(feature = "io-stdlib")]
     pub fn new_stdlib() -> Self {
         let inner = InnerEnv {
