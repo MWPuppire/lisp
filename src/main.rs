@@ -19,7 +19,7 @@ fn main() -> Result<()> {
         file.read_to_string(&mut buffer).unwrap();
         parser.add_tokenize(&buffer)?;
         for val in parser {
-            eval_top(&val?, &mut env)?;
+            eval_top(val?, &mut env)?;
         }
         return Ok(());
     }
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
                 buffer = String::new();
                 for val in &mut parser {
                     match val {
-                        Ok(tok) => match eval_top(&tok, &mut env) {
+                        Ok(tok) => match eval_top(tok, &mut env) {
                             Ok(out) => println!("{}", out.inspect()),
                             Err(err) => println!("Err: {}", err),
                         },

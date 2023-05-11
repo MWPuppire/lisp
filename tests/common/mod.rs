@@ -45,16 +45,16 @@ lazy_static! {
     };
 }
 
-pub fn lisp_test_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
+pub fn lisp_test_slurp(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let x = eval(&args[0], &mut env)?;
+    let x = eval(args.pop_front().unwrap(), &mut env)?;
     let file_name = x.into_string()?;
     let f = MOCK_FS.get(&file_name).unwrap();
     Ok((f.to_string().into(), env, false))
 }
-pub fn lisp_test_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
+pub fn lisp_test_load_file(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let x = eval(&args[0], &mut env)?;
+    let x = eval(args.pop_front().unwrap(), &mut env)?;
     let file_name = x.into_string()?;
     let f = MOCK_FS.get(&file_name).unwrap();
 
@@ -62,7 +62,7 @@ pub fn lisp_test_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<
     parser.add_tokenize(f);
     let mut global = env.global();
     for val in parser {
-        eval(&val?, &mut global)?;
+        eval(val?, &mut global)?;
     }
     Ok((LispValue::Nil, env, false))
 }
@@ -75,7 +75,7 @@ pub fn testing_env() -> LispEnv {
 
     // add `cond` built-in macro
     let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
-    eval(&LispParser::parse(cond).unwrap().unwrap(), &mut env).unwrap();
+    eval(LispParser::parse(cond).unwrap().unwrap(), &mut env).unwrap();
 
     // TODO mock println and family?
     env
@@ -84,12 +84,12 @@ pub fn testing_env() -> LispEnv {
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
     let mut env = testing_env();
-    eval(&parsed, &mut env)
+    eval(parsed, &mut env)
 }
 
 pub fn eval_str_in_env(input: &str, env: &mut LispEnv) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
-    eval(&parsed, env)
+    eval(parsed, env)
 }
 
 #[macro_export]

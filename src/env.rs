@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
-use owning_ref::{OwningRef, OwningRefMut};
+use owning_ref::OwningRef;
 use crate::LispValue;
 use crate::builtins;
 use crate::util::LispBuiltinFunc;

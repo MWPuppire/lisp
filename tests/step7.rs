@@ -227,5 +227,5 @@ fn quine() {
     )))
     "#).unwrap().unwrap();
     let mut env = testing_env();
-    assert_eq!(&eval(&expr, &mut env).unwrap(), &expr);
+    assert_eq!(&eval(expr.clone(), &mut env).unwrap(), &expr);
 }

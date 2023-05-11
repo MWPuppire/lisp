@@ -26,17 +26,17 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(val: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    if is_macro_call(val, env) {
-        let mut list = val.clone().into_list()?;
+pub fn expand_macros(val: LispValue, env: &mut LispEnv) -> Result<LispValue> {
+    if is_macro_call(&val, env) {
+        let mut list = val.into_list()?;
         let Some(head) = list.pop_front() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
         let LispValue::Func(f) = var else { unreachable!() };
-        let (out, _) = apply(f, &list, env)?;
+        let (out, _) = apply(f, list, env)?;
         Ok(out)
     } else {
-        Ok(val.clone())
+        Ok(val)
     }
 }
 
@@ -46,14 +46,14 @@ fn wrap_macro(mut f: Box<LispFunc>, env: &mut LispEnv) -> Result<LispValue> {
     f.name.take();
     f.is_macro = false;
     f.variadic = false;
-    f.body = expand_macros(&f.body, env)?;
+    f.body = expand_macros(f.body, env)?;
     Ok(LispValue::List(vector![LispValue::Func(f)]))
 }
 
-fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
+fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
     let evaluator = if f.is_macro { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
-        let mut vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
+        let mut vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let mut last_vals = vals.split_off(f.args.len() - 1);
         let list_sym = LispEnv::symbol_for_static("list");
         last_vals.push_front(LispValue::Symbol(list_sym));
@@ -69,12 +69,12 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
             let fn_env = f.closure.make_env(&params);
-            Ok((f.body.clone(), fn_env))
+            Ok((f.body, fn_env))
         }
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
-        let vals = args.iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
+        let vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
         let arg_names = f.args.iter().map(|x| x.to_owned());
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         if let Some(name) = &f.name {
@@ -85,12 +85,12 @@ fn apply(f: Box<LispFunc>, args: &Vector<LispValue>, env: &mut LispEnv) -> Resul
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
             let fn_env = f.closure.make_env(&params);
-            Ok((f.body.clone(), fn_env))
+            Ok((f.body, fn_env))
         }
     }
 }
 
-pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
+pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     let expanded = expand_macros(value, env)?;
     let mut queued = vec![(Some(expanded), None, env.clone())];
     while let Some((head, mut tail, mut env)) = queued.pop() {
@@ -129,7 +129,7 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::Func(f) => {
                     if let Some(args) = tail.take() {
-                        let (new_head, new_env) = apply(f, &args, &mut env)?;
+                        let (new_head, new_env) = apply(f, args, &mut env)?;
                         queued.push((None, None, env));
                         head = new_head;
                         env = new_env;
@@ -140,14 +140,14 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 LispValue::Vector(l) => break if tail.is_some() {
                     Err(LispError::InvalidDataType("function", "vector"))
                 } else {
-                    let l = l.iter().map(|x| eval(x, &mut env)).collect::<Result<Vec<LispValue>>>()?;
+                    let l = l.into_iter().map(|x| eval(x, &mut env)).collect::<Result<Vec<LispValue>>>()?;
                     Ok(LispValue::Vector(l))
                 },
                 LispValue::Map(m) => break if tail.is_some() {
                     Err(LispError::InvalidDataType("function", "map"))
                 } else {
-                    let m = m.iter().map(|(key, val)| {
-                        Ok((key.clone(), eval(val, &mut env)?))
+                    let m = m.into_iter().map(|(key, val)| {
+                        Ok((key, eval(val, &mut env)?))
                     }).collect::<Result<Vec<(LispValue, LispValue)>>>()?.into();
                     Ok(LispValue::Map(m))
                 },
@@ -169,9 +169,9 @@ pub fn eval(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(LispValue::Nil)
 }
 
-pub fn eval_top(value: &LispValue, env: &mut LispEnv) -> Result<LispValue> {
+pub fn eval_top(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     match value {
-        LispValue::Symbol(s) => lookup_variable(*s, env),
+        LispValue::Symbol(s) => lookup_variable(s, env),
         x => eval(x, env),
     }
 }
