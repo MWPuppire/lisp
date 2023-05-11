@@ -1,3 +1,5 @@
+#![feature(try_trait_v2)]
+
 extern crate cfg_if;
 extern crate lazy_static;
 extern crate thiserror;

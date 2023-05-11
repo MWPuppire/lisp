@@ -2,8 +2,8 @@
 
 pub use im::{Vector, vector, HashMap, hashmap};
 pub use lazy_static::lazy_static;
-pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval};
-pub use lisp::expect;
+pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval, expect};
+pub use lisp::util::LispBuiltinResult;
 
 lazy_static! {
     pub static ref MOCK_FS: HashMap<String, &'static str> = {
@@ -45,16 +45,16 @@ lazy_static! {
     };
 }
 
-pub fn lisp_test_slurp(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
+pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let x = eval(args.pop_front().unwrap(), &mut env)?;
+    let x = eval(args.pop_front().unwrap(), env)?;
     let file_name = x.into_string()?;
     let f = MOCK_FS.get(&file_name).unwrap();
-    Ok((f.to_string().into(), env, false))
+    LispBuiltinResult::Done(f.to_string().into())
 }
-pub fn lisp_test_load_file(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
+pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let x = eval(args.pop_front().unwrap(), &mut env)?;
+    let x = eval(args.pop_front().unwrap(), env)?;
     let file_name = x.into_string()?;
     let f = MOCK_FS.get(&file_name).unwrap();
 
@@ -64,7 +64,7 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, mut env: LispEnv) -> Res
     for val in parser {
         eval(val?, &mut global)?;
     }
-    Ok((LispValue::Nil, env, false))
+    LispBuiltinResult::Done(LispValue::Nil)
 }
 
 pub fn testing_env() -> LispEnv {

@@ -1,6 +1,8 @@
 use std::fmt;
 use std::hash;
 use std::sync::{Arc, RwLock};
+use std::ops::ControlFlow;
+use std::convert::Infallible;
 use thiserror::Error;
 use ordered_float::OrderedFloat;
 use im::{HashMap, Vector};
@@ -10,7 +12,7 @@ use crate::env::{LispEnv, LispClosure, LispSymbol};
 macro_rules! expect {
     ($cond:expr, $err:expr) => {
         if !$cond {
-            return Err($err);
+            Err($err)?;
         }
     }
 }
@@ -28,7 +30,36 @@ pub struct LispFunc {
     pub name: Option<LispSymbol>,
 }
 
-pub type LispBuiltinFunc = fn(Vector<LispValue>, LispEnv) -> Result<(LispValue, LispEnv, bool)>;
+pub enum LispBuiltinResult {
+    Done(LispValue),
+    Continue(LispValue),
+    ContinueIn(LispValue, LispEnv),
+    Error(LispError),
+}
+impl<E: Into<LispError>> std::ops::FromResidual<E> for LispBuiltinResult {
+    #[inline]
+    fn from_residual(residual: E) -> Self {
+        Self::Error(residual.into())
+    }
+}
+impl std::ops::Try for LispBuiltinResult {
+    type Output = LispBuiltinResult;
+    type Residual = LispError;
+
+    #[inline]
+    fn from_output(output: Self::Output) -> Self {
+        output
+    }
+
+    #[inline]
+    fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
+        match self {
+            Self::Error(e) => ControlFlow::Break(e),
+            x => ControlFlow::Continue(x),
+        }
+    }
+}
+pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> LispBuiltinResult;
 
 #[derive(Clone, Debug)]
 pub enum LispValue {
@@ -337,4 +368,13 @@ pub enum LispError {
     #[cfg(feature = "io-stdlib")]
     #[error("error calling into native function: {0}")]
     OSFailure(#[from] std::io::Error),
+}
+impl<F: Into<LispError>> From<std::result::Result<Infallible, F>> for LispError {
+    #[inline]
+    fn from(item: std::result::Result<Infallible, F>) -> Self {
+        match item {
+            Err(e) => e.into(),
+            Ok(_) => unreachable!(),
+        }
+    }
 }

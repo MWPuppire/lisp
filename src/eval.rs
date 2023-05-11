@@ -2,7 +2,7 @@ use std::iter::zip;
 use im::{Vector, vector};
 use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
-use crate::util::LispFunc;
+use crate::util::{LispFunc, LispBuiltinResult};
 
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
@@ -132,12 +132,20 @@ pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::BuiltinFunc { f, name } => {
                     if let Some(args) = tail.take() {
-                        let (new_head, new_env, cont) = f(args, env)?;
-                        if cont {
-                            head = new_head;
-                            env = new_env;
-                        } else {
-                            break Ok(new_head);
+                        match f(args, &mut env) {
+                            LispBuiltinResult::Done(val) => {
+                                break Ok(val);
+                            },
+                            LispBuiltinResult::Continue(expr) => {
+                                head = expr;
+                            },
+                            LispBuiltinResult::ContinueIn(expr, new_env) => {
+                                head = expr;
+                                env = new_env;
+                            },
+                            LispBuiltinResult::Error(err) => {
+                                break Err(err)
+                            },
                         }
                     } else {
                         break Ok(LispValue::BuiltinFunc { f, name });
