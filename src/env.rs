@@ -1,9 +1,10 @@
 use std::sync::{Arc, RwLock};
 use std::hash;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
+use owning_ref::{OwningRef, OwningRefMut};
 use crate::LispValue;
 use crate::builtins;
 use crate::util::LispBuiltinFunc;
@@ -126,9 +127,10 @@ impl LispEnv {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
 
-    fn map(&self) -> HashMap<LispSymbol, LispValue> {
+    fn map(&self) -> impl Deref<Target = HashMap<LispSymbol, LispValue>> + '_ {
         let lock = self.0.read().unwrap();
-        lock.data.clone()
+        let or = OwningRef::new(lock);
+        or.map(|x| &x.data)
     }
 
     pub fn make_closure(&self) -> LispClosure {

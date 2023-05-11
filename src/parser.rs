@@ -440,7 +440,7 @@ impl LispParser {
                 Err(_) => return Err(LispError::SyntaxError(row, col)),
             }
         }
-        if input.len() > 0 {
+        if !input.is_empty() {
             for ch in input.chars() {
                 if ch == '\n' {
                     col = 1;

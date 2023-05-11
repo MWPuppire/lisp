@@ -281,7 +281,7 @@ fn lisp_atomq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
 fn lisp_deref(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval(&args[0], &mut env)?;
-    let atom = val.expect_atom()?;
+    let atom = val.into_atom()?;
     let out = atom.read().unwrap().clone();
     Ok((out, env, false))
 }
@@ -289,7 +289,7 @@ fn lisp_deref(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
 fn lisp_reset(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let val = eval(&args[0], &mut env)?;
-    let atom = val.expect_atom()?;
+    let atom = val.into_atom()?;
     let val = eval(&args[1], &mut env)?;
     *atom.write().unwrap() = val.clone();
     Ok((val, env, false))
@@ -300,7 +300,7 @@ fn lisp_swap(mut args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
     let Some(first) = args.pop_front() else { unreachable!() };
     let Some(second) = args.pop_front() else { unreachable!() };
     let val = eval(&first, &mut env)?;
-    let atom = val.expect_atom()?;
+    let atom = val.into_atom()?;
     let val = eval(&second, &mut env)?;
     let deref_sym = LispEnv::symbol_for_static("deref");
     let mut list = vector![
@@ -327,7 +327,7 @@ fn lisp_eval(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Li
 fn lisp_readline(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     if !args.is_empty() {
         let val = eval(&args[0], &mut env)?;
-        let s = val.expect_string()?;
+        let s = val.into_string()?;
         print!("{}", s);
         std::io::stdout().flush()?;
     }
@@ -345,8 +345,8 @@ fn lisp_readline(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue
 fn lisp_read_string(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval(&args[0], &mut env)?;
-    let code_expr = arg.expect_string()?;
-    let parsed = LispParser::parse(code_expr);
+    let code_expr = arg.into_string()?;
+    let parsed = LispParser::parse(&code_expr);
     if let Some(parsed) = parsed {
         Ok((parsed?, env, false))
     } else {
@@ -367,7 +367,7 @@ fn lisp_str(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, Lis
 fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let file_name = x.expect_string()?;
+    let file_name = x.into_string()?;
     let mut f = File::open(file_name)?;
     let mut buffer = String::new();
     f.read_to_string(&mut buffer)?;
@@ -378,7 +378,7 @@ fn lisp_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, L
 fn lisp_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let file_name = x.expect_string()?;
+    let file_name = x.into_string()?;
     let mut f = File::open(file_name)?;
     let mut buffer = String::new();
     f.read_to_string(&mut buffer)?;
@@ -635,8 +635,8 @@ fn lisp_symbolq(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue,
 fn lisp_symbol(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval(&args[0], &mut env)?;
-    let s = arg.expect_string()?;
-    Ok((LispValue::Symbol(LispEnv::symbol_for(s)), env, false))
+    let s = arg.into_string()?;
+    Ok((LispValue::Symbol(LispEnv::symbol_for(&s)), env, false))
 }
 
 fn lisp_vector(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
@@ -1036,7 +1036,7 @@ lazy_static! {
         let mut lisp_argv: Vector<LispValue> = args.into_iter()
             // Lisp *ARGV* doesn't include the interpreter name
             .skip(1)
-            .map(|x| LispValue::String(x))
+            .map(LispValue::String)
             .collect();
         lisp_argv.push_front(LispValue::Symbol(strs.get_or_intern_static("list")));
         ext.insert(

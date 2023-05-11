@@ -48,15 +48,15 @@ lazy_static! {
 pub fn lisp_test_slurp(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let file_name = x.expect_string()?;
-    let f = MOCK_FS.get(file_name).unwrap();
+    let file_name = x.into_string()?;
+    let f = MOCK_FS.get(&file_name).unwrap();
     Ok((f.to_string().into(), env, false))
 }
 pub fn lisp_test_load_file(args: Vector<LispValue>, mut env: LispEnv) -> Result<(LispValue, LispEnv, bool)> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(&args[0], &mut env)?;
-    let file_name = x.expect_string()?;
-    let f = MOCK_FS.get(file_name).unwrap();
+    let file_name = x.into_string()?;
+    let f = MOCK_FS.get(&file_name).unwrap();
 
     let mut parser = LispParser::new();
     parser.add_tokenize(f);

@@ -76,34 +76,6 @@ impl LispValue {
         }
     }
 
-    pub fn expect_symbol(&self) -> Result<LispSymbol> {
-        match self {
-            Self::Symbol(s) => Ok(*s),
-            Self::VariadicSymbol(s) => Ok(*s),
-            _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
-        }
-    }
-    pub fn expect_atom(&self) -> Result<Arc<RwLock<LispValue>>> {
-        match self {
-            Self::Atom(x) => Ok(x.clone()),
-            _ => Err(LispError::InvalidDataType("atom", self.type_of())),
-        }
-    }
-    pub fn expect_number(&self) -> Result<OrderedFloat<f64>> {
-        match self {
-            Self::Number(f) => Ok(*f),
-            _ => Err(LispError::InvalidDataType("number", self.type_of())),
-        }
-    }
-    pub fn expect_string(&self) -> Result<&str> {
-        match self {
-            Self::String(s) => Ok(s),
-            _ => Err(LispError::InvalidDataType("string", self.type_of())),
-        }
-    }
-    pub fn is_nil(&self) -> bool {
-        matches!(self, Self::Nil)
-    }
     pub fn inspect(&self) -> String {
         match self {
             LispValue::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
@@ -157,12 +129,30 @@ impl LispValue {
             LispValue::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
         }
     }
+
     pub fn truthiness(&self) -> bool {
         match self {
             Self::Nil => false,
             Self::Bool(b) => *b,
             Self::Atom(a) => a.read().unwrap().truthiness(),
             _ => true,
+        }
+    }
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Self::Nil)
+    }
+
+    pub fn expect_symbol(&self) -> Result<LispSymbol> {
+        match self {
+            Self::Symbol(s) => Ok(*s),
+            Self::VariadicSymbol(s) => Ok(*s),
+            _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
+        }
+    }
+    pub fn expect_number(&self) -> Result<OrderedFloat<f64>> {
+        match self {
+            Self::Number(f) => Ok(*f),
+            _ => Err(LispError::InvalidDataType("number", self.type_of())),
         }
     }
     pub fn into_list(self) -> Result<Vector<LispValue>> {
@@ -176,6 +166,18 @@ impl LispValue {
         match self {
             Self::Map(m) => Ok(m),
             _ => Err(LispError::InvalidDataType("map", self.type_of())),
+        }
+    }
+    pub fn into_atom(self) -> Result<Arc<RwLock<LispValue>>> {
+        match self {
+            Self::Atom(x) => Ok(x),
+            _ => Err(LispError::InvalidDataType("atom", self.type_of())),
+        }
+    }
+    pub fn into_string(self) -> Result<String> {
+        match self {
+            Self::String(s) => Ok(s),
+            _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
 }

@@ -5,6 +5,7 @@ extern crate im;
 extern crate string_interner;
 extern crate ordered_float;
 extern crate nom;
+extern crate owning_ref;
 
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};
