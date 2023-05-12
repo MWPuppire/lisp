@@ -1,11 +1,10 @@
 use std::sync::{Arc, RwLock, Weak};
-use std::hash;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::ptr::NonNull;
 use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
-use owning_ref::OwningRef;
+use by_address::ByAddress;
 use crate::LispValue;
 use crate::builtins;
 use crate::util::LispBuiltinFunc;
@@ -20,11 +19,11 @@ struct InnerEnv {
     stdlib: &'static HashMap<LispSymbol, LispValue>,
 }
 
-#[derive(Clone, Debug)]
-pub struct LispClosure(LispEnv);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LispClosure(ByAddress<Arc<RwLock<InnerEnv>>>);
 impl LispClosure {
     pub fn make_env(&self, args: &[(LispSymbol, LispValue)]) -> LispEnv {
-        let enclosing = self.0.clone();
+        let enclosing = LispEnv(self.0.0.clone());
         let lock = self.0.0.read().unwrap();
         let inner = InnerEnv {
             data: args.into(),
@@ -35,7 +34,7 @@ impl LispClosure {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
     pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> LispEnv {
-        let enclosing = self.0.clone();
+        let enclosing = LispEnv(self.0.0.clone());
         let lock = self.0.0.read().unwrap();
         let inner = InnerEnv {
             data: args.into(),
@@ -44,16 +43,6 @@ impl LispClosure {
             stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
-    }
-}
-impl hash::Hash for LispClosure {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.0.map().hash(state)
-    }
-}
-impl std::cmp::PartialEq for LispClosure {
-    fn eq(&self, other: &LispClosure) -> bool {
-        Arc::ptr_eq(&self.0.0, &other.0.0)
     }
 }
 
@@ -107,14 +96,8 @@ impl LispEnv {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
 
-    fn map(&self) -> impl Deref<Target = HashMap<LispSymbol, LispValue>> + '_ {
-        let lock = self.0.read().unwrap();
-        let or = OwningRef::new(lock);
-        or.map(|x| &x.data)
-    }
-
     pub fn make_closure(&self) -> LispClosure {
-        LispClosure(self.clone())
+        LispClosure(ByAddress(self.0.clone()))
     }
 
     pub fn global(&self) -> LispEnv {

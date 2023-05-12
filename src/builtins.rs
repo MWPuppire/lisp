@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
+use by_address::ByAddress;
 use crate::{LispValue, LispError, Result, expect};
 use crate::env::{LispEnv, LispSymbol};
 use crate::eval::{eval, eval_top, expand_macros};
@@ -177,8 +178,8 @@ fn lisp_fn(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult 
 
 fn lisp_equals(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let x = eval_head!(args, env)?;
-    let y = eval_head!(args, env)?;
+    let x = eval_head!(args, env)?.vector_to_list();
+    let y = eval_head!(args, env)?.vector_to_list();
     LispBuiltinResult::Done(LispValue::Bool(x == y))
 }
 
@@ -269,7 +270,7 @@ fn lisp_not(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
 fn lisp_atom(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?;
-    LispBuiltinResult::Done(LispValue::Atom(Arc::new(RwLock::new(x))))
+    LispBuiltinResult::Done(LispValue::Atom(ByAddress(Arc::new(RwLock::new(x)))))
 }
 
 fn lisp_atomq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {

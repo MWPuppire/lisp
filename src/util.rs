@@ -1,11 +1,11 @@
 use std::fmt;
-use std::hash;
 use std::sync::{Arc, RwLock};
 use std::ops::ControlFlow;
 use std::convert::Infallible;
 use thiserror::Error;
 use ordered_float::OrderedFloat;
 use im::{HashMap, Vector};
+use by_address::ByAddress;
 use crate::env::{LispEnv, LispClosure, LispSymbol};
 
 #[macro_export]
@@ -19,7 +19,7 @@ macro_rules! expect {
 
 pub type Result<T> = std::result::Result<T, LispError>;
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LispFunc {
     pub(crate) args: Vec<LispSymbol>,
     pub(crate) body: LispValue,
@@ -59,7 +59,7 @@ impl std::ops::Try for LispBuiltinResult {
 }
 pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> LispBuiltinResult;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LispValue {
     Symbol(LispSymbol),
     String(String),
@@ -67,7 +67,7 @@ pub enum LispValue {
     Bool(bool),
     Nil,
     List(Vector<LispValue>),
-    Atom(Arc<RwLock<LispValue>>),
+    Atom(ByAddress<Arc<RwLock<LispValue>>>),
     BuiltinFunc {
         name: &'static str,
         f: LispBuiltinFunc,
@@ -199,7 +199,7 @@ impl LispValue {
     }
     pub fn into_atom(self) -> Result<Arc<RwLock<LispValue>>> {
         match self {
-            Self::Atom(x) => Ok(x),
+            Self::Atom(x) => Ok(x.0),
             _ => Err(LispError::InvalidDataType("atom", self.type_of())),
         }
     }
@@ -207,6 +207,17 @@ impl LispValue {
         match self {
             Self::String(s) => Ok(s),
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
+        }
+    }
+
+    // recursively transforms vectors to lists; used for testing equality,
+    // since the spec requires lists and vectors containing the same elements
+    // to compare equal
+    pub fn vector_to_list(self) -> Self {
+        match self {
+            Self::List(l) => Self::List(l.into_iter().map(LispValue::vector_to_list).collect()),
+            Self::Vector(l) => Self::List(l.into_iter().map(LispValue::vector_to_list).collect()),
+            x => x,
         }
     }
 }
@@ -237,6 +248,7 @@ impl From<LispSymbol> for LispValue {
     }
 }
 
+/*
 impl std::cmp::PartialEq for LispValue {
     fn eq(&self, other: &LispValue) -> bool {
         match (self, other) {
@@ -261,7 +273,7 @@ impl std::cmp::PartialEq for LispValue {
         }
     }
 }
-impl std::cmp::Eq for LispValue { }
+*/
 
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -276,7 +288,7 @@ impl fmt::Display for LispValue {
                 write!(f, "({})", xs.join(" "))
             },
             LispValue::BuiltinFunc { .. } => write!(f, "#<native function>"),
-            LispValue::Atom(x) => write!(f, "{}", x.read().unwrap()),
+            LispValue::Atom(_) => write!(f, "#<atom>"),
             LispValue::Func(_) => write!(f, "#<function>"),
             LispValue::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
@@ -290,44 +302,6 @@ impl fmt::Display for LispValue {
             },
             LispValue::Keyword(s) => write!(f, ":{}", s),
             LispValue::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-        }
-    }
-}
-
-impl hash::Hash for LispValue {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        match self {
-            LispValue::Symbol(s) => {
-                state.write_u8(b'_');
-                s.hash(state)
-            },
-            LispValue::String(s) => {
-                state.write_u8(b'"');
-                s.hash(state)
-            },
-            LispValue::Number(n) => state.write_u64(n.to_bits()),
-            LispValue::Bool(b) => b.hash(state),
-            LispValue::List(l) => {
-                state.write_u8(0x7F);
-                l.hash(state)
-            },
-            LispValue::BuiltinFunc { name, .. } => name.hash(state),
-            LispValue::Atom(x) => x.read().unwrap().hash(state),
-            LispValue::Func(f) => f.hash(state),
-            LispValue::Vector(l) => {
-                state.write_u8(0xFF);
-                l.hash(state)
-            },
-            LispValue::Map(m) => m.hash(state),
-            LispValue::Keyword(s) => {
-                state.write_u8(b':');
-                s.hash(state)
-            },
-            LispValue::Nil => state.write_u64(0),
-            LispValue::VariadicSymbol(s) => {
-                state.write_u8(b'_');
-                s.hash(state)
-            },
         }
     }
 }
