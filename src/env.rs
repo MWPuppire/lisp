@@ -1,6 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Weak};
 use std::hash;
 use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
 use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
@@ -14,9 +15,9 @@ pub type LispSymbol = DefaultSymbol;
 #[derive(Clone, Debug)]
 struct InnerEnv {
     data: HashMap<LispSymbol, LispValue>,
-    global: Option<LispEnv>,
+    global: Weak<RwLock<InnerEnv>>,
     enclosing: Option<LispEnv>,
-    constant: bool,
+    stdlib: &'static HashMap<LispSymbol, LispValue>,
 }
 
 #[derive(Clone, Debug)]
@@ -24,23 +25,23 @@ pub struct LispClosure(LispEnv);
 impl LispClosure {
     pub fn make_env(&self, args: &[(LispSymbol, LispValue)]) -> LispEnv {
         let enclosing = self.0.clone();
-        let global = enclosing.global();
+        let lock = self.0.0.read().unwrap();
         let inner = InnerEnv {
             data: args.into(),
             enclosing: Some(enclosing),
-            global: Some(global),
-            constant: false,
+            global: lock.global.clone(),
+            stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
     pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> LispEnv {
         let enclosing = self.0.clone();
-        let global = enclosing.global();
+        let lock = self.0.0.read().unwrap();
         let inner = InnerEnv {
             data: args.into(),
             enclosing: Some(enclosing.union(surrounding)),
-            global: Some(global),
-            constant: false,
+            global: lock.global.clone(),
+            stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -63,29 +64,15 @@ lazy_static! {
     static ref INTERNER: RwLock<StringInterner> = {
         RwLock::new(StringInterner::new())
     };
-
-    static ref BUILTIN_NO_IO_ENV: LispEnv = {
-        let inner = InnerEnv {
-            data: builtins::BUILTINS_NO_IO.clone(),
-            enclosing: None,
-            global: None,
-            constant: true,
-        };
-        LispEnv(Arc::new(RwLock::new(inner)))
-    };
 }
 
-#[cfg(feature = "io-stdlib")]
-lazy_static! {
-    static ref BUILTIN_ENV: LispEnv = {
-        let inner = InnerEnv {
-            data: builtins::BUILTINS.clone(),
-            enclosing: None,
-            global: None,
-            constant: true,
-        };
-        LispEnv(Arc::new(RwLock::new(inner)))
-    };
+// creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
+unsafe fn assign_global_self(inner: InnerEnv) -> LispEnv {
+    let mut boxed = Arc::new(RwLock::new(inner));
+    let mut inner = NonNull::from(Arc::get_mut(&mut boxed).unwrap().get_mut().unwrap());
+    let weak = Arc::downgrade(&boxed);
+    inner.as_mut().global = weak;
+    LispEnv(boxed)
 }
 
 impl LispEnv {
@@ -93,27 +80,29 @@ impl LispEnv {
     pub fn new_stdlib() -> Self {
         let inner = InnerEnv {
             data: HashMap::new(),
-            enclosing: Some(BUILTIN_ENV.clone()),
-            global: None,
-            constant: false,
+            enclosing: None,
+            global: Weak::new(),
+            stdlib: &builtins::BUILTINS,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        unsafe { assign_global_self(inner) }
     }
     pub fn new_stdlib_protected() -> Self {
         let inner = InnerEnv {
             data: HashMap::new(),
-            enclosing: Some(BUILTIN_NO_IO_ENV.clone()),
-            global: None,
-            constant: false,
+            enclosing: None,
+            global: Weak::new(),
+            stdlib: &builtins::BUILTINS_NO_IO,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        unsafe { assign_global_self(inner) }
     }
     pub fn new_nested(&self) -> Self {
+        let copy = self.clone();
+        let lock = self.0.read().unwrap();
         let inner = InnerEnv {
             data: HashMap::new(),
-            enclosing: Some(self.clone()),
-            global: Some(self.global()),
-            constant: false,
+            enclosing: Some(copy),
+            global: lock.global.clone(),
+            stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
@@ -130,11 +119,10 @@ impl LispEnv {
 
     pub fn global(&self) -> LispEnv {
         let lock = self.0.read().unwrap();
-        if let Some(env) = &lock.global {
-            env.clone()
-        } else {
-            self.clone()
-        }
+        // if `self` still exists, the Arc chain must make `global` exist,
+        // since `global` has to be connected by `enclosing` (or be the same
+        // value as `self` in the case of the global environment)
+        LispEnv(lock.global.upgrade().unwrap())
     }
 
     pub(crate) fn interner_mut() -> impl DerefMut<Target = StringInterner> {
@@ -154,6 +142,7 @@ impl LispEnv {
     }
 
     pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {
+        let this = self.0.read().unwrap();
         let mut env = Some(self.clone());
         while let Some(inner) = env {
             let lock = inner.0.read().unwrap();
@@ -163,18 +152,16 @@ impl LispEnv {
                 env = lock.enclosing.clone();
             }
         }
-        None
+        if let Some(val) = this.stdlib.get(&sym) {
+            Some(val.clone())
+        } else {
+            None
+        }
     }
     pub fn set(&mut self, sym: LispSymbol, val: LispValue) -> bool {
-        let lock = self.0.read().unwrap();
-        if lock.constant && lock.data.contains_key(&sym) {
-            false
-        } else {
-            drop(lock);
-            let mut lock = self.0.write().unwrap();
-            lock.data.insert(sym, val);
-            true
-        }
+        let mut lock = self.0.write().unwrap();
+        lock.data.insert(sym, val);
+        true
     }
     pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
         let sym = Self::symbol_for(key);
@@ -197,7 +184,7 @@ impl LispEnv {
             data: lock.data.clone().union(reader.data.clone()),
             enclosing: lock.enclosing.clone(),
             global: lock.global.clone(),
-            constant: lock.constant,
+            stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
     }
