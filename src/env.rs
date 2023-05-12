@@ -34,7 +34,7 @@ impl LispClosure {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
     pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> LispEnv {
-        let enclosing = self.0.union(surrounding);
+        let enclosing = self.0.clone();
         let global = enclosing.global();
         let inner = InnerEnv {
             data: args.into(),

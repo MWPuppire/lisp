@@ -275,13 +275,10 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResul
     let val = eval(first, env)?;
     let atom = val.into_atom()?;
     let val = eval(second, env)?;
-    let deref_sym = LispEnv::symbol_for_static("deref");
+    let derefed = atom.read().unwrap().clone();
     let mut list = vector![
         val,
-        LispValue::List(vector![
-            LispValue::Symbol(deref_sym),
-            LispValue::Atom(atom.clone()),
-        ]),
+        derefed,
     ];
     list.append(args);
     let out_val = eval(LispValue::List(list), env)?;
