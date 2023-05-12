@@ -26,8 +26,6 @@ pub struct LispFunc {
     pub(crate) closure: Option<LispClosure>,
     pub(crate) variadic: bool,
     pub(crate) is_macro: bool,
-    // used for self-recursive functions
-    pub(crate) name: Option<LispSymbol>,
 }
 
 pub enum LispBuiltinResult {
@@ -358,8 +356,6 @@ pub enum LispError {
     OnlyInTry,
     #[error("missing `catch` block for a `try`")]
     TryNoCatch,
-    #[error("cannot redefine variable in current scope")]
-    AlreadyExists(&'static str),
     #[error("prefix symbol `{0}` not followed by any tokens")]
     MissingToken(&'static str),
     #[error("`meta` and `with-meta` are not implemented for this version")]

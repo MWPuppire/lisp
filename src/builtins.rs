@@ -66,18 +66,8 @@ fn lisp_def(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let name = args[0].expect_symbol()?;
     let val = eval(args.pop_back().unwrap(), env)?;
-    let val = match val {
-        LispValue::Func(mut f) => {
-            f.name = Some(name);
-            LispValue::Func(f)
-        },
-        x => x,
-    };
-    if !env.set(name, val.clone()) {
-        LispBuiltinResult::Error(LispError::AlreadyExists(LispEnv::symbol_string(name).unwrap()))
-    } else {
-        LispBuiltinResult::Done(val)
-    }
+    env.set(name, val.clone());
+    LispBuiltinResult::Done(val)
 }
 
 fn lisp_let(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -144,7 +134,6 @@ fn lisp_fn(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult 
         closure,
         variadic,
         is_macro: false,
-        name: None,
     })))
 }
 
@@ -512,16 +501,12 @@ fn lisp_defmacro(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinR
     let mut val = eval(args.pop_back().unwrap(), env)?;
     match val {
         LispValue::Func(ref mut f) => {
-            f.name = Some(name.to_owned());
             f.is_macro = true;
         },
         _ => return LispBuiltinResult::Error(LispError::InvalidDataType("function", val.type_of())),
     }
-    if !env.set(name, val.clone()) {
-        LispBuiltinResult::Error(LispError::AlreadyExists(LispEnv::symbol_string(name).unwrap()))
-    } else {
-        LispBuiltinResult::Done(val)
-    }
+    env.set(name, val.clone());
+    LispBuiltinResult::Done(val)
 }
 
 fn lisp_macroexpand(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -982,7 +967,6 @@ lazy_static! {
             closure: None,
             variadic: true,
             is_macro: true,
-            name: Some(cond_name)
         }));
         funcs.insert(cond_name, cond);
         funcs.insert(

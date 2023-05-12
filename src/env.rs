@@ -158,18 +158,17 @@ impl LispEnv {
             None
         }
     }
-    pub fn set(&mut self, sym: LispSymbol, val: LispValue) -> bool {
+    pub fn set(&mut self, sym: LispSymbol, val: LispValue) {
         let mut lock = self.0.write().unwrap();
         lock.data.insert(sym, val);
-        true
     }
     pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
         let sym = Self::symbol_for(key);
         self.get(sym)
     }
-    pub fn set_by_str(&mut self, key: &str, val: LispValue) -> bool {
+    pub fn set_by_str(&mut self, key: &str, val: LispValue) {
         let sym = Self::symbol_for(key);
-        self.set(sym, val)
+        self.set(sym, val);
     }
     pub fn bind_func(&mut self, name: &'static str, f: LispBuiltinFunc) {
         let sym = Self::symbol_for_static(name);
