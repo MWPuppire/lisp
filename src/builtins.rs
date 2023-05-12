@@ -16,14 +16,35 @@ cfg_if::cfg_if! {
     }
 }
 
-macro_rules! pop_head {
-    ($args:expr) => {
-        unsafe { $args.pop_front().unwrap_unchecked() }
-    }
-}
-macro_rules! pop_tail {
-    ($args:expr) => {
-        unsafe { $args.pop_back().unwrap_unchecked() }
+cfg_if::cfg_if! {
+    if #[cfg(debug_assertions)] {
+        macro_rules! pop_head {
+            ($args:expr) => {
+                $args.pop_front().unwrap()
+            }
+        }
+        macro_rules! pop_tail {
+            ($args:expr) => {
+                $args.pop_back().unwrap()
+            }
+        }
+        fn unreachable() -> ! {
+            unreachable!()
+        }
+    } else {
+        macro_rules! pop_head {
+            ($args:expr) => {
+                unsafe { $args.pop_front().unwrap_unchecked() }
+            }
+        }
+        macro_rules! pop_tail {
+            ($args:expr) => {
+                unsafe { $args.pop_back().unwrap_unchecked() }
+            }
+        }
+        fn unreachable() -> ! {
+            unsafe { std::hint::unreachable_unchecked!() }
+        }
     }
 }
 macro_rules! eval_head {
@@ -97,9 +118,7 @@ fn lisp_let(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
     expect!(list.len() & 1 == 0, LispError::MissingBinding);
     let mut list_iter = list.into_iter();
     while let Some(name) = list_iter.next() {
-        let Some(val_expr) = list_iter.next() else {
-            unsafe { std::hint::unreachable_unchecked() }
-        };
+        let Some(val_expr) = list_iter.next() else { unreachable() };
         let name = name.expect_symbol()?;
         let val = eval(val_expr, &mut new_env)?;
         new_env.set(name, val);
@@ -627,9 +646,7 @@ fn lisp_hashmap(args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
     let mut pairs = vec![];
     let mut arg_iter = args.into_iter();
     while let Some(key_expr) = arg_iter.next() {
-        let Some(val_expr) = arg_iter.next() else {
-            unsafe { std::hint::unreachable_unchecked() }
-        };
+        let Some(val_expr) = arg_iter.next() else { unreachable() };
         let k = eval(key_expr, env)?;
         let v = eval(val_expr, env)?;
         pairs.push((k, v))
@@ -654,9 +671,7 @@ fn lisp_assoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResu
     let mut map = eval_head!(args, env)?.into_hashmap()?;
     let mut arg_iter = args.into_iter();
     while let Some(key_expr) = arg_iter.next() {
-        let Some(val_expr) = arg_iter.next() else {
-            unsafe { std::hint::unreachable_unchecked() }
-        };
+        let Some(val_expr) = arg_iter.next() else { unreachable() };
         let k = eval(key_expr, env)?;
         let v = eval(val_expr, env)?;
         map.insert(k, v);

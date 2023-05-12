@@ -152,11 +152,7 @@ impl LispEnv {
                 env = lock.enclosing.clone();
             }
         }
-        if let Some(val) = this.stdlib.get(&sym) {
-            Some(val.clone())
-        } else {
-            None
-        }
+        this.stdlib.get(&sym).map(LispValue::clone)
     }
     pub fn set(&mut self, sym: LispSymbol, val: LispValue) {
         let mut lock = self.0.write().unwrap();
