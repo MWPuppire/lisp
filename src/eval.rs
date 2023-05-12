@@ -1,4 +1,5 @@
 use std::iter::zip;
+use std::ptr::NonNull;
 use im::{Vector, vector};
 use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
@@ -107,18 +108,21 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
 }
 
 pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    let mut queued = vec![(Some(value), None, env.clone())];
+    let mut queued = vec![(Some(value), None, env)];
+    let mut envs_to_drop = vec![];
     while let Some((head, mut tail, mut env)) = queued.pop() {
         let Some(head) = head else { unreachable!() };
-        let mut head = expand_macros(head, &mut env)?;
+        let mut head = expand_macros(head, env)?;
         let new_head = loop {
             match head {
-                LispValue::Symbol(s) => head = lookup_variable(s, &env)?,
-                LispValue::VariadicSymbol(s) => head = lookup_variable(s, &env)?,
+                LispValue::Symbol(s) => head = lookup_variable(s, env)?,
+                LispValue::VariadicSymbol(s) => head = lookup_variable(s, env)?,
                 LispValue::List(mut l) => {
                     if tail.is_some() {
                         if !l.is_empty() {
-                            queued.push((None, tail.take(), env.clone()));
+                            queued.push((None, tail.take(), unsafe {
+                                NonNull::from(&*env).as_mut()
+                            }));
                             head = LispValue::List(l);
                         } else {
                             break Err(LispError::InvalidDataType("function", "list"));
@@ -132,7 +136,7 @@ pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::BuiltinFunc { f, name } => {
                     if let Some(args) = tail.take() {
-                        match f(args, &mut env) {
+                        match f(args, env) {
                             LispBuiltinResult::Done(val) => {
                                 break Ok(val);
                             },
@@ -141,7 +145,12 @@ pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
                             },
                             LispBuiltinResult::ContinueIn(expr, new_env) => {
                                 head = expr;
-                                env = new_env;
+                                let boxed = Box::new(new_env);
+                                unsafe {
+                                    let ptr = Box::into_raw(boxed);
+                                    env = NonNull::new_unchecked(ptr).as_mut();
+                                    envs_to_drop.push(Box::from_raw(ptr));
+                                }
                             },
                             LispBuiltinResult::Error(err) => {
                                 break Err(err)
@@ -153,10 +162,15 @@ pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 },
                 LispValue::Func(f) => {
                     if let Some(args) = tail.take() {
-                        let (new_head, new_env) = apply(f, args, &mut env)?;
+                        let (new_head, new_env) = apply(f, args, env)?;
                         queued.push((None, None, env));
                         head = new_head;
-                        env = new_env;
+                        let boxed = Box::new(new_env);
+                        unsafe {
+                            let ptr = Box::into_raw(boxed);
+                            env = NonNull::new_unchecked(ptr).as_mut();
+                            envs_to_drop.push(Box::from_raw(ptr));
+                        }
                     } else {
                         break Ok(LispValue::Func(f));
                     }
@@ -164,14 +178,14 @@ pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
                 LispValue::Vector(l) => break if tail.is_some() {
                     Err(LispError::InvalidDataType("function", "vector"))
                 } else {
-                    let l = l.into_iter().map(|x| eval(x, &mut env)).collect::<Result<Vec<LispValue>>>()?;
+                    let l = l.into_iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
                     Ok(LispValue::Vector(l))
                 },
                 LispValue::Map(m) => break if tail.is_some() {
                     Err(LispError::InvalidDataType("function", "map"))
                 } else {
                     let m = m.into_iter().map(|(key, val)| {
-                        Ok((key, eval(val, &mut env)?))
+                        Ok((key, eval(val, env)?))
                     }).collect::<Result<Vec<(LispValue, LispValue)>>>()?.into();
                     Ok(LispValue::Map(m))
                 },
