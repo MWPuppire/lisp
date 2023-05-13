@@ -73,10 +73,6 @@ pub fn testing_env() -> LispEnv {
     env.bind_func("slurp", lisp_test_slurp);
     env.bind_func("load-file", lisp_test_load_file);
 
-    // add `cond` built-in macro
-    let cond = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))";
-    eval(LispParser::parse(cond).unwrap().unwrap(), &mut env).unwrap();
-
     // TODO mock println and family?
     env
 }

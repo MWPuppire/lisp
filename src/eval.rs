@@ -65,7 +65,7 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
             let mut fn_env = if let Some(closure) = &f.closure {
                 closure.make_macro_env(&params, env)
             } else {
-                env.global()
+                env.global().make_closure().make_env(&params)
             };
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
@@ -86,7 +86,7 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
             let mut fn_env = if let Some(closure) = &f.closure {
                 closure.make_macro_env(&params, env)
             } else {
-                env.global()
+                env.global().make_closure().make_env(&params)
             };
             Ok((wrap_macro(f, &mut fn_env)?, fn_env))
         } else {
