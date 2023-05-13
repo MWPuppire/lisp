@@ -125,17 +125,14 @@ impl LispEnv {
     }
 
     pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {
-        let this = self.0.read().unwrap();
-        let mut env = Some(self.clone());
-        while let Some(inner) = env {
-            let lock = inner.0.read().unwrap();
+        for env in self.nested_envs() {
+            let lock = env.0.read().unwrap();
             if let Some(val) = lock.data.get(&sym) {
                 return Some(val.clone());
-            } else {
-                env = lock.enclosing.clone();
             }
         }
-        this.stdlib.get(&sym).map(LispValue::clone)
+        let lock = self.0.read().unwrap();
+        lock.stdlib.get(&sym).map(LispValue::clone)
     }
     pub fn set(&mut self, sym: LispSymbol, val: LispValue) {
         let mut lock = self.0.write().unwrap();
@@ -165,6 +162,41 @@ impl LispEnv {
             stdlib: lock.stdlib,
         };
         LispEnv(Arc::new(RwLock::new(inner)))
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = LispSymbol> {
+        let lock = self.0.read().unwrap();
+        lock.stdlib.keys().copied().chain(self.nested_envs().map(|env| {
+            let lock = env.0.read().unwrap();
+            // `collect()` and `into_iter()` because otherwise it's borrowing
+            // `lock`, which goes out of scope right away
+            lock.data.keys().copied().collect::<Vec<_>>().into_iter()
+        }).flatten())
+    }
+
+    pub fn nested_envs(&self) -> impl Iterator<Item = LispEnv> {
+        NestedEnvIter {
+            current: Some(self.clone())
+        }
+    }
+}
+
+pub struct NestedEnvIter {
+    current: Option<LispEnv>,
+}
+impl Iterator for NestedEnvIter {
+    type Item = LispEnv;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.current.as_ref() {
+            let out = current.clone();
+            let lock = current.0.read().unwrap();
+            let enclosing = lock.enclosing.clone();
+            drop(lock);
+            self.current = enclosing;
+            Some(out)
+        } else {
+            None
+        }
     }
 }
 
