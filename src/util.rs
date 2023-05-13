@@ -8,6 +8,15 @@ use im::{HashMap, Vector};
 use by_address::ByAddress;
 use crate::env::{LispEnv, LispClosure, LispSymbol};
 
+cfg_if::cfg_if! {
+    if #[cfg(feature = "async")] {
+        use std::pin::Pin;
+        use futures::prelude::*;
+        use futures::future::{Shared, BoxFuture};
+        use futures::task::{Context, Poll};
+    }
+}
+
 #[macro_export]
 macro_rules! expect {
     ($cond:expr, $err:expr) => {
@@ -34,8 +43,15 @@ pub enum LispBuiltinResult {
     ContinueIn(LispValue, LispEnv),
     Error(LispError),
 }
+impl From<Result<LispValue>> for LispBuiltinResult {
+    fn from(item: Result<LispValue>) -> Self {
+        match item {
+            Ok(x) => Self::Done(x),
+            Err(x) => Self::Error(x),
+        }
+    }
+}
 impl<E: Into<LispError>> std::ops::FromResidual<E> for LispBuiltinResult {
-    #[inline]
     fn from_residual(residual: E) -> Self {
         Self::Error(residual.into())
     }
@@ -44,12 +60,10 @@ impl std::ops::Try for LispBuiltinResult {
     type Output = LispBuiltinResult;
     type Residual = LispError;
 
-    #[inline]
     fn from_output(output: Self::Output) -> Self {
         output
     }
 
-    #[inline]
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
         match self {
             Self::Error(e) => ControlFlow::Break(e),
@@ -58,6 +72,34 @@ impl std::ops::Try for LispBuiltinResult {
     }
 }
 pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> LispBuiltinResult;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "async")] {
+        #[derive(Clone, Debug)]
+        #[repr(transparent)]
+        pub struct LispAsyncValue(Shared<BoxFuture<'static, Result<LispValue>>>);
+
+        impl PartialEq for LispAsyncValue {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.ptr_eq(&other.0)
+            }
+        }
+        impl Eq for LispAsyncValue { }
+
+        impl std::hash::Hash for LispAsyncValue {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.0.ptr_hash(state);
+            }
+        }
+
+        impl Future for LispAsyncValue {
+            type Output = Result<LispValue>;
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                Pin::new(&mut self.0).poll(cx)
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LispValue {
@@ -77,6 +119,8 @@ pub enum LispValue {
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
     VariadicSymbol(LispSymbol),
+    #[cfg(feature = "async")]
+    Future(LispAsyncValue),
 }
 
 impl LispValue {
@@ -102,6 +146,7 @@ impl LispValue {
             Self::Map(_) => "map",
             Self::Vector(_) => "vector",
             Self::VariadicSymbol(_) => "symbol",
+            Self::Future(_) => "future",
         }
     }
 
@@ -156,6 +201,7 @@ impl LispValue {
                 format!("[{}]", xs.join(" "))
             },
             LispValue::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
+            LispValue::Future(_) => format!("(promise ...)"),
         }
     }
 
@@ -209,6 +255,13 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
+    #[cfg(feature = "async")]
+    pub fn into_future(self) -> Result<LispAsyncValue> {
+        match self {
+            Self::Future(f) => Ok(f),
+            _ => Err(LispError::InvalidDataType("promise", self.type_of())),
+        }
+    }
 
     // recursively transforms vectors to lists; used for testing equality,
     // since the spec requires lists and vectors containing the same elements
@@ -247,6 +300,13 @@ impl From<LispSymbol> for LispValue {
         Self::Symbol(item)
     }
 }
+#[cfg(feature = "async")]
+impl From<BoxFuture<'static, Result<LispValue>>> for LispValue {
+    fn from(item: BoxFuture<'static, Result<LispValue>>) -> Self {
+        let wrapper = LispAsyncValue(item.shared());
+        Self::Future(wrapper)
+    }
+}
 
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -275,6 +335,7 @@ impl fmt::Display for LispValue {
             },
             LispValue::Keyword(s) => write!(f, ":{}", s),
             LispValue::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
+            LispValue::Future(_) => write!(f, "#<promise>"),
         }
     }
 }
@@ -318,6 +379,19 @@ impl<F: Into<LispError>> From<std::result::Result<Infallible, F>> for LispError 
         match item {
             Err(e) => e.into(),
             Ok(_) => unreachable!(),
+        }
+    }
+}
+impl Clone for LispError {
+    fn clone(&self) -> Self {
+        match self {
+            // HACK to get around io::Error being non-cloneable
+            Self::OSFailure(x) => Self::UncaughtException(
+                LispValue::String(
+                    format!("error calling into native function: {}", x)
+                )
+            ),
+            x => x.clone(),
         }
     }
 }

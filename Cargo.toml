@@ -14,12 +14,18 @@ string-interner = "0.14"
 ordered-float = "3.0"
 nom = "7.1"
 by_address = "1.1"
+futures = { version = "0.3", optional = true }
+async-std = { version = "1.12", optional = true }
 rustyline = { version = "11.0", optional = true }
 
 [features]
-default = ["io-stdlib", "rustyline"]
+default = ["io-stdlib", "rustyline", "async", "async-io"]
 # Enable functions in the Lisp standard library which require I/O
 io-stdlib = []
+# Add promises to the Lisp standard library
+async = ["futures"]
+# Add asynchronous versions of some I/O functions
+async-io = ["io-stdlib", "async", "async-std"]
 
 [[bin]]
 name = "lisp-repl"
