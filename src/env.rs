@@ -19,7 +19,7 @@ struct InnerEnv {
     stdlib: &'static HashMap<LispSymbol, LispValue>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LispClosure(ByAddress<Arc<RwLock<InnerEnv>>>);
 impl LispClosure {
     pub fn make_env(&self, args: &[(LispSymbol, LispValue)]) -> LispEnv {

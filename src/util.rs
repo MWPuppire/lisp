@@ -19,7 +19,7 @@ macro_rules! expect {
 
 pub type Result<T> = std::result::Result<T, LispError>;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LispFunc {
     pub(crate) args: Vec<LispSymbol>,
     pub(crate) body: LispValue,
@@ -59,7 +59,7 @@ impl std::ops::Try for LispBuiltinResult {
 }
 pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> LispBuiltinResult;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LispValue {
     Symbol(LispSymbol),
     String(String),
@@ -247,33 +247,6 @@ impl From<LispSymbol> for LispValue {
         Self::Symbol(item)
     }
 }
-
-/*
-impl std::cmp::PartialEq for LispValue {
-    fn eq(&self, other: &LispValue) -> bool {
-        match (self, other) {
-            (LispValue::Symbol(a), LispValue::Symbol(b)) => a == b,
-            (LispValue::String(a), LispValue::String(b)) => a == b,
-            (LispValue::Number(a), LispValue::Number(b)) => a == b,
-            (LispValue::Bool(a), LispValue::Bool(b)) => a == b,
-            (LispValue::Nil, LispValue::Nil) => true,
-            (LispValue::List(a), LispValue::List(b)) => a == b,
-            (LispValue::Atom(a), LispValue::Atom(b)) => *a.read().unwrap() == *b.read().unwrap(),
-            (LispValue::BuiltinFunc { name: a_name, .. }, LispValue::BuiltinFunc { name: b_name, .. }) => a_name == b_name,
-            (LispValue::Vector(a), LispValue::Vector(b)) => a == b,
-            (LispValue::Keyword(a), LispValue::Keyword(b)) => a == b,
-            (LispValue::Map(a), LispValue::Map(b)) => a == b,
-            (LispValue::VariadicSymbol(a), LispValue::VariadicSymbol(b)) => a == b,
-            (LispValue::Symbol(a), LispValue::VariadicSymbol(b)) => a == b,
-            (LispValue::VariadicSymbol(a), LispValue::Symbol(b)) => a == b,
-            (LispValue::Func(a), LispValue::Func(b)) => a == b,
-            (LispValue::List(a), LispValue::Vector(b)) => a == &Vector::from(b),
-            (LispValue::Vector(a), LispValue::List(b)) => &Vector::from(a) == b,
-            _ => false,
-        }
-    }
-}
-*/
 
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
