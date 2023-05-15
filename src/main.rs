@@ -10,7 +10,6 @@ fn main() -> Result<()> {
 
     let mut parser = LispParser::new();
     let mut env = LispEnv::default();
-    let mut complete = true;
     let mut buffer = String::new();
 
     let args: Vec<String> = std::env::args().collect();
@@ -25,30 +24,25 @@ fn main() -> Result<()> {
     }
 
     loop {
-        if let Ok(line) = rl.readline(if complete { "> " } else { "... " }) {
+        if let Ok(line) = rl.readline("> ") {
             if let Err(err) = parser.add_tokenize(&line) {
                 println!("Err: {}", err);
                 parser.clear_tokens();
                 parser.advance_line();
                 continue;
             }
-            complete = parser.is_parse_complete();
-            if complete {
-                rl.add_history_entry(buffer + &line).unwrap();
-                buffer = String::new();
-                for val in &mut parser {
-                    match val {
-                        Ok(tok) => match eval_top(tok, &mut env) {
-                            Ok(out) => println!("{}", out.inspect()),
-                            Err(err) => println!("Err: {}", err),
-                        },
+            rl.add_history_entry(buffer + &line).unwrap();
+            buffer = String::new();
+            for val in &mut parser {
+                match val {
+                    Ok(tok) => match eval_top(tok, &mut env) {
+                        Ok(out) => println!("{}", out.inspect()),
                         Err(err) => println!("Err: {}", err),
-                    }
+                    },
+                    Err(err) => println!("Err: {}", err),
                 }
-                parser.advance_line();
-            } else {
-                buffer = buffer + &line + "\n";
             }
+            parser.advance_line();
         } else {
             // eof
             break Ok(());

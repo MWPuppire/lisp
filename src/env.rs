@@ -119,7 +119,9 @@ impl LispEnv {
         let mut interner = INTERNER.write().unwrap();
         interner.get_or_intern_static(s)
     }
-    // in hindsight, I think this is actually an unsound transmute
+    // TODO: I think this is actually an unsound transmute,
+    // and I never did like having a single static `StringInterner`
+    // not a member of any type
     pub fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
         let interner = INTERNER.read().unwrap();
         unsafe { std::mem::transmute(interner.resolve(sym)) }

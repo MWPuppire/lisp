@@ -101,6 +101,8 @@ fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result
 }
 
 pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
+    // TODO: current `queued` system is considered UB by Stacked Borrows
+    // wrap in Cell or something?
     let mut queued = vec![(Some(value), None, env)];
     let mut envs_to_drop = vec![];
     while let Some((head, mut tail, mut env)) = queued.pop() {
