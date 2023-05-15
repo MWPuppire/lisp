@@ -401,18 +401,16 @@ impl LispParser {
             let parsed = parse_lisp(input);
             match parsed.finish() {
                 Ok((new_input, parsed)) => {
-                    let start_pos = unsafe {
-                        new_input.as_ptr().offset_from(input.as_ptr()) as usize
-                    };
-                    for ch in input[..start_pos].chars() {
+                    while !std::ptr::eq(input, new_input) {
+                        let ch = input.chars().next().unwrap();
                         if ch == '\n' {
                             col = 1;
                             row += 1;
                         } else {
                             col += 1;
                         }
+                        input = &input[ch.len_utf8()..];
                     }
-                    input = new_input;
                     let parsed = match parsed {
                         LispTokenType::String(s) => {
                             let buf_idx = buffer.len();

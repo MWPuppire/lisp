@@ -51,7 +51,7 @@ cfg_if::cfg_if! {
             }
         }
         fn unreachable() -> ! {
-            unsafe { std::hint::unreachable_unchecked!() }
+            unsafe { std::hint::unreachable_unchecked() }
         }
     }
 }
