@@ -5,7 +5,7 @@ use ordered_float::OrderedFloat;
 use by_address::ByAddress;
 use crate::{LispValue, LispError, Result, expect};
 use crate::env::{LispEnv, LispSymbol};
-use crate::eval::{eval, eval_top, expand_macros};
+use crate::eval::{eval, expand_macros};
 use crate::parser::LispParser;
 use crate::util::{LispFunc, LispBuiltinResult};
 
@@ -404,10 +404,10 @@ fn inner_quasiquote(arg: LispValue, env: &mut LispEnv) -> Result<(LispValue, boo
                 Ok((LispValue::List(l), false))
             } else if l[0] == LispValue::Symbol(unquote_sym) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
-                Ok((eval_top(pop_tail!(l), env)?, false))
+                Ok((eval_tail!(l, env)?, false))
             } else if l[0] == LispValue::Symbol(splice_sym) {
                 expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
-                Ok((eval_top(pop_tail!(l), env)?, true))
+                Ok((eval_tail!(l, env)?, true))
             } else {
                 let mut out = Vector::new();
                 for val in l.into_iter() {

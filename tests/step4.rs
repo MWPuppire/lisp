@@ -139,7 +139,7 @@ fn recursive_func_environment() {
 
 #[test]
 fn variadic_function() {
-    assert_eq!(eval!("((fn* (& more) `(~@more)) 1 2 3)"), LispValue::List(vector![
+    assert_eq!(eval!("((fn* (& more) more) 1 2 3)"), LispValue::List(vector![
         1.0.into(),
         2.0.into(),
         3.0.into(),

@@ -214,10 +214,7 @@ fn vec() {
     assert_eq!(eval!("(vec [])"), LispValue::Vector(vec![]));
 }
 
-// always halts for some reason, so `ignore`
-// TODO should figure out why the test never finishes
 #[test]
-#[ignore]
 fn quine() {
     let expr = LispParser::parse(r#"
     ((fn* (q)

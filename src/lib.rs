@@ -14,7 +14,7 @@ pub use crate::util::{LispError, LispValue, Result};
 pub mod parser;
 pub use crate::parser::LispParser;
 pub mod eval;
-pub use crate::eval::{eval, eval_top};
+pub use crate::eval::eval;
 pub mod env;
 pub use crate::env::LispEnv;
 mod builtins;
