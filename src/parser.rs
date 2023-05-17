@@ -494,7 +494,7 @@ impl LispParser {
             })?;
             let val_exp = some_or_err(
                 Self::read_form(tokens, strs),
-                LispError::UnbalancedDelim(0, "}"),
+                LispError::MissingBinding,
             ).map_err(|err| match err {
                 LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                 _ => err,
