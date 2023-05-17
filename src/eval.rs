@@ -205,20 +205,19 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(match ast {
         LispValue::Symbol(s) => lookup_variable(s, env)?,
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
-        LispValue::Object(o) => LispValue::Object(Arc::new(
-            match Arc::unwrap_or_clone(o) {
-                ObjectValue::Vector(l) => ObjectValue::Vector(
-                    l.into_iter()
-                        .map(|x| eval(x, env))
-                        .collect::<Result<Vec<LispValue>>>()?
-                ),
-                ObjectValue::Map(m) => ObjectValue::Map(
-                    m.into_iter()
-                        .map(|(key, val)| Ok((key, eval(val, env)?)))
-                        .collect::<Result<HashMap<LispValue, LispValue>>>()?
-                ),
-                x => x,
-        })),
+        LispValue::Object(o) => LispValue::Object(match o.deref() {
+            ObjectValue::Vector(l) => Arc::new(ObjectValue::Vector(
+                l.iter().cloned()
+                    .map(|x| eval(x, env))
+                    .collect::<Result<Vec<LispValue>>>()?
+            )),
+            ObjectValue::Map(m) => Arc::new(ObjectValue::Map(
+                m.iter()
+                    .map(|(key, val)| Ok((key.clone(), eval(val.clone(), env)?)))
+                    .collect::<Result<HashMap<LispValue, LispValue>>>()?
+            )),
+            _ => o.clone(),
+        }),
         x => x
     })
 }
