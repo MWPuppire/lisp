@@ -549,7 +549,7 @@ fn lisp_try(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let catch = pop_tail!(args);
     if let Ok(mut catch) = catch.into_list() {
-        expect!(catch.len() == 3, LispError::IncorrectArguments(2, args.len() - 1));
+        expect!(catch.len() == 3, LispError::IncorrectArguments(2, catch.len() - 1));
         let catch_sym = pop_head!(catch);
         let base_catch_sym = LispValue::Symbol(LispEnv::symbol_for_static("catch*"));
         if catch_sym != base_catch_sym {
