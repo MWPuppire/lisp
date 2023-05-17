@@ -36,6 +36,6 @@ fn evaluate_in_collections() {
         "a".to_owned().into() => 15.0.into(),
     }));
     assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::map_from(hashmap!{
-        LispValue::Keyword("a".to_owned()) => 15.0.into(),
+        LispValue::keyword_for("a".to_owned()) => 15.0.into(),
     }));
 }

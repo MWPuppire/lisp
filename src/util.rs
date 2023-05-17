@@ -111,6 +111,8 @@ pub enum ObjectValue {
     Func(LispFunc),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
+    String(String),
+    Keyword(String),
 }
 
 impl ObjectValue {
@@ -121,6 +123,8 @@ impl ObjectValue {
             Self::Func(_) => "function",
             Self::Map(_) => "map",
             Self::Vector(_) => "vector",
+            Self::String(_) => "string",
+            Self::Keyword(_) => "keyword",
         }
     }
     pub fn inspect(&self) -> String {
@@ -165,6 +169,8 @@ impl ObjectValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("'[{}]", xs.join(" "))
             },
+            Self::String(s) => format!(r#""{}""#, s.escape_default()),
+            Self::Keyword(s) => format!(":{}", s),
         }
     }
 }
@@ -188,6 +194,8 @@ impl fmt::Display for ObjectValue {
                 ).collect();
                 write!(f, "{{{}}}", xs.join(" "))
             },
+            Self::String(s) => write!(f, "{}", s),
+            Self::Keyword(s) => write!(f, ":{}", s),
         }
     }
 }
@@ -196,11 +204,9 @@ impl fmt::Display for ObjectValue {
 pub enum LispValue {
     Symbol(LispSymbol),
     VariadicSymbol(LispSymbol),
-    String(String),
     Number(OrderedFloat<f64>),
     Bool(bool),
     Nil,
-    Keyword(String),
     Atom(ByAddress<Arc<RwLock<LispValue>>>),
     Object(Arc<ObjectValue>),
 
@@ -216,15 +222,25 @@ impl LispValue {
         Self::Symbol(LispEnv::symbol_for_static(s))
     }
 
+    pub fn string_for(s: String) -> Self {
+        Self::Object(Arc::new(
+            ObjectValue::String(s.to_owned())
+        ))
+    }
+
+    pub fn keyword_for(s: String) -> Self {
+        Self::Object(Arc::new(
+            ObjectValue::Keyword(s.to_owned())
+        ))
+    }
+
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::Symbol(_) => "symbol",
             Self::VariadicSymbol(_) => "symbol",
-            Self::String(_) => "string",
             Self::Number(_) => "number",
             Self::Bool(_) => "bool",
             Self::Nil => "nil",
-            Self::Keyword(_) => "keyword",
             Self::Atom(_) => "atom",
             Self::Object(obj) => obj.type_of(),
 
@@ -244,11 +260,9 @@ impl LispValue {
         match self {
             Self::Symbol(s) => format!("{}", LispEnv::symbol_string(*s).unwrap()),
             Self::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::String(s) => format!(r#""{}""#, s.escape_default()),
             Self::Number(n) => format!("{}", n),
             Self::Bool(b) => format!("{}", b),
             Self::Nil => "nil".to_owned(),
-            Self::Keyword(s) => format!(":{}", s),
             Self::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             Self::Object(o) => o.inspect_inner(),
 
@@ -334,9 +348,12 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("atom", self.type_of())),
         }
     }
-    pub fn into_string(self) -> Result<String> {
+    pub fn expect_string(&self) -> Result<&str> {
         match self {
-            Self::String(s) => Ok(s),
+            Self::Object(o) => match o.deref() {
+                ObjectValue::String(s) => Ok(s),
+                _ => Err(LispError::InvalidDataType("string", self.type_of())),
+            },
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
@@ -404,7 +421,7 @@ impl From<bool> for LispValue {
 }
 impl From<String> for LispValue {
     fn from(item: String) -> Self {
-        Self::String(item)
+        Self::Object(Arc::new(ObjectValue::String(item)))
     }
 }
 impl From<LispSymbol> for LispValue {
@@ -425,11 +442,9 @@ impl fmt::Display for LispValue {
         match self {
             Self::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
             Self::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::String(s) => write!(f, "{}", s),
             Self::Number(n) => write!(f, "{}", n),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Nil => write!(f, "nil"),
-            Self::Keyword(s) => write!(f, ":{}", s),
             Self::Atom(_) => write!(f, "#<atom>"),
             Self::Object(o) => o.fmt(f),
             #[cfg(feature = "async")]
@@ -487,9 +502,7 @@ impl Clone for LispError {
         match self {
             // HACK to get around io::Error being non-cloneable
             Self::OSFailure(x) => Self::UncaughtException(
-                LispValue::String(
-                    format!("error calling into native function: {}", x)
-                )
+                format!("error calling into native function: {}", x).into()
             ),
             x => x.clone(),
         }

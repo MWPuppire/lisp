@@ -329,7 +329,8 @@ fn lisp_eval(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResul
 #[cfg(feature = "io-stdlib")]
 fn lisp_readline(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     if !args.is_empty() {
-        let s = eval_head!(args, env)?.into_string()?;
+        let s_owner = eval_head!(args, env)?;
+        let s = s_owner.expect_string()?;
         print!("{}", s);
         std::io::stdout().flush()?;
     }
@@ -340,14 +341,15 @@ fn lisp_readline(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinR
         LispBuiltinResult::Done(LispValue::Nil)
     } else {
         buffer.pop(); // remove newline
-        LispBuiltinResult::Done(LispValue::String(buffer))
+        LispBuiltinResult::Done(LispValue::string_for(buffer))
     }
 }
 
 fn lisp_read_string(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let code_expr = eval_head!(args, env)?.into_string()?;
-    let parsed = LispParser::parse(&code_expr);
+    let code_value = eval_head!(args, env)?;
+    let code_expr = code_value.expect_string()?;
+    let parsed = LispParser::parse(code_expr);
     if let Some(parsed) = parsed {
         LispBuiltinResult::Done(parsed?)
     } else {
@@ -361,21 +363,23 @@ fn lisp_str(args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
         let x = eval(arg, env)?;
         buffer.push_str(&x.to_string());
     }
-    LispBuiltinResult::Done(LispValue::String(buffer))
+    LispBuiltinResult::Done(LispValue::string_for(buffer))
 }
 
 #[cfg(feature = "io-stdlib")]
 fn lisp_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let file_name = eval_head!(args, env)?.into_string()?;
+    let file_value = eval_head!(args, env)?;
+    let file_name = file_value.expect_string()?;
     let contents = fs::read_to_string(file_name)?;
-    LispBuiltinResult::Done(LispValue::String(contents))
+    LispBuiltinResult::Done(LispValue::string_for(contents))
 }
 
 #[cfg(feature = "io-stdlib")]
 fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let file_name = eval_head!(args, env)?.into_string()?;
+    let file_value = eval_head!(args, env)?;
+    let file_name = file_value.expect_string()?;
     let contents = fs::read_to_string(file_name)?;
 
     let mut parser = LispParser::new();
@@ -390,7 +394,7 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltin
 fn lisp_typeof(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?;
-    LispBuiltinResult::Done(LispValue::String(x.type_of().to_owned()))
+    LispBuiltinResult::Done(LispValue::string_for(x.type_of().to_owned()))
 }
 
 fn lisp_quote(mut args: Vector<LispValue>, _env: &mut LispEnv) -> LispBuiltinResult {
@@ -561,7 +565,7 @@ fn lisp_macroexpand(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuilt
 fn lisp_inspect(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
-    LispBuiltinResult::Done(LispValue::String(val.inspect()))
+    LispBuiltinResult::Done(LispValue::string_for(val.inspect()))
 }
 
 fn lisp_try(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -585,7 +589,7 @@ fn lisp_try(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
             },
             Err(err) => {
                 let s = err.to_string();
-                caught_env.set(err_name, LispValue::String(s));
+                caught_env.set(err_name, LispValue::string_for(s));
                 LispBuiltinResult::ContinueIn(catch, caught_env)
             }
         }
@@ -632,8 +636,9 @@ fn lisp_symbolq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinRe
 
 fn lisp_symbol(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let s = eval_head!(args, env)?.into_string()?;
-    LispBuiltinResult::Done(LispValue::Symbol(LispEnv::symbol_for(&s)))
+    let s_owner = eval_head!(args, env)?;
+    let s = s_owner.expect_string()?;
+    LispBuiltinResult::Done(LispValue::Symbol(LispEnv::symbol_for(s)))
 }
 
 fn lisp_vector(args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -654,9 +659,21 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinRe
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     LispBuiltinResult::Done(match arg {
-        LispValue::Keyword(s) => Ok(LispValue::Keyword(s)),
-        LispValue::String(s) => Ok(LispValue::Keyword(s)),
-        LispValue::Symbol(s) => Ok(LispValue::Keyword(LispEnv::symbol_string(s).unwrap().to_owned())),
+        LispValue::Object(o) => match o.deref() {
+            ObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
+            ObjectValue::String(_) => {
+                let ObjectValue::String(inner) = Arc::unwrap_or_clone(o) else {
+                    unreachable!()
+                };
+                Ok(LispValue::Object(Arc::new(
+                    ObjectValue::Keyword(inner)
+                )))
+            },
+            _ => Err(LispError::InvalidDataType("string", o.type_of())),
+        },
+        LispValue::Symbol(s) => Ok(LispValue::keyword_for(
+            LispEnv::symbol_string(s).unwrap().to_owned()
+        )),
         x => Err(LispError::InvalidDataType("string", x.type_of())),
     }?)
 }
@@ -664,7 +681,10 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinRe
 fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
-    LispBuiltinResult::Done(LispValue::Bool(matches!(arg, LispValue::Keyword(_))))
+    LispBuiltinResult::Done(LispValue::Bool(match arg {
+        LispValue::Object(o) => matches!(o.deref(), ObjectValue::Keyword(_)),
+        _ => false,
+    }))
 }
 
 fn lisp_hashmap(args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -782,7 +802,7 @@ fn lisp_pr_str(args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult 
     let full_str = args.into_iter().map(|x| {
         Ok(eval(x, env)?.inspect())
     }).collect::<Result<Vec<String>>>()?;
-    LispBuiltinResult::Done(LispValue::String(full_str.join(" ")))
+    LispBuiltinResult::Done(LispValue::string_for(full_str.join(" ")))
 }
 
 #[cfg(feature = "io-stdlib")]
@@ -811,7 +831,11 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
 fn lisp_stringq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
-    LispBuiltinResult::Done(LispValue::Bool(matches!(arg, LispValue::String(_))))
+    LispBuiltinResult::Done(if let Ok(_) = arg.expect_string() {
+        LispValue::Bool(true)
+    } else {
+        LispValue::Bool(false)
+    })
 }
 
 fn lisp_numberq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
@@ -869,14 +893,12 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult
             } else {
                 LispValue::list_from(l.iter().cloned())
             }),
-            x => LispBuiltinResult::Error(LispError::InvalidDataType("list", x.type_of())),
-        },
-        LispValue::String(s) => {
-            LispBuiltinResult::Done(if s.is_empty() {
+            ObjectValue::String(s) => LispBuiltinResult::Done(if s.is_empty() {
                 LispValue::Nil
             } else {
                 LispValue::list_from(s.chars().map(|x| x.to_string().into()))
-            })
+            }),
+            x => LispBuiltinResult::Error(LispError::InvalidDataType("list", x.type_of())),
         },
         LispValue::Nil => LispBuiltinResult::Done(LispValue::Nil),
         x => LispBuiltinResult::Error(LispError::InvalidDataType("list", x.type_of())),
@@ -973,7 +995,8 @@ fn lisp_readline_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBu
     let mut env = env.clone();
     LispBuiltinResult::Done(async move {
         if !args.is_empty() {
-            let s = eval_head!(args, &mut env)?.into_string()?;
+            let s_owner = eval_head!(args, &mut env)?;
+            let s = s_owner.expect_string()?;
             print!("{}", s);
             async_std::io::stdout().flush().await?;
         }
@@ -984,7 +1007,7 @@ fn lisp_readline_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBu
             Ok(LispValue::Nil)
         } else {
             buffer.pop(); // remove newline
-            Ok(LispValue::String(buffer))
+            Ok(LispValue::string_for(buffer))
         }
     }.boxed().into())
 }
@@ -994,9 +1017,10 @@ fn lisp_slurp_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuilt
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let mut env = env.clone();
     LispBuiltinResult::Done(async move {
-        let file_name = eval_head!(args, &mut env)?.into_string()?;
+        let file_value = eval_head!(args, &mut env)?;
+        let file_name = file_value.expect_string()?;
         let contents = async_std::fs::read_to_string(file_name).await?;
-        Ok(LispValue::String(contents))
+        Ok(LispValue::string_for(contents))
     }.boxed().into())
 }
 
@@ -1111,7 +1135,7 @@ lazy_static! {
 
         funcs.insert(
             strs.get_or_intern_static("*host-language*"),
-            LispValue::String("Rust".to_owned()),
+            LispValue::string_for("Rust".to_owned()),
         );
 
         cfg_if::cfg_if! {
@@ -1149,7 +1173,7 @@ lazy_static! {
         let mut lisp_argv: Vector<LispValue> = args.into_iter()
             // Lisp *ARGV* doesn't include the interpreter name
             .skip(1)
-            .map(LispValue::String)
+            .map(LispValue::string_for)
             .collect();
         lisp_argv.push_front(LispValue::Symbol(strs.get_or_intern_static("list")));
         ext.insert(

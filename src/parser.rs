@@ -506,7 +506,7 @@ impl LispParser {
         if let LispTokenType::Number(num) = token {
             LispValue::Number(OrderedFloat(num))
         } else if let LispTokenType::String(s) = token {
-            LispValue::String(s)
+            LispValue::string_for(s)
         } else if token == LispTokenType::True {
             LispValue::Bool(true)
         } else if token == LispTokenType::False {
@@ -516,7 +516,7 @@ impl LispParser {
         } else if let LispTokenType::Symbol(sym) = token {
             LispValue::Symbol(strs.get_or_intern(&sym))
         } else if let LispTokenType::Keyword(kw) = token {
-            LispValue::Keyword(kw)
+            LispValue::keyword_for(kw)
         } else {
             LispValue::Nil
         }
