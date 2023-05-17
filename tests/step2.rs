@@ -20,22 +20,22 @@ fn fail_undefined_func() {
 
 #[test]
 fn empty_collection_nop() {
-    assert_eq!(eval!("()"), LispValue::List(vector![]));
-    assert_eq!(eval!("[]"), LispValue::Vector(vec![]));
-    assert_eq!(eval!("{}"), LispValue::Map(HashMap::new()));
+    assert_eq!(eval!("()"), LispValue::list_from(vector![]));
+    assert_eq!(eval!("[]"), LispValue::vector_from(vec![]));
+    assert_eq!(eval!("{}"), LispValue::map_from(HashMap::new()));
 }
 
 #[test]
 fn evaluate_in_collections() {
-    assert_eq!(eval!("[1 2 (+ 1 2)]"), LispValue::Vector(vec![
+    assert_eq!(eval!("[1 2 (+ 1 2)]"), LispValue::vector_from(vec![
         1.0.into(),
         2.0.into(),
         3.0.into(),
     ]));
-    assert_eq!(eval!("{\"a\" (+ 7 8)}"), LispValue::Map(hashmap!{
+    assert_eq!(eval!("{\"a\" (+ 7 8)}"), LispValue::map_from(hashmap!{
         "a".to_owned().into() => 15.0.into(),
     }));
-    assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::Map(hashmap!{
+    assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::map_from(hashmap!{
         LispValue::Keyword("a".to_owned()) => 15.0.into(),
     }));
 }

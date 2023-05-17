@@ -19,17 +19,17 @@ fn inspect_outputs_code() {
 
 #[test]
 fn read_string() {
-    assert_eq!(eval!("(read-string \"(1 2 (3 4) nil)\")"), LispValue::List(vector![
+    assert_eq!(eval!("(read-string \"(1 2 (3 4) nil)\")"), LispValue::list_from(vector![
         1.0.into(),
         2.0.into(),
-        LispValue::List(vector![
+        LispValue::list_from(vector![
             3.0.into(),
             4.0.into(),
         ]),
         LispValue::Nil,
     ]));
     assert_eq!(eval!("(read-string \"nil\")"), LispValue::Nil);
-    assert_eq!(eval!("(read-string \"(+ 2 3)\")"), LispValue::List(vector![
+    assert_eq!(eval!("(read-string \"(+ 2 3)\")"), LispValue::list_from(vector![
         LispValue::symbol_for_static("+"),
         2.0.into(),
         3.0.into(),
@@ -71,7 +71,7 @@ fn test_load_file() {
     assert_eq!(eval!("(inc4 7)", &mut env), 11.0.into());
     assert_eq!(eval!("(inc5 7)", &mut env), 12.0.into());
     eval!("(load-file \"incC.mal\")", &mut env);
-    assert_eq!(eval!("mymap", &mut env), LispValue::Map(hashmap!{
+    assert_eq!(eval!("mymap", &mut env), LispValue::map_from(hashmap!{
         "a".to_owned().into() => 1.0.into(),
     }));
 }

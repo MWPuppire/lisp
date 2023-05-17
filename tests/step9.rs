@@ -43,7 +43,7 @@ fn query_functions() {
 fn apply() {
     assert_eq!(eval!("(apply + (list 2 3))"), 5.0.into());
     assert_eq!(eval!("(apply + 4 (list 2 3))"), 9.0.into());
-    assert_eq!(eval!("(apply list (list))"), LispValue::List(vector![]));
+    assert_eq!(eval!("(apply list (list))"), LispValue::list_from(vector![]));
     assert_eq!(eval!("(apply symbol? (list 'two))"), true.into());
     assert_eq!(eval!("(apply (fn* (a b) (+ a b)) (list 2 3))"), 5.0.into());
 }
@@ -53,12 +53,12 @@ fn map() {
     let mut env = testing_env();
     eval!("(def! nums (list 1 2 3))", &mut env);
     eval!("(def! double (fn* (a) (* 2 a)))", &mut env);
-    assert_eq!(eval!("(map double nums)", &mut env), LispValue::List(vector![
+    assert_eq!(eval!("(map double nums)", &mut env), LispValue::list_from(vector![
         2.0.into(),
         4.0.into(),
         6.0.into(),
     ]));
-    assert_eq!(eval!("(map (fn* (x) (symbol? x)) (list 1 (quote two) \"three\"))"), LispValue::List(vector![
+    assert_eq!(eval!("(map (fn* (x) (symbol? x)) (list 1 (quote two) \"three\"))"), LispValue::list_from(vector![
         false.into(),
         true.into(),
         false.into(),
@@ -68,10 +68,10 @@ fn map() {
 
 #[test]
 fn hashmap_functions() {
-    assert_eq!(eval!(r#"{"a" 1}"#), LispValue::Map(hashmap!{
+    assert_eq!(eval!(r#"{"a" 1}"#), LispValue::map_from(hashmap!{
         "a".to_owned().into() => 1.0.into(),
     }));
-    assert_eq!(eval!(r#"(assoc {} "a" 1)"#), LispValue::Map(hashmap!{
+    assert_eq!(eval!(r#"(assoc {} "a" 1)"#), LispValue::map_from(hashmap!{
         "a".to_owned().into() => 1.0.into(),
     }));
     assert_eq!(
@@ -82,15 +82,15 @@ fn hashmap_functions() {
         eval!(r#"(get (assoc (assoc {"a" 1} "b" 2) "a" 3) "a")"#),
         3.0.into(),
     );
-    assert_eq!(eval!("(keys {})"), LispValue::List(vector![]));
+    assert_eq!(eval!("(keys {})"), LispValue::list_from(vector![]));
 
     let tested = eval!(r#"(keys {"1" 1 "2" 2})"#);
     // order of hash-map keys isn't guaranteed, so either is acceptable
     assert!(
-        tested == LispValue::List(vector![
+        tested == LispValue::list_from(vector![
             "1".to_owned().into(),
             "2".to_owned().into(),
-        ]) || tested == LispValue::List(vector![
+        ]) || tested == LispValue::list_from(vector![
             "2".to_owned().into(),
             "1".to_owned().into(),
         ])

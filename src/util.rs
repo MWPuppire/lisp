@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::{Arc, RwLock};
-use std::ops::ControlFlow;
+use std::ops::{ControlFlow, Deref};
 use std::convert::Infallible;
 use thiserror::Error;
 use ordered_float::OrderedFloat;
@@ -102,23 +102,108 @@ cfg_if::cfg_if! {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LispValue {
-    Symbol(LispSymbol),
-    String(String),
-    Number(OrderedFloat<f64>),
-    Bool(bool),
-    Nil,
+pub enum ObjectValue {
     List(Vector<LispValue>),
-    Atom(ByAddress<Arc<RwLock<LispValue>>>),
     BuiltinFunc {
         name: &'static str,
         f: LispBuiltinFunc,
     },
-    Func(Box<LispFunc>),
-    Keyword(String),
+    Func(LispFunc),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
+}
+
+impl ObjectValue {
+    pub fn type_of(&self) -> &'static str {
+        match self {
+            Self::List(_) => "list",
+            Self::BuiltinFunc { .. } => "function",
+            Self::Func(_) => "function",
+            Self::Map(_) => "map",
+            Self::Vector(_) => "vector",
+        }
+    }
+    pub fn inspect(&self) -> String {
+        match self {
+            Self::List(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("'({})", xs.join(" "))
+            },
+            Self::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.inspect_inner() + " " + &val.inspect()
+                ).collect();
+                format!("'{{{}}}", xs.join(" "))
+            },
+            Self::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("'[{}]", xs.join(" "))
+            },
+            _ => self.inspect_inner(),
+        }
+    }
+    fn inspect_inner(&self) -> String {
+        match self {
+            Self::List(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("({})", xs.join(" "))
+            }
+            Self::BuiltinFunc { name, .. } => name.to_string(),
+            Self::Func(f) => format!(
+                "({} ({}) {})",
+                if f.is_macro { "#<macro-fn*>" } else { "fn*" },
+                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
+                f.body.inspect()
+            ),
+            Self::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.inspect_inner() + " " + &val.inspect()
+                ).collect();
+                format!("{{{}}}", xs.join(" "))
+            },
+            Self::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
+                format!("'[{}]", xs.join(" "))
+            },
+        }
+    }
+}
+
+impl fmt::Display for ObjectValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::List(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
+                write!(f, "({})", xs.join(" "))
+            },
+            Self::BuiltinFunc { .. } => write!(f, "#<native function>"),
+            Self::Func(_) => write!(f, "#<function>"),
+            Self::Vector(l) => {
+                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
+                write!(f, "[{}]", xs.join(" "))
+            },
+            Self::Map(m) => {
+                let xs: Vec<String> = m.iter().map(|(key, val)|
+                    key.to_string() + " " + &val.to_string()
+                ).collect();
+                write!(f, "{{{}}}", xs.join(" "))
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LispValue {
+    Symbol(LispSymbol),
     VariadicSymbol(LispSymbol),
+    String(String),
+    Number(OrderedFloat<f64>),
+    Bool(bool),
+    Nil,
+    Keyword(String),
+    Atom(ByAddress<Arc<RwLock<LispValue>>>),
+    Object(Arc<ObjectValue>),
+
     #[cfg(feature = "async")]
     Future(LispAsyncValue),
 }
@@ -134,74 +219,41 @@ impl LispValue {
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::Symbol(_) => "symbol",
-            Self::List(_) => "list",
-            Self::BuiltinFunc { .. } => "function",
+            Self::VariadicSymbol(_) => "symbol",
             Self::String(_) => "string",
             Self::Number(_) => "number",
             Self::Bool(_) => "bool",
             Self::Nil => "nil",
-            Self::Func(_) => "function",
-            Self::Atom(_) => "atom",
             Self::Keyword(_) => "keyword",
-            Self::Map(_) => "map",
-            Self::Vector(_) => "vector",
-            Self::VariadicSymbol(_) => "symbol",
+            Self::Atom(_) => "atom",
+            Self::Object(obj) => obj.type_of(),
+
+            #[cfg(feature = "async")]
             Self::Future(_) => "future",
         }
     }
 
     pub fn inspect(&self) -> String {
         match self {
-            LispValue::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
-            LispValue::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("'({})", xs.join(" "))
-            },
-            LispValue::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect_inner() + " " + &val.inspect()
-                ).collect();
-                format!("'{{{}}}", xs.join(" "))
-            },
-            LispValue::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("'[{}]", xs.join(" "))
-            },
+            Self::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::Object(o) => o.inspect(),
             _ => self.inspect_inner(),
         }
     }
     fn inspect_inner(&self) -> String {
         match self {
-            LispValue::Symbol(s) => format!("{}", LispEnv::symbol_string(*s).unwrap()),
-            LispValue::String(s) => format!(r#""{}""#, s.escape_default()),
-            LispValue::Number(n) => format!("{}", n),
-            LispValue::Bool(b) => format!("{}", b),
-            LispValue::Nil => "nil".to_owned(),
-            LispValue::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("({})", xs.join(" "))
-            },
-            LispValue::BuiltinFunc { name, .. } => format!("{}", name),
-            LispValue::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
-            LispValue::Func(f) => format!(
-                "({} ({}) {})",
-                if f.is_macro { "#<macro-fn*>" } else { "fn*" },
-                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
-                f.body.inspect()
-            ),
-            LispValue::Keyword(s) => format!(":{}", s),
-            LispValue::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect_inner() + " " + &val.inspect_inner()
-                ).collect();
-                format!("{{{}}}", xs.join(" "))
-            },
-            LispValue::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("[{}]", xs.join(" "))
-            },
-            LispValue::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
-            LispValue::Future(_) => format!("(promise ...)"),
+            Self::Symbol(s) => format!("{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::String(s) => format!(r#""{}""#, s.escape_default()),
+            Self::Number(n) => format!("{}", n),
+            Self::Bool(b) => format!("{}", b),
+            Self::Nil => "nil".to_owned(),
+            Self::Keyword(s) => format!(":{}", s),
+            Self::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
+            Self::Object(o) => o.inspect_inner(),
+
+            #[cfg(feature = "async")]
+            Self::Future(_) => format!("(promise ...)"),
         }
     }
 
@@ -230,17 +282,50 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("number", self.type_of())),
         }
     }
-    pub fn into_list(self) -> Result<Vector<LispValue>> {
+    pub fn expect_func(&self) -> Result<&LispFunc> {
         match self {
-            Self::List(l) => Ok(l),
-            Self::Vector(l) => Ok(Vector::from(l)),
-            x => Err(LispError::InvalidDataType("list", x.type_of())),
+            Self::Object(o) => match o.deref() {
+                ObjectValue::Func(f) => Ok(f),
+                _ => Err(LispError::InvalidDataType("function", o.type_of())),
+            },
+            _ => Err(LispError::InvalidDataType("function", self.type_of())),
+        }
+    }
+    pub fn into_list(self) -> Result<Vector<LispValue>> {
+        if let Self::Object(o) = self {
+            if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
+                // `matches!` before the `match` to avoid potentially cloning
+                // non-lists; whether or not this is necessary remains to be
+                // seen, since these `expect_` functions do expect to receive a
+                // value of the correct type, so incorrect types should be a
+                // rare case
+                let cloned = Arc::unwrap_or_clone(o);
+                match cloned {
+                    ObjectValue::List(l) => Ok(l),
+                    ObjectValue::Vector(l) => Ok(Vector::from(l)),
+                    _ => unreachable!(),
+                }
+            } else {
+                Err(LispError::InvalidDataType("list", o.type_of()))
+            }
+        } else {
+            Err(LispError::InvalidDataType("list", self.type_of()))
         }
     }
     pub fn into_hashmap(self) -> Result<HashMap<LispValue, LispValue>> {
-        match self {
-            Self::Map(m) => Ok(m),
-            _ => Err(LispError::InvalidDataType("map", self.type_of())),
+        if let Self::Object(o) = self {
+            if matches!(o.deref(), ObjectValue::Map(_)) {
+                // `matches!` before the `match` explained in `into_list`
+                let cloned = Arc::unwrap_or_clone(o);
+                match cloned {
+                    ObjectValue::Map(m) => Ok(m),
+                    _ => unreachable!(),
+                }
+            } else {
+                Err(LispError::InvalidDataType("map", o.type_of()))
+            }
+        } else {
+            Err(LispError::InvalidDataType("map", self.type_of()))
         }
     }
     pub fn into_atom(self) -> Result<Arc<RwLock<LispValue>>> {
@@ -255,6 +340,7 @@ impl LispValue {
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
         }
     }
+
     #[cfg(feature = "async")]
     pub fn into_future(self) -> Result<LispAsyncValue> {
         match self {
@@ -267,11 +353,37 @@ impl LispValue {
     // since the spec requires lists and vectors containing the same elements
     // to compare equal
     pub fn vector_to_list(self) -> Self {
-        match self {
-            Self::List(l) => Self::List(l.into_iter().map(LispValue::vector_to_list).collect()),
-            Self::Vector(l) => Self::List(l.into_iter().map(LispValue::vector_to_list).collect()),
-            x => x,
+        if let Self::Object(o) = self {
+            if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
+                // `matches!` before the `match` explained in `into_list`
+                let cloned = Arc::unwrap_or_clone(o);
+                let list: Vector<LispValue> = match cloned {
+                    ObjectValue::List(l) => l.into_iter().map(Self::vector_to_list).collect(),
+                    ObjectValue::Vector(l) => l.into_iter().map(Self::vector_to_list).collect(),
+                    _ => unreachable!(),
+                };
+                Self::Object(Arc::new(ObjectValue::List(list)))
+            } else {
+                Self::Object(o)
+            }
+        } else {
+            self
         }
+    }
+
+    pub fn list_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
+        let list = ObjectValue::List(iter.into_iter().collect());
+        Self::Object(Arc::new(list))
+    }
+
+    pub fn vector_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
+        let list = ObjectValue::Vector(iter.into_iter().collect());
+        Self::Object(Arc::new(list))
+    }
+
+    pub fn map_from<T: IntoIterator<Item = (Self, Self)>>(iter: T) -> Self {
+        let list = ObjectValue::Map(iter.into_iter().collect());
+        Self::Object(Arc::new(list))
     }
 }
 
@@ -311,31 +423,17 @@ impl From<BoxFuture<'static, Result<LispValue>>> for LispValue {
 impl fmt::Display for LispValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LispValue::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            LispValue::String(s) => write!(f, "{}", s),
-            LispValue::Number(n) => write!(f, "{}", n),
-            LispValue::Bool(b) => write!(f, "{}", b),
-            LispValue::Nil => write!(f, "nil"),
-            LispValue::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
-                write!(f, "({})", xs.join(" "))
-            },
-            LispValue::BuiltinFunc { .. } => write!(f, "#<native function>"),
-            LispValue::Atom(_) => write!(f, "#<atom>"),
-            LispValue::Func(_) => write!(f, "#<function>"),
-            LispValue::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
-                write!(f, "[{}]", xs.join(" "))
-            },
-            LispValue::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.to_string() + " " + &val.to_string()
-                ).collect();
-                write!(f, "{{{}}}", xs.join(" "))
-            },
-            LispValue::Keyword(s) => write!(f, ":{}", s),
-            LispValue::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            LispValue::Future(_) => write!(f, "#<promise>"),
+            Self::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Nil => write!(f, "nil"),
+            Self::Keyword(s) => write!(f, ":{}", s),
+            Self::Atom(_) => write!(f, "#<atom>"),
+            Self::Object(o) => o.fmt(f),
+            #[cfg(feature = "async")]
+            Self::Future(_) => write!(f, "#<promise>"),
         }
     }
 }

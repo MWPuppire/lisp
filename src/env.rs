@@ -7,7 +7,7 @@ use string_interner::{StringInterner, DefaultSymbol};
 use by_address::ByAddress;
 use crate::LispValue;
 use crate::builtins;
-use crate::util::LispBuiltinFunc;
+use crate::util::{LispBuiltinFunc, ObjectValue};
 
 pub type LispSymbol = DefaultSymbol;
 
@@ -150,11 +150,17 @@ impl LispEnv {
         self.set(sym, val);
     }
     pub fn bind_func(&mut self, name: &'static str, f: LispBuiltinFunc) {
+        let f = LispValue::Object(
+            Arc::new(ObjectValue::BuiltinFunc {
+                name,
+                f,
+            })
+        );
         let sym = Self::symbol_for_static(name);
-        let mut lock = self.0.write().unwrap();
-        let val = LispValue::BuiltinFunc { name, f };
-        lock.data.insert(sym, val);
+        self.set(sym, f);
     }
+
+
     pub fn union(&self, other: &LispEnv) -> LispEnv {
         let lock = self.0.read().unwrap();
         let reader = other.0.read().unwrap();

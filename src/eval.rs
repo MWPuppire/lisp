@@ -1,8 +1,10 @@
 use std::iter::zip;
-use im::Vector;
+use std::sync::Arc;
+use std::ops::Deref;
+use im::{Vector, HashMap};
 use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
-use crate::util::{LispFunc, LispBuiltinResult};
+use crate::util::{LispFunc, LispBuiltinResult, ObjectValue};
 
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
@@ -10,17 +12,25 @@ fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
 
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     match val {
-        LispValue::List(list) => {
-            if list.is_empty() {
-                false
-            } else if let Ok(sym) = list[0].expect_symbol() {
-                match lookup_variable(sym, env) {
-                    Ok(LispValue::Func(f)) => f.is_macro,
-                    _ => false,
+        LispValue::Object(o) => match o.deref() {
+            ObjectValue::List(l) => {
+                if l.is_empty() {
+                    false
+                } else if let Ok(sym) = l[0].expect_symbol() {
+                    if let Ok(var) = lookup_variable(sym, env) {
+                        if let Ok(f) = var.expect_func() {
+                            f.is_macro
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
-            } else {
-                false
-            }
+            },
+            _ => false,
         },
         _ => false,
     }
@@ -32,7 +42,7 @@ pub fn expand_macros(val: LispValue, env: &mut LispEnv) -> Result<LispValue> {
         let Some(head) = list.pop_front() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
-        let LispValue::Func(f) = var else { unreachable!() };
+        let Ok(f) = var.expect_func() else { unreachable!() };
         let (out, _) = apply(f, list, env)?;
         Ok(out)
     } else {
@@ -51,33 +61,32 @@ fn wrap_macro(mut f: Box<LispFunc>, env: &mut LispEnv) -> Result<LispValue> {
 }
 */
 
-fn apply(f: Box<LispFunc>, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
+fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
     let evaluator = if f.is_macro { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let last_vals = vals.split_off(f.args.len() - 1);
         let variadic_idx = f.args.len() - 1;
-        let arg_names = f.args[0..variadic_idx].iter().map(|x| x.to_owned());
+        let arg_names = f.args[0..variadic_idx].iter().copied();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
-        params.push((f.args[variadic_idx].to_owned(), LispValue::List(last_vals)));
+        params.push((f.args[variadic_idx], LispValue::list_from(last_vals)));
         let fn_env = if f.is_macro {
             f.closure.make_macro_env(&params, env)
         } else {
             f.closure.make_env(&params)
         };
-        Ok((f.body, fn_env))
+        Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
         let vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
-        let arg_names = f.args.iter().map(|x| x.to_owned());
-        let params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
+        let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), vals).collect();
         let fn_env = if f.is_macro {
             f.closure.make_macro_env(&params, env)
         } else {
             f.closure.make_env(&params)
         };
-        Ok((f.body, fn_env))
+        Ok((f.body.clone(), fn_env))
     }
 }
 
@@ -196,24 +205,20 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(match ast {
         LispValue::Symbol(s) => lookup_variable(s, env)?,
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
-        /*
-        LispValue::List(l) => LispValue::List(
-            l.into_iter()
-                .map(|x| eval(x, env))
-                .collect::<Result<Vector<LispValue>>>()?
-        ),
-        */
-        LispValue::Vector(l) => LispValue::Vector(
-            l.into_iter()
-                .map(|x| eval(x, env))
-                .collect::<Result<Vec<LispValue>>>()?
-        ),
-        LispValue::Map(m) => LispValue::Map(
-            m.into_iter()
-                .map(|(key, val)| Ok((key, eval(val, env)?)))
-                .collect::<Result<Vec<(LispValue, LispValue)>>>()?
-                .into()
-        ),
+        LispValue::Object(o) => LispValue::Object(Arc::new(
+            match Arc::unwrap_or_clone(o) {
+                ObjectValue::Vector(l) => ObjectValue::Vector(
+                    l.into_iter()
+                        .map(|x| eval(x, env))
+                        .collect::<Result<Vec<LispValue>>>()?
+                ),
+                ObjectValue::Map(m) => ObjectValue::Map(
+                    m.into_iter()
+                        .map(|(key, val)| Ok((key, eval(val, env)?)))
+                        .collect::<Result<HashMap<LispValue, LispValue>>>()?
+                ),
+                x => x,
+        })),
         x => x
     })
 }
@@ -221,50 +226,56 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
 pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
     let mut envs_to_drop = vec![];
     loop {
-        if !matches!(ast, LispValue::List(_)) {
+        ast = expand_macros(ast, env)?;
+        if !matches!(ast, LispValue::Object(_)) {
             break eval_ast(ast, env);
         }
-        ast = expand_macros(ast, env)?;
-        if !matches!(ast, LispValue::List(_)) {
+        let LispValue::Object(ref arc) = ast else { unreachable!() };
+        if !matches!(arc.deref(), ObjectValue::List(_)) {
             break eval_ast(ast, env);
         }
         let Ok(mut list) = ast.into_list() else { unreachable!() };
         let Some(head) = list.pop_front() else {
             // just return an empty list without evaluating anything
-            break Ok(LispValue::List(list));
+            break Ok(LispValue::list_from(list));
         };
         match eval(head, env)? {
-            LispValue::BuiltinFunc { f, .. } => {
-                match f(list, env) {
-                    LispBuiltinResult::Done(val) => {
-                        break Ok(val);
-                    },
-                    LispBuiltinResult::Continue(expr) => {
-                        ast = expr;
-                    },
-                    LispBuiltinResult::ContinueIn(expr, new_env) => {
-                        ast = expr;
-                        let idx = envs_to_drop.len();
-                        envs_to_drop.push(new_env);
-                        env = unsafe {
-                            let ptr = envs_to_drop.as_mut_ptr();
-                            ptr.add(idx).as_mut().unwrap()
-                        };
-                    },
-                    LispBuiltinResult::Error(err) => {
-                        break Err(err);
-                    },
-                }
-            },
-            LispValue::Func(f) => {
-                let (new_ast, new_env) = apply(f, list, env)?;
-                ast = new_ast;
-                let idx = envs_to_drop.len();
-                envs_to_drop.push(new_env);
-                env = unsafe {
-                    let ptr = envs_to_drop.as_mut_ptr();
-                    ptr.add(idx).as_mut().unwrap()
-                };
+            LispValue::Object(o) => match o.deref() {
+                ObjectValue::BuiltinFunc { f, .. } => {
+                    match f(list, env) {
+                        LispBuiltinResult::Done(val) => {
+                            break Ok(val);
+                        },
+                        LispBuiltinResult::Continue(expr) => {
+                            ast = expr;
+                        },
+                        LispBuiltinResult::ContinueIn(expr, new_env) => {
+                            ast = expr;
+                            let idx = envs_to_drop.len();
+                            envs_to_drop.push(new_env);
+                            env = unsafe {
+                                let ptr = envs_to_drop.as_mut_ptr();
+                                ptr.add(idx).as_mut().unwrap()
+                            };
+                        },
+                        LispBuiltinResult::Error(err) => {
+                            break Err(err);
+                        },
+                    }
+                },
+                ObjectValue::Func(f) => {
+                    let (new_ast, new_env) = apply(f, list, env)?;
+                    ast = new_ast;
+                    let idx = envs_to_drop.len();
+                    envs_to_drop.push(new_env);
+                    env = unsafe {
+                        let ptr = envs_to_drop.as_mut_ptr();
+                        ptr.add(idx).as_mut().unwrap()
+                    };
+                },
+                x => break Err(
+                    LispError::InvalidDataType("function", x.type_of())
+                ),
             },
             x => break Err(
                 LispError::InvalidDataType("function", x.type_of())

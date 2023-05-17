@@ -1,4 +1,5 @@
 #![feature(try_trait_v2)]
+#![feature(arc_unwrap_or_clone)]
 
 extern crate cfg_if;
 extern crate lazy_static;

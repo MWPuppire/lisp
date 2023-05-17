@@ -304,7 +304,7 @@ macro_rules! token_prefix {
             LispParser::read_form($rest, $interner),
             LispError::MissingToken($prefix),
         ).map(|inner| {
-            LispValue::List(vector![
+            LispValue::list_from(vector![
                 LispValue::Symbol($interner.get_or_intern_static($name)),
                 inner,
             ])
@@ -438,7 +438,7 @@ impl LispParser {
             match tokens.get(0) {
                 Some(LispToken { token: LispTokenType::RParen, .. }) => {
                     tokens.pop_front();
-                    return Ok(LispValue::List(res));
+                    return Ok(LispValue::list_from(res));
                 },
                 None => return Err(LispError::UnbalancedDelim(1, ")")),
                 _ => (),
@@ -459,7 +459,7 @@ impl LispParser {
             match tokens.get(0) {
                 Some(LispToken { token: LispTokenType::RBracket, .. }) => {
                     tokens.pop_front();
-                    return Ok(LispValue::Vector(res));
+                    return Ok(LispValue::vector_from(res));
                 },
                 None => return Err(LispError::UnbalancedDelim(1, "]")),
                 _ => (),
@@ -480,7 +480,7 @@ impl LispParser {
             match tokens.get(0) {
                 Some(LispToken { token: LispTokenType::RCurly, .. }) => {
                     tokens.pop_front();
-                    return Ok(LispValue::Map(res.into()));
+                    return Ok(LispValue::map_from(res));
                 },
                 None => return Err(LispError::UnbalancedDelim(1, "}")),
                 _ => (),

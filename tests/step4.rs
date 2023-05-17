@@ -3,11 +3,11 @@ use common::*;
 
 #[test]
 fn list_functions() {
-    assert_eq!(eval!("(list)"), LispValue::List(vector![]));
+    assert_eq!(eval!("(list)"), LispValue::list_from(vector![]));
     assert_eq!(eval!("(list? (list))"), true.into());
     assert_eq!(eval!("(empty? (list))"), true.into());
     assert_eq!(eval!("(empty? (list 1))"), false.into());
-    assert_eq!(eval!("(list 1 2 3)"), LispValue::List(vector![
+    assert_eq!(eval!("(list 1 2 3)"), LispValue::list_from(vector![
         1.0.into(),
         2.0.into(),
         3.0.into(),
@@ -139,7 +139,7 @@ fn recursive_func_environment() {
 
 #[test]
 fn variadic_function() {
-    assert_eq!(eval!("((fn* (& more) more) 1 2 3)"), LispValue::List(vector![
+    assert_eq!(eval!("((fn* (& more) more) 1 2 3)"), LispValue::list_from(vector![
         1.0.into(),
         2.0.into(),
         3.0.into(),
