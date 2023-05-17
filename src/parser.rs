@@ -342,14 +342,6 @@ impl LispParser {
         }
         Self::read_form(&mut tokens, LispEnv::interner_mut().deref_mut())
     }
-    pub(crate) fn parse_with_interner(strs: &mut StringInterner, input: &str) -> Option<Result<LispValue>> {
-        let mut tokens = VecDeque::new();
-        match Self::tokenize(&mut tokens, input, 1, 1) {
-            Ok(_) => (),
-            Err(e) => return Some(Err(e)),
-        }
-        Self::read_form(&mut tokens, strs)
-    }
     pub fn advance_line(&mut self) {
         self.row += 1;
         self.col = 1;

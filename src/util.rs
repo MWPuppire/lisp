@@ -32,7 +32,7 @@ pub type Result<T> = std::result::Result<T, LispError>;
 pub struct LispFunc {
     pub(crate) args: Vec<LispSymbol>,
     pub(crate) body: LispValue,
-    pub(crate) closure: Option<LispClosure>,
+    pub(crate) closure: LispClosure,
     pub(crate) variadic: bool,
     pub(crate) is_macro: bool,
 }
@@ -368,6 +368,8 @@ pub enum LispError {
     MissingToken(&'static str),
     #[error("`meta` and `with-meta` are not implemented for this version")]
     NoMeta,
+    #[error("odd number of arguments passed to cond")]
+    OddCondArguments,
 
     #[cfg(feature = "io-stdlib")]
     #[error("error calling into native function: {0}")]

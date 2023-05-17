@@ -173,7 +173,7 @@ fn lisp_fn(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult 
     };
     let arg_names = args_list.into_iter().map(|x| x.expect_symbol()).collect::<Result<Vec<LispSymbol>>>()?;
     let body = pop_head!(args);
-    let closure = Some(env.make_closure());
+    let closure = env.make_closure();
     LispBuiltinResult::Done(LispValue::Func(Box::new(LispFunc {
         args: arg_names,
         body,
@@ -947,6 +947,18 @@ fn lisp_slurp_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuilt
     }.boxed().into())
 }
 
+fn lisp_cond(mut args: Vector<LispValue>, env: &mut LispEnv) -> LispBuiltinResult {
+    expect!(args.len() & 1 == 0, LispError::OddCondArguments);
+    while let Some(pred) = args.pop_front() {
+        if eval(pred, env)?.truthiness() {
+            return LispBuiltinResult::Continue(pop_head!(args));
+        } else {
+            pop_head!(args);
+        }
+    }
+    LispBuiltinResult::Done(LispValue::Nil)
+}
+
 macro_rules! make_lisp_funcs {
     ($interner:expr, $($name:literal => $f:path,)*) => {
         hashmap! {
@@ -958,7 +970,6 @@ macro_rules! make_lisp_funcs {
     }
 }
 
-const COND_BODY_STR: &str = "(if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))";
 lazy_static! {
     pub static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
         let mut strs = LispEnv::interner_mut();
@@ -1039,22 +1050,9 @@ lazy_static! {
             "conj" => lisp_conj,
             "meta" => lisp_meta,
             "with-meta" => lisp_with_meta,
+            "cond" => lisp_cond,
         );
 
-        let xs_symbol = strs.get_or_intern_static("xs");
-        let cond_name = strs.get_or_intern_static("cond");
-        let parsed_cond_body = LispParser::parse_with_interner(
-            &mut strs,
-            COND_BODY_STR,
-        ).unwrap().unwrap();
-        let cond = LispValue::Func(Box::new(LispFunc {
-            args: vec![xs_symbol],
-            body: parsed_cond_body,
-            closure: None,
-            variadic: true,
-            is_macro: true,
-        }));
-        funcs.insert(cond_name, cond);
         funcs.insert(
             strs.get_or_intern_static("*host-language*"),
             LispValue::String("Rust".to_owned()),
