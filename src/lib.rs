@@ -1,4 +1,5 @@
 #![feature(arc_unwrap_or_clone)]
+#![feature(get_mut_unchecked)]
 
 extern crate cfg_if;
 extern crate lazy_static;

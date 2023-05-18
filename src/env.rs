@@ -1,6 +1,5 @@
 use std::sync::{Arc, RwLock, Weak};
 use std::ops::DerefMut;
-use std::ptr::NonNull;
 use im::HashMap;
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
@@ -56,11 +55,12 @@ lazy_static! {
 }
 
 // creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
-unsafe fn assign_global_self(inner: InnerEnv) -> LispEnv {
+fn assign_global_self(inner: InnerEnv) -> LispEnv {
     let mut boxed = Arc::new(RwLock::new(inner));
-    let mut inner = NonNull::from(Arc::get_mut(&mut boxed).unwrap().get_mut().unwrap());
     let weak = Arc::downgrade(&boxed);
-    inner.as_mut().global = weak;
+    unsafe {
+        Arc::get_mut_unchecked(&mut boxed).get_mut().unwrap().global = weak;
+    };
     LispEnv(boxed)
 }
 
@@ -73,7 +73,7 @@ impl LispEnv {
             global: Weak::new(),
             stdlib: &builtins::BUILTINS,
         };
-        unsafe { assign_global_self(inner) }
+        assign_global_self(inner)
     }
     pub fn new_stdlib_protected() -> Self {
         let inner = InnerEnv {
@@ -82,7 +82,7 @@ impl LispEnv {
             global: Weak::new(),
             stdlib: &builtins::BUILTINS_NO_IO,
         };
-        unsafe { assign_global_self(inner) }
+        assign_global_self(inner)
     }
     pub fn new_nested(&self) -> Self {
         let copy = self.clone();
