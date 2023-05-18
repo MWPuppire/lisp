@@ -15,6 +15,7 @@ ordered-float = "3.0"
 nom = "7.1"
 by_address = "1.1"
 phf = { version = "0.11", features = ["macros"] }
+parking_lot = "0.12"
 futures = { version = "0.3", optional = true }
 async-std = { version = "1.12", optional = true }
 rustyline = { version = "11.0", optional = true }

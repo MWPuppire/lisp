@@ -342,7 +342,7 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
                 LispSpecialForm::Deref => {
                     if let Some(atom) = list.pop_front() {
                         let atom = eval(atom, &env)?.into_atom()?;
-                        let out = atom.read().unwrap().clone();
+                        let out = atom.read().clone();
                         break Ok(out)
                     } else {
                         break Err(LispError::IncorrectArguments(1, 0));

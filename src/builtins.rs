@@ -1,9 +1,10 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::ops::Deref;
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use by_address::ByAddress;
+use parking_lot::RwLock;
 use crate::{LispValue, LispError, Result, expect};
 use crate::env::{LispEnv, LispSymbol};
 use crate::eval::eval;
@@ -205,7 +206,7 @@ fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let atom = eval_head!(args, env)?.into_atom()?;
     let val = eval_head!(args, env)?;
-    *atom.write().unwrap() = val.clone();
+    *atom.write() = val.clone();
     Ok(val)
 }
 
@@ -213,14 +214,14 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
     let atom = eval_head!(args, env)?.into_atom()?;
     let val = eval_head!(args, env)?;
-    let derefed = atom.read().unwrap().clone();
+    let derefed = atom.read().clone();
     let mut list = vector![
         val,
         derefed,
     ];
     list.append(args);
     let out_val = eval(LispValue::list_from(list), env)?;
-    *atom.write().unwrap() = out_val.clone();
+    *atom.write() = out_val.clone();
     Ok(out_val)
 }
 

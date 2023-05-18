@@ -1,5 +1,5 @@
 use std::fmt;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::ops::Deref;
 use std::convert::Infallible;
 use thiserror::Error;
@@ -7,6 +7,7 @@ use ordered_float::OrderedFloat;
 use im::{HashMap, Vector};
 use by_address::ByAddress;
 use phf::phf_map;
+use parking_lot::RwLock;
 use crate::env::{LispEnv, LispClosure, LispSymbol};
 
 cfg_if::cfg_if! {
@@ -327,7 +328,7 @@ impl LispValue {
             Self::Number(n) => format!("{}", n),
             Self::Bool(b) => format!("{}", b),
             Self::Nil => "nil".to_owned(),
-            Self::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
+            Self::Atom(x) => format!("(atom {})", x.read().inspect()),
             Self::Object(o) => o.inspect_inner(),
             Self::Special(s) => format!("{}", s),
 
@@ -340,7 +341,7 @@ impl LispValue {
         match self {
             Self::Nil => false,
             Self::Bool(b) => *b,
-            Self::Atom(a) => a.read().unwrap().truthiness(),
+            Self::Atom(a) => a.read().truthiness(),
             _ => true,
         }
     }
