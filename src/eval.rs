@@ -1,10 +1,10 @@
 use std::iter::zip;
 use std::sync::Arc;
 use std::ops::Deref;
-use im::{Vector, HashMap};
-use crate::{LispValue, LispError, Result};
+use im::{Vector, vector, HashMap};
+use crate::{LispValue, LispError, Result, expect};
 use crate::env::{LispEnv, LispSymbol};
-use crate::util::{LispFunc, LispBuiltinResult, ObjectValue};
+use crate::util::{LispFunc, ObjectValue, LispSpecialForm};
 
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
@@ -18,10 +18,12 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
                     false
                 } else if let Ok(sym) = l[0].expect_symbol() {
                     if let Ok(var) = lookup_variable(sym, env) {
-                        if let Ok(f) = var.expect_func() {
-                            f.is_macro
-                        } else {
-                            false
+                        match var {
+                            LispValue::Object(o) => matches!(
+                                o.deref(),
+                                ObjectValue::Macro(_),
+                            ),
+                            _ => false,
                         }
                     } else {
                         false
@@ -43,26 +45,15 @@ pub fn expand_macros(val: LispValue, env: &mut LispEnv) -> Result<LispValue> {
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
         let Ok(f) = var.expect_func() else { unreachable!() };
-        let (out, _) = apply(f, list, env)?;
+        let (out, _) = apply(f, list, env, true)?;
         Ok(out)
     } else {
         Ok(val)
     }
 }
 
-/*
-fn wrap_macro(mut f: Box<LispFunc>, env: &mut LispEnv) -> Result<LispValue> {
-    f.closure = Some(env.make_closure());
-    f.args.clear();
-    f.is_macro = false;
-    f.variadic = false;
-    f.body = expand_macros(f.body, env)?;
-    Ok(LispValue::Func(f))
-}
-*/
-
-fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, LispEnv)> {
-    let evaluator = if f.is_macro { expand_macros } else { eval };
+fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv, is_macro: bool) -> Result<(LispValue, LispEnv)> {
+    let evaluator = if is_macro { expand_macros } else { eval };
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let last_vals = vals.split_off(f.args.len() - 1);
@@ -70,7 +61,7 @@ fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(Li
         let arg_names = f.args[0..variadic_idx].iter().copied();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
         params.push((f.args[variadic_idx], LispValue::list_from(last_vals)));
-        let fn_env = if f.is_macro {
+        let fn_env = if is_macro {
             f.closure.make_macro_env(&params, env)
         } else {
             f.closure.make_env(&params)
@@ -81,7 +72,7 @@ fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(Li
     } else {
         let vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
         let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), vals).collect();
-        let fn_env = if f.is_macro {
+        let fn_env = if is_macro {
             f.closure.make_macro_env(&params, env)
         } else {
             f.closure.make_env(&params)
@@ -89,117 +80,6 @@ fn apply(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(Li
         Ok((f.body.clone(), fn_env))
     }
 }
-
-/*
-pub fn eval(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    // TODO: current `queued` system is considered UB by Stacked Borrows
-    // wrap in Cell or something?
-    let mut queued = vec![(Some(value), None, env)];
-    let mut envs_to_drop = vec![];
-    while let Some((head, mut tail, mut env)) = queued.pop() {
-        let Some(head) = head else { unreachable!() };
-        let mut head = expand_macros(head, env)?;
-        let new_head = loop {
-            match head {
-                LispValue::Symbol(s) => head = lookup_variable(s, env)?,
-                LispValue::VariadicSymbol(s) => head = lookup_variable(s, env)?,
-                LispValue::List(mut l) => {
-                    if tail.is_some() {
-                        if !l.is_empty() {
-                            queued.push((None, tail.take(), unsafe {
-                                NonNull::from(&*env).as_mut()
-                            }));
-                            head = LispValue::List(l);
-                        } else {
-                            break Err(LispError::InvalidDataType("function", "list"));
-                        }
-                    } else if let Some(inner_head) = l.pop_front() {
-                        head = inner_head;
-                        tail = Some(l);
-                    } else {
-                        break Ok(LispValue::List(l));
-                    }
-                },
-                LispValue::BuiltinFunc { f, name } => {
-                    if let Some(args) = tail.take() {
-                        match f(args, env) {
-                            LispBuiltinResult::Done(val) => {
-                                break Ok(val);
-                            },
-                            LispBuiltinResult::Continue(expr) => {
-                                head = expr;
-                            },
-                            LispBuiltinResult::ContinueIn(expr, new_env) => {
-                                head = expr;
-                                let boxed = Box::new(new_env);
-                                unsafe {
-                                    let ptr = Box::into_raw(boxed);
-                                    env = NonNull::new_unchecked(ptr).as_mut();
-                                    envs_to_drop.push(Box::from_raw(ptr));
-                                }
-                            },
-                            LispBuiltinResult::Error(err) => {
-                                break Err(err)
-                            },
-                        }
-                    } else {
-                        break Ok(LispValue::BuiltinFunc { f, name });
-                    }
-                },
-                LispValue::Func(f) => {
-                    if let Some(args) = tail.take() {
-                        let (new_head, new_env) = apply(f, args, env)?;
-                        queued.push((None, None, env));
-                        head = new_head;
-                        let boxed = Box::new(new_env);
-                        unsafe {
-                            let ptr = Box::into_raw(boxed);
-                            env = NonNull::new_unchecked(ptr).as_mut();
-                            envs_to_drop.push(Box::from_raw(ptr));
-                        }
-                    } else {
-                        break Ok(LispValue::Func(f));
-                    }
-                },
-                LispValue::Vector(l) => break if tail.is_some() {
-                    Err(LispError::InvalidDataType("function", "vector"))
-                } else {
-                    let l = l.into_iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
-                    Ok(LispValue::Vector(l))
-                },
-                LispValue::Map(m) => break if tail.is_some() {
-                    Err(LispError::InvalidDataType("function", "map"))
-                } else {
-                    let m = m.into_iter().map(|(key, val)| {
-                        Ok((key, eval(val, env)?))
-                    }).collect::<Result<Vec<(LispValue, LispValue)>>>()?.into();
-                    Ok(LispValue::Map(m))
-                },
-                x => break if tail.is_some() {
-                    Err(LispError::InvalidDataType("function", x.type_of()))
-                } else {
-                    Ok(x)
-                },
-            }
-        }?;
-        if let Some(last) = queued.last_mut() {
-            if last.0.is_none() {
-                last.0 = Some(new_head);
-            }
-        } else {
-            return Ok(new_head);
-        }
-    }
-    Ok(LispValue::Nil)
-}
-
-pub fn eval_top(value: LispValue, env: &mut LispEnv) -> Result<LispValue> {
-    match value {
-        LispValue::Symbol(s) => lookup_variable(s, env),
-        x => eval(x, env),
-    }
-}
-*/
 
 fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(match ast {
@@ -222,6 +102,40 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     })
 }
 
+fn inner_quasiquote(arg: LispValue, env: &mut LispEnv) -> Result<(LispValue, bool)> {
+    match arg {
+        LispValue::Object(o) => match o.deref() {
+            ObjectValue::List(l) => {
+                if l.is_empty() {
+                    return Ok((LispValue::Object(o.clone()), false));
+                }
+                let ObjectValue::List(mut l) = Arc::unwrap_or_clone(o) else { unreachable!() };
+                // established non-empty just prior
+                if l[0] == LispValue::Special(LispSpecialForm::Unquote) {
+                    expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
+                    Ok((eval(l.pop_back().unwrap(), env)?, false))
+                } else if l[0] == LispValue::Special(LispSpecialForm::SpliceUnquote) {
+                    expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
+                    Ok((eval(l.pop_back().unwrap(), env)?, true))
+                } else {
+                    let mut out = Vector::new();
+                    for val in l.into_iter() {
+                        let (new_val, inplace) = inner_quasiquote(val, env)?;
+                        if inplace {
+                            out.append(new_val.into_list()?);
+                        } else {
+                            out.push_back(new_val);
+                        }
+                    }
+                    Ok((LispValue::list_from(out), false))
+                }
+            },
+            _ => Ok((LispValue::Object(o.clone()), false)),
+        },
+        x => Ok((x, false)),
+    }
+}
+
 pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
     let mut envs_to_drop = vec![];
     loop {
@@ -239,31 +153,249 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             break Ok(LispValue::list_from(list));
         };
         match eval(head, env)? {
-            LispValue::Object(o) => match o.deref() {
-                ObjectValue::BuiltinFunc { f, .. } => {
-                    match f(list, env) {
-                        LispBuiltinResult::Done(val) => {
-                            break Ok(val);
-                        },
-                        LispBuiltinResult::Continue(expr) => {
-                            ast = expr;
-                        },
-                        LispBuiltinResult::ContinueIn(expr, new_env) => {
-                            ast = expr;
-                            let idx = envs_to_drop.len();
-                            envs_to_drop.push(new_env);
-                            env = unsafe {
-                                let ptr = envs_to_drop.as_mut_ptr();
-                                ptr.add(idx).as_mut().unwrap()
-                            };
-                        },
-                        LispBuiltinResult::Error(err) => {
-                            break Err(err);
-                        },
+            LispValue::Special(form) => match form {
+                LispSpecialForm::Def => {
+                    expect!(list.len() == 2, LispError::IncorrectArguments(2, list.len()));
+                    if let LispValue::Special(form) = &list[0] {
+                        // provide a more helpful error, since `def! quote x`
+                        // looks like it's definining a valid symbol
+                        break Err(LispError::CannotRedefineSpecialForm(*form));
+                    }
+                    let name = list[0].expect_symbol()?;
+                    let val = eval(list.pop_back().unwrap(), env)?;
+                    env.set(name, val.clone());
+                    break Ok(val);
+                },
+                LispSpecialForm::Defmacro => {
+                    expect!(list.len() == 2, LispError::IncorrectArguments(2, list.len()));
+                    if let LispValue::Special(form) = &list[0] {
+                        // provide a more helpful error, since `def! quote x`
+                        // looks like it's definining a valid symbol
+                        break Err(LispError::CannotRedefineSpecialForm(*form));
+                    }
+                    let name = list[0].expect_symbol()?;
+                    let val = eval(list.pop_back().unwrap(), env)?;
+                    let val = match val {
+                        LispValue::Object(o) => match o.deref() {
+                            ObjectValue::Func(f) => {
+                                LispValue::Object(Arc::new(
+                                    ObjectValue::Macro(f.clone())
+                                ))
+                            },
+                            x => break Err(LispError::InvalidDataType("function", x.type_of())),
+                        }
+                        x => break Err(LispError::InvalidDataType("function", x.type_of())),
+                    };
+                    env.set(name, val.clone());
+                    break Ok(val);
+                },
+                LispSpecialForm::Let => {
+                    expect!(list.len() == 2, LispError::IncorrectArguments(2, list.len()));
+                    let mut new_env = env.new_nested();
+                    let decls = list.pop_front().unwrap().into_list()?;
+                    let mut decl_iter = decls.into_iter();
+                    while let Some(name) = decl_iter.next() {
+                        let name = name.expect_symbol()?;
+                        let Some(val_expr) = decl_iter.next() else {
+                            return Err(LispError::MissingBinding);
+                        };
+                        let val = eval(val_expr, &mut new_env)?;
+                        new_env.set(name, val);
+                    }
+                    ast = list.pop_front().unwrap();
+                    let idx = envs_to_drop.len();
+                    envs_to_drop.push(new_env);
+                    env = unsafe {
+                        let ptr = envs_to_drop.as_mut_ptr();
+                        ptr.add(idx).as_mut().unwrap()
+                    };
+                },
+                LispSpecialForm::Quote => {
+                    if let Some(quoted) = list.pop_front() {
+                        break Ok(quoted);
+                    } else {
+                        break Err(LispError::IncorrectArguments(1, 0));
                     }
                 },
+                LispSpecialForm::Quasiquote => {
+                    const UNQUOTE: LispValue = LispValue::Special(
+                        LispSpecialForm::Unquote
+                    );
+                    const SPLICE_UNQUOTE: LispValue = LispValue::Special(
+                        LispSpecialForm::SpliceUnquote
+                    );
+                    let Some(front) = list.pop_front() else {
+                        break Err(LispError::IncorrectArguments(1, 0));
+                    };
+                    match front {
+                        LispValue::Object(o) => match o.deref() {
+                            ObjectValue::List(list) => {
+                                if list.is_empty() {
+                                    break Ok(LispValue::Object(o.clone()));
+                                }
+                                let ObjectValue::List(mut list) = Arc::unwrap_or_clone(o) else {
+                                    unreachable!();
+                                };
+                                if list[0] == UNQUOTE || list[0] == SPLICE_UNQUOTE {
+                                    expect!(list.len() == 2, LispError::IncorrectArguments(1, list.len() - 1));
+                                    ast = list.pop_back().unwrap();
+                                } else {
+                                    let mut out = Vector::new();
+                                    for val in list {
+                                        let (new_val, inplace) = inner_quasiquote(val, env)?;
+                                        if inplace {
+                                            out.append(new_val.into_list()?);
+                                        } else {
+                                            out.push_back(new_val);
+                                        }
+                                    }
+                                    break Ok(LispValue::list_from(out));
+                                }
+                            },
+                            _ => break Ok(LispValue::Object(o.clone())),
+                        },
+                        x => break Ok(x),
+                    }
+                },
+                // `unquote` and `splice-unquote` are handled internally in
+                // `quasiquote`, so usage here must be outside quasiquote (which
+                // is an error)
+                LispSpecialForm::Unquote | LispSpecialForm::SpliceUnquote => {
+                    break Err(LispError::OnlyInQuasiquote);
+                },
+                LispSpecialForm::Macroexpand => {
+                    if let Some(quoted) = list.pop_front() {
+                        break expand_macros(quoted, env);
+                    } else {
+                        break Err(LispError::IncorrectArguments(1, 0));
+                    }
+                },
+                LispSpecialForm::Try => {
+                    expect!(list.len() == 2, LispError::IncorrectArguments(2, list.len()));
+                    let catch = list.pop_back().unwrap();
+                    if let Ok(mut catch) = catch.into_list() {
+                        expect!(catch.len() == 3, LispError::IncorrectArguments(2, catch.len() - 1));
+                        let catch_sym = catch.pop_front().unwrap();
+                        if catch_sym != LispValue::Special(LispSpecialForm::Catch) {
+                            break Err(LispError::TryNoCatch);
+                        }
+                        let err_name = catch.pop_front().unwrap().expect_symbol()?;
+                        let mut caught_env = env.new_nested();
+                        match eval(list.pop_front().unwrap(), env) {
+                            Ok(x) => break Ok(x),
+                            Err(err) => {
+                                if let LispError::UncaughtException(exc) = err {
+                                    caught_env.set(err_name, exc);
+                                } else {
+                                    let s = err.to_string();
+                                    caught_env.set(err_name, s.into());
+                                }
+                                ast = catch.pop_front().unwrap();
+                                let idx = envs_to_drop.len();
+                                envs_to_drop.push(caught_env);
+                                env = unsafe {
+                                    let ptr = envs_to_drop.as_mut_ptr();
+                                    ptr.add(idx).as_mut().unwrap()
+                                };
+                            },
+                        }
+                    } else {
+                        break Err(LispError::TryNoCatch);
+                    }
+                },
+                // `catch*` is handled internally in `try*`, so being used here
+                // automatically means it's outside a try block
+                LispSpecialForm::Catch => {
+                    break Err(LispError::OnlyInTry);
+                },
+                LispSpecialForm::Do => {
+                    let Some(tail) = list.pop_back() else {
+                        break Err(LispError::IncorrectArguments(1, 0));
+                    };
+                    for val in list.into_iter() {
+                        eval(val, env)?;
+                    }
+                    ast = tail;
+                },
+                LispSpecialForm::If => {
+                    expect!(list.len() > 1 && list.len() < 4, LispError::IncorrectArguments(2, list.len()));
+                    let pred = list.pop_front().unwrap();
+                    let pred = eval(pred, env)?.truthiness();
+                    if pred {
+                        ast = list.pop_front().unwrap();
+                    } else if list.len() > 1 {
+                        ast = list.pop_back().unwrap();
+                    } else {
+                        break Ok(LispValue::Nil);
+                    }
+                },
+                LispSpecialForm::Fn => {
+                    expect!(list.len() == 2, LispError::IncorrectArguments(2, list.len()));
+                    let args_list = list.pop_front().unwrap().into_list()?;
+                    let variadic = args_list.last().map(|last| {
+                        matches!(last, LispValue::VariadicSymbol(_))
+                    }).unwrap_or(false);
+                    let args = args_list.into_iter()
+                        .map(|x| x.expect_symbol())
+                        .collect::<Result<Vec<LispSymbol>>>()?;
+                    let body = list.pop_front().unwrap();
+                    let closure = env.make_closure();
+                    let inner = ObjectValue::Func(LispFunc {
+                        args,
+                        body,
+                        closure,
+                        variadic,
+                    });
+                    break Ok(LispValue::Object(Arc::new(inner)));
+                },
+                LispSpecialForm::Deref => {
+                    if let Some(atom) = list.pop_front() {
+                        let atom = eval(atom, env)?.into_atom()?;
+                        let out = atom.read().unwrap().clone();
+                        break Ok(out)
+                    } else {
+                        break Err(LispError::IncorrectArguments(1, 0));
+                    }
+                },
+                LispSpecialForm::Eval => {
+                    let Some(expr) = list.pop_front() else {
+                        break Err(LispError::IncorrectArguments(1, 0));
+                    };
+                    ast = eval(expr, env)?;
+                    let global = env.global();
+                    let idx = envs_to_drop.len();
+                    envs_to_drop.push(global);
+                    env = unsafe {
+                        let ptr = envs_to_drop.as_mut_ptr();
+                        ptr.add(idx).as_mut().unwrap()
+                    };
+                },
+                LispSpecialForm::Apply => {
+                    expect!(list.len() > 1, LispError::IncorrectArguments(2, list.len()));
+                    let f = eval(list.pop_front().unwrap(), env)?;
+                    let args = eval(list.pop_back().unwrap(), env)?.into_list()?;
+                    let mut full_list = vector![f];
+                    full_list.append(list);
+                    full_list.append(args);
+                    ast = LispValue::list_from(full_list);
+                },
+                LispSpecialForm::Cond => {
+                    expect!(list.len() & 1 == 0, LispError::OddCondArguments);
+                    // return `nil` if none of the conditions ends up true
+                    ast = LispValue::Nil;
+                    while let Some(pred) = list.pop_front() {
+                        let then = list.pop_front().unwrap();
+                        if eval(pred, env)?.truthiness() {
+                            ast = then;
+                            break;
+                        }
+                    }
+                },
+            },
+            LispValue::Object(o) => match o.deref() {
+                ObjectValue::BuiltinFunc { f, .. } => break f(list, env),
                 ObjectValue::Func(f) => {
-                    let (new_ast, new_env) = apply(f, list, env)?;
+                    let (new_ast, new_env) = apply(f, list, env, false)?;
                     ast = new_ast;
                     let idx = envs_to_drop.len();
                     envs_to_drop.push(new_env);

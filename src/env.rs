@@ -111,18 +111,18 @@ impl LispEnv {
     pub(crate) fn interner_mut() -> impl DerefMut<Target = StringInterner> {
         INTERNER.write().unwrap()
     }
-    pub fn symbol_for(s: &str) -> LispSymbol {
+    pub(crate) fn symbol_for(s: &str) -> LispSymbol {
         let mut interner = INTERNER.write().unwrap();
         interner.get_or_intern(s)
     }
-    pub fn symbol_for_static(s: &'static str) -> LispSymbol {
+    pub(crate) fn symbol_for_static(s: &'static str) -> LispSymbol {
         let mut interner = INTERNER.write().unwrap();
         interner.get_or_intern_static(s)
     }
     // TODO: I think this is actually an unsound transmute,
     // and I never did like having a single static `StringInterner`
     // not a member of any type
-    pub fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
+    pub(crate) fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
         let interner = INTERNER.read().unwrap();
         unsafe { std::mem::transmute(interner.resolve(sym)) }
     }

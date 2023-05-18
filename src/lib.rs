@@ -1,4 +1,3 @@
-#![feature(try_trait_v2)]
 #![feature(arc_unwrap_or_clone)]
 
 extern crate cfg_if;
@@ -9,6 +8,7 @@ extern crate string_interner;
 extern crate ordered_float;
 extern crate nom;
 extern crate by_address;
+extern crate phf;
 
 pub mod util;
 pub use crate::util::{LispError, LispValue, Result};

@@ -1,11 +1,12 @@
 use std::fmt;
 use std::sync::{Arc, RwLock};
-use std::ops::{ControlFlow, Deref};
+use std::ops::Deref;
 use std::convert::Infallible;
 use thiserror::Error;
 use ordered_float::OrderedFloat;
 use im::{HashMap, Vector};
 use by_address::ByAddress;
+use phf::phf_map;
 use crate::env::{LispEnv, LispClosure, LispSymbol};
 
 cfg_if::cfg_if! {
@@ -26,6 +27,84 @@ macro_rules! expect {
     }
 }
 
+// criteria for becoming a special form are somewhat nebulous
+// `deref`, for example, is only a special form because of the `@atom` syntax,
+//    so making it a special form prevents changing what `@` does syntatically
+// `catch*`, `unquote`, and `splice-unquote` are special forms because they're
+//    handled by separate functions that expect a specific name (and handle the
+//    behavior internally), so redefining the functions won't work as expected
+//    (redefined, they would function differently only outside their intended
+//    scope; redefining `catch*` won't change anything within a `try*`, which is
+//    confusing)
+// `eval`, `apply`, `do`, `cond`, and `if` are here mainly for TCO benefits
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LispSpecialForm {
+    Def,
+    Defmacro,
+    Let,
+    Quote,
+    Quasiquote,
+    Unquote,
+    SpliceUnquote,
+    Macroexpand,
+    Try,
+    Catch,
+    Do,
+    If,
+    Fn,
+    Deref,
+    Eval,
+    Apply,
+    Cond,
+}
+
+impl fmt::Display for LispSpecialForm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Def => write!(f, "def!"),
+            Self::Defmacro => write!(f, "defmacro!"),
+            Self::Let => write!(f, "let*"),
+            Self::Quote => write!(f, "quote"),
+            Self::Quasiquote => write!(f, "quasiquote"),
+            Self::Unquote => write!(f, "unquote"),
+            Self::SpliceUnquote => write!(f, "splice-unquote"),
+            Self::Macroexpand => write!(f, "macroexpand"),
+            Self::Try => write!(f, "try*"),
+            Self::Catch => write!(f, "catch*"),
+            Self::Do => write!(f, "do"),
+            Self::If => write!(f, "if"),
+            Self::Fn => write!(f, "fn*"),
+            Self::Deref => write!(f, "deref"),
+            Self::Eval => write!(f, "eval"),
+            Self::Apply => write!(f, "apply"),
+            Self::Cond => write!(f, "cond"),
+        }
+    }
+}
+
+static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
+    "def!" => LispValue::Special(LispSpecialForm::Def),
+    "defmacro!" => LispValue::Special(LispSpecialForm::Defmacro),
+    "let*" => LispValue::Special(LispSpecialForm::Let),
+    "quote" => LispValue::Special(LispSpecialForm::Quote),
+    "quasiquote" => LispValue::Special(LispSpecialForm::Quasiquote),
+    "unquote" => LispValue::Special(LispSpecialForm::Unquote),
+    "splice-unquote" => LispValue::Special(LispSpecialForm::SpliceUnquote),
+    "macroexpand" => LispValue::Special(LispSpecialForm::Macroexpand),
+    "try*" => LispValue::Special(LispSpecialForm::Try),
+    "catch*" => LispValue::Special(LispSpecialForm::Catch),
+    "do" => LispValue::Special(LispSpecialForm::Do),
+    "if" => LispValue::Special(LispSpecialForm::If),
+    "fn*" => LispValue::Special(LispSpecialForm::Fn),
+    "deref" => LispValue::Special(LispSpecialForm::Deref),
+    "eval" => LispValue::Special(LispSpecialForm::Eval),
+    "apply" => LispValue::Special(LispSpecialForm::Apply),
+    "cond" => LispValue::Special(LispSpecialForm::Cond),
+    "nil" => LispValue::Nil,
+    "true" => LispValue::Bool(true),
+    "false" => LispValue::Bool(false),
+};
+
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -34,44 +113,9 @@ pub struct LispFunc {
     pub(crate) body: LispValue,
     pub(crate) closure: LispClosure,
     pub(crate) variadic: bool,
-    pub(crate) is_macro: bool,
 }
 
-pub enum LispBuiltinResult {
-    Done(LispValue),
-    Continue(LispValue),
-    ContinueIn(LispValue, LispEnv),
-    Error(LispError),
-}
-impl From<Result<LispValue>> for LispBuiltinResult {
-    fn from(item: Result<LispValue>) -> Self {
-        match item {
-            Ok(x) => Self::Done(x),
-            Err(x) => Self::Error(x),
-        }
-    }
-}
-impl<E: Into<LispError>> std::ops::FromResidual<E> for LispBuiltinResult {
-    fn from_residual(residual: E) -> Self {
-        Self::Error(residual.into())
-    }
-}
-impl std::ops::Try for LispBuiltinResult {
-    type Output = LispBuiltinResult;
-    type Residual = LispError;
-
-    fn from_output(output: Self::Output) -> Self {
-        output
-    }
-
-    fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
-        match self {
-            Self::Error(e) => ControlFlow::Break(e),
-            x => ControlFlow::Continue(x),
-        }
-    }
-}
-pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> LispBuiltinResult;
+pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
@@ -109,6 +153,7 @@ pub enum ObjectValue {
         f: LispBuiltinFunc,
     },
     Func(LispFunc),
+    Macro(LispFunc),
     Map(HashMap<LispValue, LispValue>),
     Vector(Vec<LispValue>),
     String(String),
@@ -121,6 +166,7 @@ impl ObjectValue {
             Self::List(_) => "list",
             Self::BuiltinFunc { .. } => "function",
             Self::Func(_) => "function",
+            Self::Macro(_) => "function",
             Self::Map(_) => "map",
             Self::Vector(_) => "vector",
             Self::String(_) => "string",
@@ -155,7 +201,13 @@ impl ObjectValue {
             Self::BuiltinFunc { name, .. } => name.to_string(),
             Self::Func(f) => format!(
                 "({} ({}) {})",
-                if f.is_macro { "#<macro-fn*>" } else { "fn*" },
+                "fn*",
+                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
+                f.body.inspect()
+            ),
+            Self::Macro(f) => format!(
+                "({} ({}) {})",
+                "#<macro-fn*>",
                 f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
                 f.body.inspect()
             ),
@@ -184,6 +236,7 @@ impl fmt::Display for ObjectValue {
             },
             Self::BuiltinFunc { .. } => write!(f, "#<native function>"),
             Self::Func(_) => write!(f, "#<function>"),
+            Self::Macro(_) => write!(f, "#<macro>"),
             Self::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "[{}]", xs.join(" "))
@@ -209,6 +262,7 @@ pub enum LispValue {
     Nil,
     Atom(ByAddress<Arc<RwLock<LispValue>>>),
     Object(Arc<ObjectValue>),
+    Special(LispSpecialForm),
 
     #[cfg(feature = "async")]
     Future(LispAsyncValue),
@@ -216,10 +270,18 @@ pub enum LispValue {
 
 impl LispValue {
     pub fn symbol_for(s: &str) -> Self {
-        Self::Symbol(LispEnv::symbol_for(s))
+        if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
+            val.clone()
+        } else {
+            Self::Symbol(LispEnv::symbol_for(s))
+        }
     }
     pub fn symbol_for_static(s: &'static str) -> Self {
-        Self::Symbol(LispEnv::symbol_for_static(s))
+        if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
+            val.clone()
+        } else {
+            Self::Symbol(LispEnv::symbol_for_static(s))
+        }
     }
 
     pub fn string_for(s: String) -> Self {
@@ -243,6 +305,7 @@ impl LispValue {
             Self::Nil => "nil",
             Self::Atom(_) => "atom",
             Self::Object(obj) => obj.type_of(),
+            Self::Special(_) => "function",
 
             #[cfg(feature = "async")]
             Self::Future(_) => "future",
@@ -253,6 +316,7 @@ impl LispValue {
         match self {
             Self::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
             Self::Object(o) => o.inspect(),
+            Self::Special(s) => format!("{}", s),
             _ => self.inspect_inner(),
         }
     }
@@ -265,6 +329,7 @@ impl LispValue {
             Self::Nil => "nil".to_owned(),
             Self::Atom(x) => format!("(atom {})", x.read().unwrap().inspect()),
             Self::Object(o) => o.inspect_inner(),
+            Self::Special(s) => format!("{}", s),
 
             #[cfg(feature = "async")]
             Self::Future(_) => format!("(promise ...)"),
@@ -300,6 +365,7 @@ impl LispValue {
         match self {
             Self::Object(o) => match o.deref() {
                 ObjectValue::Func(f) => Ok(f),
+                ObjectValue::Macro(f) => Ok(f),
                 _ => Err(LispError::InvalidDataType("function", o.type_of())),
             },
             _ => Err(LispError::InvalidDataType("function", self.type_of())),
@@ -447,6 +513,7 @@ impl fmt::Display for LispValue {
             Self::Nil => write!(f, "nil"),
             Self::Atom(_) => write!(f, "#<atom>"),
             Self::Object(o) => o.fmt(f),
+            Self::Special(s) => s.fmt(f),
             #[cfg(feature = "async")]
             Self::Future(_) => write!(f, "#<promise>"),
         }
@@ -483,6 +550,8 @@ pub enum LispError {
     NoMeta,
     #[error("odd number of arguments passed to cond")]
     OddCondArguments,
+    #[error("cannot redefine special form `{0}`")]
+    CannotRedefineSpecialForm(LispSpecialForm),
 
     #[cfg(feature = "io-stdlib")]
     #[error("error calling into native function: {0}")]

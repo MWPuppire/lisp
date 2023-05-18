@@ -14,6 +14,7 @@ use nom::{
     character::complete::{multispace1, line_ending, char, none_of, one_of},
 };
 use crate::{LispValue, LispError, Result, LispEnv};
+use crate::util::LispSpecialForm;
 
 // numbers can't start an identifier, but they're valid in one
 const IDEN_INVALID_CHARS_START: &str = "~@^{}()[]'\"&`\\,;:0123456789 \t\r\n\u{0}";
@@ -39,6 +40,7 @@ enum LispTokenType {
     Nil,
     True,
     False,
+    Special(LispSpecialForm),
 
     Number(f64),
     String(String),
@@ -54,6 +56,11 @@ macro_rules! reserved_word_token {
             // if the input ends on a reserved word, it still matches
             not(peek(none_of(IDEN_INVALID_CHARS))),
         ))
+    }
+}
+macro_rules! special_form {
+    ($name:ident) => {
+        LispTokenType::Special(LispSpecialForm::$name)
     }
 }
 
@@ -277,9 +284,28 @@ fn parse_lisp(input: &str) -> IResult<&str, LispTokenType> {
             value(LispTokenType::Ampersand, char('&')),
             value(LispTokenType::AtSign, char('@')),
             value(LispTokenType::Backtick, char('`')),
-            reserved_word_token!(LispTokenType::Nil, "nil"),
-            reserved_word_token!(LispTokenType::True, "true"),
-            reserved_word_token!(LispTokenType::False, "false"),
+            alt((
+                reserved_word_token!(LispTokenType::Nil, "nil"),
+                reserved_word_token!(LispTokenType::True, "true"),
+                reserved_word_token!(LispTokenType::False, "false"),
+                reserved_word_token!(special_form!(Def), "def!"),
+                reserved_word_token!(special_form!(Defmacro), "defmacro!"),
+                reserved_word_token!(special_form!(Let), "let*"),
+                reserved_word_token!(special_form!(Quote), "quote"),
+                reserved_word_token!(special_form!(Quasiquote), "quasiquote"),
+                reserved_word_token!(special_form!(Unquote), "unquote"),
+                reserved_word_token!(special_form!(SpliceUnquote), "splice-unquote"),
+                reserved_word_token!(special_form!(Macroexpand), "macroexpand"),
+                reserved_word_token!(special_form!(Try), "try*"),
+                reserved_word_token!(special_form!(Catch), "catch*"),
+                reserved_word_token!(special_form!(Do), "do"),
+                reserved_word_token!(special_form!(If), "if"),
+                reserved_word_token!(special_form!(Fn), "fn*"),
+                reserved_word_token!(special_form!(Deref), "deref"),
+                reserved_word_token!(special_form!(Eval), "eval"),
+                reserved_word_token!(special_form!(Apply), "apply"),
+                reserved_word_token!(special_form!(Cond), "cond"),
+            )),
             identifier,
             keyword,
         )),
@@ -299,13 +325,13 @@ fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
 }
 
 macro_rules! token_prefix {
-    ($prefix:expr, $name:expr, $rest:expr, $interner:expr $(,)?) => {
+    ($prefix:expr, $name:ident, $rest:expr, $interner:expr $(,)?) => {
         some_or_err(
             LispParser::read_form($rest, $interner),
             LispError::MissingToken($prefix),
         ).map(|inner| {
             LispValue::list_from(vector![
-                LispValue::Symbol($interner.get_or_intern_static($name)),
+                LispValue::Special(LispSpecialForm::$name),
                 inner,
             ])
         })
@@ -414,11 +440,11 @@ impl LispParser {
             LispTokenType::RBracket    => Err(LispError::SyntaxError(row, col)),
             LispTokenType::LCurly      => Self::read_map(tokens, strs),
             LispTokenType::RCurly      => Err(LispError::SyntaxError(row, col)),
-            LispTokenType::AtSign      => token_prefix!("@", "deref", tokens, strs),
-            LispTokenType::Apostrophe  => token_prefix!("'", "quote", tokens, strs),
-            LispTokenType::Backtick    => token_prefix!("`", "quasiquote", tokens, strs),
-            LispTokenType::Tilde       => token_prefix!("~", "unquote", tokens, strs),
-            LispTokenType::TildeAtSign => token_prefix!("~@", "splice-unquote", tokens, strs),
+            LispTokenType::AtSign      => token_prefix!("@", Deref, tokens, strs),
+            LispTokenType::Apostrophe  => token_prefix!("'", Quote, tokens, strs),
+            LispTokenType::Backtick    => token_prefix!("`", Quasiquote, tokens, strs),
+            LispTokenType::Tilde       => token_prefix!("~", Unquote, tokens, strs),
+            LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens, strs),
             LispTokenType::Ampersand   => {
                 match some_or_err(
                     Self::read_form(tokens, strs),
@@ -503,22 +529,15 @@ impl LispParser {
         }
     }
     fn read_atom(token: LispTokenType, strs: &mut StringInterner) -> LispValue {
-        if let LispTokenType::Number(num) = token {
-            LispValue::Number(OrderedFloat(num))
-        } else if let LispTokenType::String(s) = token {
-            LispValue::string_for(s)
-        } else if token == LispTokenType::True {
-            LispValue::Bool(true)
-        } else if token == LispTokenType::False {
-            LispValue::Bool(false)
-        } else if token == LispTokenType::Nil {
-            LispValue::Nil
-        } else if let LispTokenType::Symbol(sym) = token {
-            LispValue::Symbol(strs.get_or_intern(&sym))
-        } else if let LispTokenType::Keyword(kw) = token {
-            LispValue::keyword_for(kw)
-        } else {
-            LispValue::Nil
+        match token {
+            LispTokenType::Number(num) => LispValue::Number(OrderedFloat(num)),
+            LispTokenType::String(s) => LispValue::string_for(s),
+            LispTokenType::Symbol(sym) => LispValue::Symbol(strs.get_or_intern(&sym)),
+            LispTokenType::Keyword(kw) => LispValue::keyword_for(kw),
+            LispTokenType::True => LispValue::Bool(true),
+            LispTokenType::False => LispValue::Bool(false),
+            LispTokenType::Special(form) => LispValue::Special(form),
+            _ => LispValue::Nil,
         }
     }
 }
