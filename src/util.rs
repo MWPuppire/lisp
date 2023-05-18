@@ -115,7 +115,7 @@ pub struct LispFunc {
     pub(crate) variadic: bool,
 }
 
-pub type LispBuiltinFunc = fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>;
+pub type LispBuiltinFunc = fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {

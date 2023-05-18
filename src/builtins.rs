@@ -52,11 +52,11 @@ macro_rules! eval_head {
     }
 }
 
-fn eval_list_to_numbers(args: Vector<LispValue>, env: &mut LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
+fn eval_list_to_numbers(args: Vector<LispValue>, env: &LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
     args.into_iter().map(|x| eval(x, env)?.expect_number()).collect()
 }
 
-fn lisp_plus(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(args, env)?;
     Ok(LispValue::Number(
@@ -64,7 +64,7 @@ fn lisp_plus(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     ))
 }
 
-fn lisp_minus(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_minus(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first = eval_head!(args, env)?.expect_number()?;
     let nums = eval_list_to_numbers(args, env)?;
@@ -73,7 +73,7 @@ fn lisp_minus(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     ))
 }
 
-fn lisp_times(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_times(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(args, env)?;
     Ok(LispValue::Number(
@@ -81,14 +81,14 @@ fn lisp_times(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     ))
 }
 
-fn lisp_divide(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let numerator = eval_head!(args, env)?.expect_number()?;
     let denominator = eval_head!(args, env)?.expect_number()?;
     Ok(LispValue::Number(numerator / denominator))
 }
 
-fn lisp_int_divide(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_int_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let numerator = eval_head!(args, env)?.expect_number()?;
     let denominator = eval_head!(args, env)?.expect_number()?;
@@ -97,7 +97,7 @@ fn lisp_int_divide(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Lis
     )))
 }
 
-fn lisp_equals(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_equals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let x = eval_head!(args, env)?.vector_to_list();
     let y = eval_head!(args, env)?.vector_to_list();
@@ -105,7 +105,7 @@ fn lisp_equals(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
 }
 
 #[cfg(feature = "io-stdlib")]
-fn lisp_prn(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_prn(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if let Some(last) = args.pop_back() {
         for val in args.into_iter() {
             let val = eval(val, env)?;
@@ -119,12 +119,12 @@ fn lisp_prn(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     Ok(LispValue::Nil)
 }
 
-fn lisp_list(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_list(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let vals = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vector<LispValue>>>()?;
     Ok(LispValue::list_from(vals))
 }
 
-fn lisp_listq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_listq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
     Ok(LispValue::Bool(match val {
@@ -133,7 +133,7 @@ fn lisp_listq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     }))
 }
 
-fn lisp_emptyq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
     if val.is_nil() {
@@ -144,7 +144,7 @@ fn lisp_emptyq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
     }
 }
 
-fn lisp_count(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_count(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
     if val.is_nil() {
@@ -155,53 +155,53 @@ fn lisp_count(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     }
 }
 
-fn lisp_lt(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_lt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let x = eval_head!(args, env)?.expect_number()?;
     let y = eval_head!(args, env)?.expect_number()?;
     Ok(LispValue::Bool(x < y))
 }
 
-fn lisp_lte(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let x = eval_head!(args, env)?.expect_number()?;
     let y = eval_head!(args, env)?.expect_number()?;
     Ok(LispValue::Bool(x <= y))
 }
 
-fn lisp_gt(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let x = eval_head!(args, env)?.expect_number()?;
     let y = eval_head!(args, env)?.expect_number()?;
     Ok(LispValue::Bool(x > y))
 }
 
-fn lisp_gte(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_gte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let x = eval_head!(args, env)?.expect_number()?;
     let y = eval_head!(args, env)?.expect_number()?;
     Ok(LispValue::Bool(x >= y))
 }
 
-fn lisp_not(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_not(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?.truthiness();
     Ok(LispValue::Bool(!x))
 }
 
-fn lisp_atom(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_atom(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?;
     Ok(LispValue::Atom(ByAddress(Arc::new(RwLock::new(x)))))
 }
 
-fn lisp_atomq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_atomq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
     Ok(LispValue::Bool(matches!(val, LispValue::Atom(_))))
 }
 
-fn lisp_reset(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let atom = eval_head!(args, env)?.into_atom()?;
     let val = eval_head!(args, env)?;
@@ -209,7 +209,7 @@ fn lisp_reset(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     Ok(val)
 }
 
-fn lisp_swap(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
     let atom = eval_head!(args, env)?.into_atom()?;
     let val = eval_head!(args, env)?;
@@ -225,7 +225,7 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
 }
 
 #[cfg(feature = "io-stdlib")]
-fn lisp_readline(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_readline(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if !args.is_empty() {
         let s_owner = eval_head!(args, env)?;
         let s = s_owner.expect_string()?;
@@ -243,7 +243,7 @@ fn lisp_readline(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispV
     }
 }
 
-fn lisp_read_string(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_read_string(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let code_value = eval_head!(args, env)?;
     let code_expr = code_value.expect_string()?;
@@ -255,7 +255,7 @@ fn lisp_read_string(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Li
     }
 }
 
-fn lisp_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let mut buffer = String::new();
     for arg in args.into_iter() {
         let x = eval(arg, env)?;
@@ -265,7 +265,7 @@ fn lisp_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
 }
 
 #[cfg(feature = "io-stdlib")]
-fn lisp_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let file_value = eval_head!(args, env)?;
     let file_name = file_value.expect_string()?;
@@ -274,7 +274,7 @@ fn lisp_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
 }
 
 #[cfg(feature = "io-stdlib")]
-fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let file_value = eval_head!(args, env)?;
     let file_name = file_value.expect_string()?;
@@ -289,13 +289,13 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Lisp
     Ok(LispValue::Nil)
 }
 
-fn lisp_typeof(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_typeof(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?;
     Ok(LispValue::string_for(x.type_of().to_owned()))
 }
 
-fn lisp_cons(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let cons = eval_head!(args, env)?;
     let mut list = eval_head!(args, env)?.into_list()?;
@@ -303,7 +303,7 @@ fn lisp_cons(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     Ok(LispValue::list_from(list))
 }
 
-fn lisp_concat(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_concat(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let mut out = Vector::new();
     for arg in args.into_iter() {
         let arg = eval(arg, env)?;
@@ -313,7 +313,7 @@ fn lisp_concat(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> 
     Ok(LispValue::list_from(out))
 }
 
-fn lisp_nth(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let mut list = eval_head!(args, env)?.into_list()?;
     let idx = eval_head!(args, env)?.expect_number()?.into_inner() as usize;
@@ -321,7 +321,7 @@ fn lisp_nth(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     Ok(list.remove(idx))
 }
 
-fn lisp_first(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     if arg.is_nil() {
@@ -335,7 +335,7 @@ fn lisp_first(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     }
 }
 
-fn lisp_rest(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_rest(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     if arg.is_nil() {
@@ -346,7 +346,7 @@ fn lisp_rest(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     Ok(LispValue::list_from(list))
 }
 
-fn lisp_macroq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_macroq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -355,55 +355,55 @@ fn lisp_macroq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
     }))
 }
 
-fn lisp_inspect(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_inspect(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
     Ok(LispValue::string_for(val.inspect()))
 }
 
-fn lisp_throw(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_throw(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Err(LispError::UncaughtException(arg))
 }
 
-fn lisp_nilq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_nilq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(arg.is_nil()))
 }
 
-fn lisp_trueq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_trueq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(matches!(arg, LispValue::Bool(true))))
 }
 
-fn lisp_falseq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_falseq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(matches!(arg, LispValue::Bool(false))))
 }
 
-fn lisp_symbolq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_symbolq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(matches!(arg, LispValue::Symbol(_))))
 }
 
-fn lisp_symbol(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_symbol(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let s_owner = eval_head!(args, env)?;
     let s = s_owner.expect_string()?;
     Ok(LispValue::symbol_for(s))
 }
 
-fn lisp_vector(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_vector(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let vals: Vec<LispValue> = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
     Ok(LispValue::vector_from(vals))
 }
 
-fn lisp_vectorq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_vectorq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -412,7 +412,7 @@ fn lisp_vectorq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     }))
 }
 
-fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_keyword(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(match arg {
@@ -435,7 +435,7 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     }?)
 }
 
-fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_keywordq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -444,7 +444,7 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispV
     }))
 }
 
-fn lisp_hashmap(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_hashmap(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() & 1 == 0, LispError::MissingBinding);
     let mut pairs = vec![];
     let mut arg_iter = args.into_iter();
@@ -457,7 +457,7 @@ fn lisp_hashmap(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     Ok(LispValue::map_from(pairs))
 }
 
-fn lisp_mapq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_mapq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -466,7 +466,7 @@ fn lisp_mapq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     }))
 }
 
-fn lisp_sequentialq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_sequentialq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -475,7 +475,7 @@ fn lisp_sequentialq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Li
     }))
 }
 
-fn lisp_assoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_assoc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() & 1 == 1, LispError::MissingBinding);
     let mut map = eval_head!(args, env)?.into_hashmap()?;
     let mut arg_iter = args.into_iter();
@@ -488,7 +488,7 @@ fn lisp_assoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     Ok(LispValue::map_from(map))
 }
 
-fn lisp_dissoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_dissoc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let base_map = eval_head!(args, env)?.into_hashmap()?;
     let keys = args.into_iter().map(|x| {
@@ -497,7 +497,7 @@ fn lisp_dissoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
     Ok(LispValue::map_from(base_map.difference(keys.into())))
 }
 
-fn lisp_get(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_get(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let map = eval_head!(args, env)?;
     let key = eval_head!(args, env)?;
@@ -513,28 +513,28 @@ fn lisp_get(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     }
 }
 
-fn lisp_containsq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_containsq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let map = eval_head!(args, env)?.into_hashmap()?;
     let key = eval_head!(args, env)?;
     Ok(LispValue::Bool(map.contains_key(&key)))
 }
 
-fn lisp_keys(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_keys(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let map = eval_head!(args, env)?.into_hashmap()?;
     let keys = map.keys().cloned();
     Ok(LispValue::list_from(keys))
 }
 
-fn lisp_vals(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_vals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let map = eval_head!(args, env)?.into_hashmap()?;
     let vals = map.values().cloned();
     Ok(LispValue::list_from(vals))
 }
 
-fn lisp_map(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let f = eval_head!(args, env)?;
     let list = eval_head!(args, env)?.into_list()?;
@@ -545,7 +545,7 @@ fn lisp_map(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     Ok(LispValue::list_from(out))
 }
 
-fn lisp_pr_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_pr_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let full_str = args.into_iter().map(|x| {
         Ok(eval(x, env)?.inspect())
     }).collect::<Result<Vec<String>>>()?;
@@ -553,7 +553,7 @@ fn lisp_pr_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> 
 }
 
 #[cfg(feature = "io-stdlib")]
-fn lisp_println(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_println(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if let Some(last) = args.pop_back() {
         for val in args.into_iter() {
             let val = eval(val, env)?;
@@ -566,7 +566,7 @@ fn lisp_println(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     Ok(LispValue::Nil)
 }
 
-fn lisp_fnq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_fnq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
@@ -575,7 +575,7 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     }))
 }
 
-fn lisp_stringq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_stringq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(if let Ok(_) = arg.expect_string() {
@@ -585,13 +585,13 @@ fn lisp_stringq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     })
 }
 
-fn lisp_numberq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_numberq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(matches!(arg, LispValue::Number(_))))
 }
 
-fn lisp_vec(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_vec(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     match arg {
@@ -614,7 +614,7 @@ fn lisp_vec(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
-        fn lisp_time_ms(_args: Vector<LispValue>, _env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_time_ms(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue> {
             Ok(LispValue::Number(OrderedFloat(
                 match SystemTime::now().duration_since(UNIX_EPOCH) {
                     Ok(d) => d.as_secs_f64() * 1000.0,
@@ -625,7 +625,7 @@ cfg_if::cfg_if! {
     }
 }
 
-fn lisp_seq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
     match arg {
@@ -652,7 +652,7 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     }
 }
 
-fn lisp_conj(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first = eval_head!(args, env)?;
     let args = args.into_iter().map(|x| eval(x, env));
@@ -686,45 +686,45 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     }
 }
 
-fn lisp_meta(_args: Vector<LispValue>, _env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_meta(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue> {
     Err(LispError::NoMeta)
 }
 
-fn lisp_with_meta(_args: Vector<LispValue>, _env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_with_meta(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue> {
     Err(LispError::NoMeta)
 }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
-        fn lisp_promise(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_promise(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
             let expr = pop_head!(args);
-            let mut env = env.clone();
-            let fut = future::lazy(move |_| eval(expr, &mut env)).boxed();
+            let env = env.clone();
+            let fut = future::lazy(move |_| eval(expr, &env)).boxed();
             Ok(fut.into())
         }
 
-        fn lisp_resolve(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_resolve(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
             let result = eval_head!(args, env)?;
             let fut = future::ready(Ok(result)).boxed();
             Ok(fut.into())
         }
 
-        fn lisp_reject(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_reject(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
             let result = eval_head!(args, env)?;
             let fut = future::ready(Err(LispError::UncaughtException(result))).boxed();
             Ok(fut.into())
         }
 
-        fn lisp_await(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_await(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
             let fut = eval_head!(args, env)?.into_future()?;
             futures::executor::block_on(fut).into()
         }
 
-        fn lisp_join(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+        fn lisp_join(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
             let futs = args.into_iter()
                 .map(|x| eval(x, env)?.into_future())
@@ -738,11 +738,11 @@ cfg_if::cfg_if! {
 }
 
 #[cfg(feature = "async-io")]
-fn lisp_readline_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    let mut env = env.clone();
+fn lisp_readline_async(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    let env = env.clone();
     Ok(async move {
         if !args.is_empty() {
-            let s_owner = eval_head!(args, &mut env)?;
+            let s_owner = eval_head!(args, &env)?;
             let s = s_owner.expect_string()?;
             print!("{}", s);
             async_std::io::stdout().flush().await?;
@@ -760,11 +760,11 @@ fn lisp_readline_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result
 }
 
 #[cfg(feature = "async-io")]
-fn lisp_slurp_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+fn lisp_slurp_async(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let mut env = env.clone();
+    let env = env.clone();
     Ok(async move {
-        let file_value = eval_head!(args, &mut env)?;
+        let file_value = eval_head!(args, &env)?;
         let file_name = file_value.expect_string()?;
         let contents = async_std::fs::read_to_string(file_name).await?;
         Ok(LispValue::string_for(contents))

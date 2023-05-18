@@ -23,10 +23,7 @@ fn macros() {
     assert_eq!(eval!("(let* (a 123) (identity a))", &mut env), 123.0.into());
 }
 
-// always blows the stack for some reason, so `ignore`
-// TODO figure out why
 #[test]
-#[ignore]
 fn macroexpand() {
     let mut env = basic_macros();
     assert_eq!(eval!("(macroexpand (one))", &mut env), 1.0.into());

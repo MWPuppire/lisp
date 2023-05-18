@@ -44,14 +44,14 @@ lazy_static! {
     };
 }
 
-pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(args.pop_front().unwrap(), env)?;
     let file_name = x.expect_string()?;
     let f = MOCK_FS.get(file_name).unwrap();
     Ok(f.to_string().into())
 }
-pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
+pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval(args.pop_front().unwrap(), env)?;
     let file_name = x.expect_string()?;
@@ -61,7 +61,7 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Re
     parser.add_tokenize(f);
     let mut global = env.global();
     for val in parser {
-        eval(val?, &mut global)?;
+        eval(val?, &global)?;
     }
     Ok(LispValue::Nil)
 }
@@ -79,12 +79,12 @@ pub fn testing_env() -> LispEnv {
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
     let mut env = testing_env();
-    eval(parsed, &mut env)
+    eval(parsed, &env)
 }
 
-pub fn eval_str_in_env(input: &str, env: &mut LispEnv) -> Result<LispValue> {
+pub fn eval_str_in_env(input: &str, env: &LispEnv) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
-    eval(parsed, env)
+    eval(parsed, &env)
 }
 
 #[macro_export]

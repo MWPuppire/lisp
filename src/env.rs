@@ -137,7 +137,7 @@ impl LispEnv {
         let lock = self.0.read().unwrap();
         lock.stdlib.get(&sym).map(LispValue::clone)
     }
-    pub fn set(&mut self, sym: LispSymbol, val: LispValue) {
+    pub fn set(&self, sym: LispSymbol, val: LispValue) {
         let mut lock = self.0.write().unwrap();
         lock.data.insert(sym, val);
     }
@@ -145,11 +145,11 @@ impl LispEnv {
         let sym = Self::symbol_for(key);
         self.get(sym)
     }
-    pub fn set_by_str(&mut self, key: &str, val: LispValue) {
+    pub fn set_by_str(&self, key: &str, val: LispValue) {
         let sym = Self::symbol_for(key);
         self.set(sym, val);
     }
-    pub fn bind_func(&mut self, name: &'static str, f: LispBuiltinFunc) {
+    pub fn bind_func(&self, name: &'static str, f: LispBuiltinFunc) {
         let f = LispValue::Object(
             Arc::new(ObjectValue::BuiltinFunc {
                 name,
