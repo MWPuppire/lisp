@@ -19,14 +19,14 @@ cfg_if::cfg_if! {
     }
 }
 
-#[macro_export]
-macro_rules! expect {
+macro_rules! __expect__ {
     ($cond:expr, $err:expr) => {
         if !$cond {
             Err($err)?;
         }
     }
 }
+pub(crate) use __expect__ as expect;
 
 // criteria for becoming a special form are somewhat nebulous
 // `deref`, for example, is only a special form because of the `@atom` syntax,

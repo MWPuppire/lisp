@@ -5,11 +5,11 @@ use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use by_address::ByAddress;
 use parking_lot::RwLock;
-use crate::{LispValue, LispError, Result, expect};
+use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
 use crate::eval::eval;
 use crate::parser::LispParser;
-use crate::util::ObjectValue;
+use crate::util::{ObjectValue, expect};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {

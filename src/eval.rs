@@ -2,9 +2,9 @@ use std::iter::zip;
 use std::sync::Arc;
 use std::ops::Deref;
 use im::{Vector, vector, HashMap};
-use crate::{LispValue, LispError, Result, expect};
+use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
-use crate::util::{LispFunc, ObjectValue, LispSpecialForm};
+use crate::util::{LispFunc, ObjectValue, LispSpecialForm, expect};
 
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
