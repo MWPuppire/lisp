@@ -116,7 +116,17 @@ pub struct LispFunc {
     pub(crate) variadic: bool,
 }
 
-pub type LispBuiltinFunc = fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>;
+#[derive(Clone, Copy, Debug, Hash)]
+pub struct LispBuiltinFunc {
+    pub name: &'static str,
+    pub body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>,
+}
+impl PartialEq for LispBuiltinFunc {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for LispBuiltinFunc { }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
@@ -149,10 +159,7 @@ cfg_if::cfg_if! {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ObjectValue {
     List(Vector<LispValue>),
-    BuiltinFunc {
-        name: &'static str,
-        f: LispBuiltinFunc,
-    },
+    BuiltinFunc(LispBuiltinFunc),
     Func(LispFunc),
     Macro(LispFunc),
     Map(HashMap<LispValue, LispValue>),
@@ -199,7 +206,7 @@ impl ObjectValue {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("({})", xs.join(" "))
             }
-            Self::BuiltinFunc { name, .. } => name.to_string(),
+            Self::BuiltinFunc(f) => f.name.to_string(),
             Self::Func(f) => format!(
                 "({} ({}) {})",
                 "fn*",
@@ -235,7 +242,7 @@ impl fmt::Display for ObjectValue {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "({})", xs.join(" "))
             },
-            Self::BuiltinFunc { .. } => write!(f, "#<native function>"),
+            Self::BuiltinFunc(_) => write!(f, "#<native function>"),
             Self::Func(_) => write!(f, "#<function>"),
             Self::Macro(_) => write!(f, "#<macro>"),
             Self::Vector(l) => {
@@ -379,7 +386,7 @@ impl LispValue {
                 // seen, since these `expect_` functions do expect to receive a
                 // value of the correct type, so incorrect types should be a
                 // rare case
-                let cloned = Arc::unwrap_or_clone(o);
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 match cloned {
                     ObjectValue::List(l) => Ok(l),
                     ObjectValue::Vector(l) => Ok(Vector::from(l)),
@@ -396,7 +403,7 @@ impl LispValue {
         if let Self::Object(o) = self {
             if matches!(o.deref(), ObjectValue::Map(_)) {
                 // `matches!` before the `match` explained in `into_list`
-                let cloned = Arc::unwrap_or_clone(o);
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 match cloned {
                     ObjectValue::Map(m) => Ok(m),
                     _ => unreachable!(),
@@ -439,7 +446,7 @@ impl LispValue {
         if let Self::Object(o) = self {
             if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
                 // `matches!` before the `match` explained in `into_list`
-                let cloned = Arc::unwrap_or_clone(o);
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let list: Vector<LispValue> = match cloned {
                     ObjectValue::List(l) => l.into_iter().map(Self::vector_to_list).collect(),
                     ObjectValue::Vector(l) => l.into_iter().map(Self::vector_to_list).collect(),

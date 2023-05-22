@@ -1,13 +1,13 @@
 use std::sync::{Arc, Weak};
 use std::ops::DerefMut;
-use im::HashMap;
+use im::{HashMap, Vector};
 use lazy_static::lazy_static;
 use string_interner::{StringInterner, DefaultSymbol};
 use by_address::ByAddress;
 use parking_lot::RwLock;
 use crate::LispValue;
 use crate::builtins;
-use crate::util::{LispBuiltinFunc, ObjectValue};
+use crate::util::{LispBuiltinFunc, ObjectValue, Result};
 
 pub type LispSymbol = DefaultSymbol;
 
@@ -150,12 +150,12 @@ impl LispEnv {
         let sym = Self::symbol_for(key);
         self.set(sym, val);
     }
-    pub fn bind_func(&self, name: &'static str, f: LispBuiltinFunc) {
+    pub fn bind_func(&self, name: &'static str, body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>) {
         let f = LispValue::Object(
-            Arc::new(ObjectValue::BuiltinFunc {
+            Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
                 name,
-                f,
-            })
+                body,
+            }))
         );
         let sym = Self::symbol_for_static(name);
         self.set(sym, f);

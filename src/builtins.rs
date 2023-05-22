@@ -9,7 +9,7 @@ use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
 use crate::eval::eval;
 use crate::parser::LispParser;
-use crate::util::{ObjectValue, expect};
+use crate::util::{ObjectValue, LispBuiltinFunc, expect};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
@@ -404,9 +404,8 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
         LispValue::Object(o) => match o.deref() {
             ObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
             ObjectValue::String(_) => {
-                let ObjectValue::String(inner) = Arc::unwrap_or_clone(o) else {
-                    unreachable!()
-                };
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::String(inner) = cloned else { unreachable!() };
                 Ok(LispValue::Object(Arc::new(
                     ObjectValue::Keyword(inner)
                 )))
@@ -648,9 +647,8 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
                 if l.is_empty() {
                     return Ok(LispValue::vector_from(args));
                 }
-                let ObjectValue::Vector(mut l) = Arc::unwrap_or_clone(o) else {
-                    unreachable!()
-                };
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::Vector(mut l) = cloned else { unreachable!() };
                 l.append(&mut args);
                 Ok(LispValue::vector_from(l))
             },
@@ -659,9 +657,8 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
                 if l.is_empty() {
                     return Ok(LispValue::list_from(args));
                 }
-                let ObjectValue::List(l) = Arc::unwrap_or_clone(o) else {
-                    unreachable!()
-                };
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::List(l) = cloned else { unreachable!() };
                 args.append(l);
                 Ok(LispValue::list_from(args))
             },
@@ -760,10 +757,10 @@ macro_rules! make_lisp_funcs {
     ($interner:expr, $($name:literal => $f:path,)*) => {
         hashmap! {
             $($interner.get_or_intern_static($name) => LispValue::Object(
-                    Arc::new(ObjectValue::BuiltinFunc {
+                    Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
                         name: $name,
-                        f: $f,
-                    })
+                        body: $f,
+                    }))
                 )
             ),*
         }

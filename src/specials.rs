@@ -15,7 +15,8 @@ pub(crate) fn inner_quasiquote(arg: LispValue, eval: fn(LispValue, &LispEnv) -> 
                 if l.is_empty() {
                     return Ok((LispValue::Object(o.clone()), false));
                 }
-                let ObjectValue::List(mut l) = Arc::unwrap_or_clone(o) else { unreachable!() };
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::List(mut l) = cloned else { unreachable!() };
                 // established non-empty just prior
                 if l[0] == UNQUOTE {
                     expect!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
@@ -117,7 +118,7 @@ macro_rules! special_form {
                             if list.is_empty() {
                                 return Ok(LispValue::Object(o.clone()));
                             }
-                            let cloned = Arc::unwrap_or_clone(o);
+                            let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                             let ObjectValue::List(mut list) = cloned else {
                                 unreachable!()
                             };

@@ -125,7 +125,7 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
                 ast = special_form!(form, list, eval, env);
             },
             LispValue::Object(o) => match o.deref() {
-                ObjectValue::BuiltinFunc { f, .. } => break f(list, &env),
+                ObjectValue::BuiltinFunc(f) => break (f.body)(list, &env),
                 ObjectValue::Func(f) => {
                     let (new_ast, new_env) = apply(f, list, &env, false)?;
                     ast = new_ast;
