@@ -80,12 +80,14 @@ pub fn testing_env() -> LispEnv {
     env
 }
 
+#[inline]
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
     let mut env = testing_env();
     eval(parsed, &env)
 }
 
+#[inline]
 pub fn eval_str_in_env(input: &str, env: &LispEnv) -> Result<LispValue> {
     let parsed = LispParser::parse(input).unwrap()?;
     eval(parsed, &env)

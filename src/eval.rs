@@ -7,6 +7,7 @@ use crate::env::{LispEnv, LispSymbol};
 use crate::util::{LispFunc, ObjectValue, LispSpecialForm, expect};
 use crate::specials::special_form;
 
+#[inline]
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val).ok_or(LispError::UndefinedVariable(LispEnv::symbol_string(val).unwrap()))
 }

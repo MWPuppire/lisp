@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 
+#[inline]
 fn test_inspect(expr: &str) -> bool {
     let formatted = format!("(eval (read-string (inspect {})))", expr);
     eval!(expr) == eval!(&formatted)

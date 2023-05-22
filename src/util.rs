@@ -122,12 +122,14 @@ pub struct LispBuiltinFunc {
     pub body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>,
 }
 impl PartialEq for LispBuiltinFunc {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 impl Eq for LispBuiltinFunc { }
 impl std::hash::Hash for LispBuiltinFunc {
+    #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
@@ -148,6 +150,7 @@ cfg_if::cfg_if! {
         pub struct LispAsyncValue(Shared<BoxFuture<'static, Result<LispValue>>>);
 
         impl PartialEq for LispAsyncValue {
+            #[inline]
             fn eq(&self, other: &Self) -> bool {
                 self.0.ptr_eq(&other.0)
             }
@@ -155,6 +158,7 @@ cfg_if::cfg_if! {
         impl Eq for LispAsyncValue { }
 
         impl std::hash::Hash for LispAsyncValue {
+            #[inline]
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 self.0.ptr_hash(state);
             }
@@ -162,6 +166,7 @@ cfg_if::cfg_if! {
 
         impl Future for LispAsyncValue {
             type Output = Result<LispValue>;
+            #[inline]
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 Pin::new(&mut self.0).poll(cx)
             }
@@ -305,12 +310,14 @@ impl LispValue {
         }
     }
 
+    #[inline]
     pub fn string_for(s: String) -> Self {
         Self::Object(Arc::new(
             ObjectValue::String(s.to_owned())
         ))
     }
 
+    #[inline]
     pub fn keyword_for(s: String) -> Self {
         Self::Object(Arc::new(
             ObjectValue::Keyword(s.to_owned())
@@ -364,6 +371,7 @@ impl LispValue {
             _ => true,
         }
     }
+    #[inline]
     pub fn is_nil(&self) -> bool {
         matches!(self, Self::Nil)
     }
@@ -474,16 +482,19 @@ impl LispValue {
         }
     }
 
+    #[inline]
     pub fn list_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
         let list = ObjectValue::List(iter.into_iter().collect());
         Self::Object(Arc::new(list))
     }
 
+    #[inline]
     pub fn vector_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
         let list = ObjectValue::Vector(iter.into_iter().collect());
         Self::Object(Arc::new(list))
     }
 
+    #[inline]
     pub fn map_from<T: IntoIterator<Item = (Self, Self)>>(iter: T) -> Self {
         let list = ObjectValue::Map(iter.into_iter().collect());
         Self::Object(Arc::new(list))
@@ -491,32 +502,38 @@ impl LispValue {
 }
 
 impl From<f64> for LispValue {
+    #[inline]
     fn from(item: f64) -> Self {
         Self::Number(OrderedFloat(item))
     }
 }
 impl From<OrderedFloat<f64>> for LispValue {
+    #[inline]
     fn from(item: OrderedFloat<f64>) -> Self {
         Self::Number(item)
     }
 }
 impl From<bool> for LispValue {
+    #[inline]
     fn from(item: bool) -> Self {
         Self::Bool(item)
     }
 }
 impl From<String> for LispValue {
+    #[inline]
     fn from(item: String) -> Self {
         Self::Object(Arc::new(ObjectValue::String(item)))
     }
 }
 impl From<LispSymbol> for LispValue {
+    #[inline]
     fn from(item: LispSymbol) -> Self {
         Self::Symbol(item)
     }
 }
 #[cfg(feature = "async")]
 impl From<BoxFuture<'static, Result<LispValue>>> for LispValue {
+    #[inline]
     fn from(item: BoxFuture<'static, Result<LispValue>>) -> Self {
         let wrapper = LispAsyncValue(item.shared());
         Self::Future(wrapper)

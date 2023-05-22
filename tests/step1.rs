@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 
+#[inline]
 fn parse(input: &str) -> LispValue {
     LispParser::parse(input).unwrap().unwrap()
 }

@@ -49,6 +49,7 @@ impl LispClosure {
 #[derive(Clone, Debug)]
 pub struct LispEnv(Arc<RwLock<InnerEnv>>);
 
+// TODO I'd probably rather not have a single static interner
 lazy_static! {
     static ref INTERNER: RwLock<StringInterner> = {
         RwLock::new(StringInterner::new())
@@ -56,6 +57,7 @@ lazy_static! {
 }
 
 // creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
+#[inline]
 fn assign_global_self(inner: InnerEnv) -> LispEnv {
     let mut boxed = RwLock::new(inner);
     let arc = Arc::new_cyclic(|weak| {
@@ -97,10 +99,12 @@ impl LispEnv {
         LispEnv(Arc::new(RwLock::new(inner)))
     }
 
+    #[inline]
     pub fn make_closure(&self) -> LispClosure {
         LispClosure(ByAddress(self.0.clone()))
     }
 
+    #[inline]
     pub fn global(&self) -> LispEnv {
         let lock = self.0.read();
         // if `self` still exists, the Arc chain must make `global` exist,
@@ -109,20 +113,21 @@ impl LispEnv {
         LispEnv(lock.global.upgrade().unwrap())
     }
 
+    #[inline]
     pub(crate) fn interner_mut() -> impl DerefMut<Target = StringInterner> {
         INTERNER.write()
     }
+    #[inline]
     pub(crate) fn symbol_for(s: &str) -> LispSymbol {
         let mut interner = INTERNER.write();
         interner.get_or_intern(s)
     }
+    #[inline]
     pub(crate) fn symbol_for_static(s: &'static str) -> LispSymbol {
         let mut interner = INTERNER.write();
         interner.get_or_intern_static(s)
     }
-    // TODO: I think this is actually an unsound transmute,
-    // and I never did like having a single static `StringInterner`
-    // not a member of any type
+    #[inline]
     pub(crate) fn symbol_string(sym: LispSymbol) -> Option<String> {
         let interner = INTERNER.read();
         interner.resolve(sym).map(ToString::to_string)
@@ -142,14 +147,17 @@ impl LispEnv {
         let mut lock = self.0.write();
         lock.data.insert(sym, val);
     }
+    #[inline]
     pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
         let sym = Self::symbol_for(key);
         self.get(sym)
     }
+    #[inline]
     pub fn set_by_str(&self, key: &str, val: LispValue) {
         let sym = Self::symbol_for(key);
         self.set(sym, val);
     }
+    #[inline]
     pub fn bind_func(&self, name: &'static str, body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>) {
         let f = LispValue::Object(
             Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
@@ -183,6 +191,7 @@ impl LispEnv {
         }).flatten())
     }
 
+    #[inline]
     pub fn nested_envs(&self) -> impl Iterator<Item = LispEnv> {
         NestedEnvIter {
             current: Some(self.clone())
@@ -212,12 +221,14 @@ impl Iterator for NestedEnvIter {
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
         impl Default for LispEnv {
+            #[inline]
             fn default() -> Self {
                 Self::new_stdlib()
             }
         }
     } else {
         impl Default for LispEnv {
+            #[inline]
             fn default() -> Self {
                 Self::new_stdlib_protected()
             }

@@ -316,6 +316,7 @@ fn parse_lisp(input: &str) -> IResult<&str, LispTokenType> {
     )(input)
 }
 
+#[inline]
 fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
     match opt {
         None => Err(err),
@@ -372,6 +373,7 @@ impl LispParser {
         self.row += 1;
         self.col = 1;
     }
+    #[inline]
     pub fn has_tokens(&self) -> bool {
         !self.tokens.is_empty()
     }
@@ -383,6 +385,7 @@ impl LispParser {
         self.col = new_col;
         Ok(())
     }
+    #[inline]
     pub fn clear_tokens(&mut self) {
         self.tokens.clear();
     }
@@ -542,6 +545,7 @@ impl LispParser {
     }
 }
 impl Default for LispParser {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }

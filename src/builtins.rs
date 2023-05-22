@@ -37,7 +37,8 @@ macro_rules! eval_head {
     }
 }
 
-fn eval_list_to_numbers(args: Vector<LispValue>, env: &LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
+#[inline]
+fn eval_list_to_numbers<I: IntoIterator<Item = LispValue>>(args: I, env: &LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
     args.into_iter().map(|x| eval(x, env)?.expect_number()).collect()
 }
 
