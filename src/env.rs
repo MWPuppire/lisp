@@ -57,15 +57,12 @@ lazy_static! {
 
 // creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
 fn assign_global_self(inner: InnerEnv) -> LispEnv {
-    let boxed = Arc::new(RwLock::new(inner));
-    let weak = Arc::downgrade(&boxed);
-    let ptr = Arc::into_raw(boxed);
-    let boxed = unsafe {
-        let mut_ptr = ptr as *mut RwLock<InnerEnv>;
-        mut_ptr.as_mut().unwrap().get_mut().global = weak;
-        Arc::from_raw(ptr)
-    };
-    LispEnv(boxed)
+    let mut boxed = RwLock::new(inner);
+    let arc = Arc::new_cyclic(|weak| {
+        boxed.get_mut().global = weak.clone();
+        boxed
+    });
+    LispEnv(arc)
 }
 
 impl LispEnv {
@@ -126,9 +123,9 @@ impl LispEnv {
     // TODO: I think this is actually an unsound transmute,
     // and I never did like having a single static `StringInterner`
     // not a member of any type
-    pub(crate) fn symbol_string(sym: LispSymbol) -> Option<&'static str> {
+    pub(crate) fn symbol_string(sym: LispSymbol) -> Option<String> {
         let interner = INTERNER.read();
-        unsafe { std::mem::transmute(interner.resolve(sym)) }
+        interner.resolve(sym).map(ToString::to_string)
     }
 
     pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {

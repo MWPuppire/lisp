@@ -203,13 +203,13 @@ impl ObjectValue {
             Self::Func(f) => format!(
                 "({} ({}) {})",
                 "fn*",
-                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
+                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<_>>().join(" "),
                 f.body.inspect()
             ),
             Self::Macro(f) => format!(
                 "({} ({}) {})",
                 "#<macro-fn*>",
-                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<&str>>().join(" "),
+                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<_>>().join(" "),
                 f.body.inspect()
             ),
             Self::Map(m) => {
@@ -527,7 +527,7 @@ pub enum LispError {
     #[error("missing delimiter '{1}' (expected {0} more)")]
     UnbalancedDelim(usize, &'static str),
     #[error("undefined variable `{0}`")]
-    UndefinedVariable(&'static str),
+    UndefinedVariable(String),
     #[error("invalid data type. expected {0}, received {1}")]
     InvalidDataType(&'static str, &'static str),
     #[error("unexpected arguments. expected {0}, received {1}")]

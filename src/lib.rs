@@ -1,4 +1,5 @@
 #![feature(arc_unwrap_or_clone)]
+#![forbid(unsafe_code)]
 
 extern crate cfg_if;
 extern crate lazy_static;
