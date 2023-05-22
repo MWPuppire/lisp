@@ -116,7 +116,7 @@ pub struct LispFunc {
     pub(crate) variadic: bool,
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy)]
 pub struct LispBuiltinFunc {
     pub name: &'static str,
     pub body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>,
@@ -127,6 +127,19 @@ impl PartialEq for LispBuiltinFunc {
     }
 }
 impl Eq for LispBuiltinFunc { }
+impl std::hash::Hash for LispBuiltinFunc {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+impl fmt::Debug for LispBuiltinFunc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LispBuiltinFunc")
+            .field("name", &self.name)
+            .field("body", &self.body as &fn(Vector<LispValue>, &'static LispEnv) -> Result<LispValue>)
+            .finish()
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
