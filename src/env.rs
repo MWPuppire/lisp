@@ -57,10 +57,13 @@ lazy_static! {
 
 // creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
 fn assign_global_self(inner: InnerEnv) -> LispEnv {
-    let mut boxed = Arc::new(RwLock::new(inner));
+    let boxed = Arc::new(RwLock::new(inner));
     let weak = Arc::downgrade(&boxed);
-    unsafe {
-        Arc::get_mut_unchecked(&mut boxed).get_mut().global = weak;
+    let ptr = Arc::into_raw(boxed);
+    let boxed = unsafe {
+        let mut_ptr = ptr as *mut RwLock<InnerEnv>;
+        mut_ptr.as_mut().unwrap().get_mut().global = weak;
+        Arc::from_raw(ptr)
     };
     LispEnv(boxed)
 }

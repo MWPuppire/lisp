@@ -317,7 +317,6 @@ impl LispValue {
         match self {
             Self::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
             Self::Object(o) => o.inspect(),
-            Self::Special(s) => format!("{}", s),
             _ => self.inspect_inner(),
         }
     }
@@ -429,7 +428,7 @@ impl LispValue {
     pub fn into_future(self) -> Result<LispAsyncValue> {
         match self {
             Self::Future(f) => Ok(f),
-            _ => Err(LispError::InvalidDataType("promise", self.type_of())),
+            _ => Err(LispError::InvalidDataType("future", self.type_of())),
         }
     }
 
@@ -516,7 +515,7 @@ impl fmt::Display for LispValue {
             Self::Object(o) => o.fmt(f),
             Self::Special(s) => s.fmt(f),
             #[cfg(feature = "async")]
-            Self::Future(_) => write!(f, "#<promise>"),
+            Self::Future(_) => write!(f, "#<future>"),
         }
     }
 }
