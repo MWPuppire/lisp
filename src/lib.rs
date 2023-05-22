@@ -20,3 +20,4 @@ pub use crate::eval::eval;
 pub mod env;
 pub use crate::env::LispEnv;
 mod builtins;
+mod specials;

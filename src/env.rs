@@ -161,7 +161,6 @@ impl LispEnv {
         self.set(sym, f);
     }
 
-
     pub fn union(&self, other: &LispEnv) -> LispEnv {
         let lock = self.0.read();
         let reader = other.0.read();

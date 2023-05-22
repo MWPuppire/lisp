@@ -787,7 +787,7 @@ macro_rules! make_lisp_funcs {
 }
 
 lazy_static! {
-    pub static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
+    pub(crate) static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
         let mut strs = LispEnv::interner_mut();
         let mut funcs = make_lisp_funcs!(strs,
             "+" => lisp_plus,
@@ -876,7 +876,7 @@ lazy_static! {
 
 #[cfg(feature = "io-stdlib")]
 lazy_static! {
-    pub static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
+    pub(crate) static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
         let base = BUILTINS_NO_IO.clone();
         let mut strs = LispEnv::interner_mut();
         let mut ext = make_lisp_funcs!(strs,
