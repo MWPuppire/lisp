@@ -386,11 +386,8 @@ impl LispValue {
     pub fn try_into_iter(self) -> Result<std::vec::IntoIter<LispValue>> {
         if let Self::Object(o) = self {
             if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
-                // `matches!` before the `match` to avoid potentially cloning
-                // non-lists; whether or not this is necessary remains to be
-                // seen, since these `expect_` functions do expect to receive a
-                // value of the correct type, so incorrect types should be a
-                // rare case
+                // `matches!` before the `match` to avoid potentially cloning a
+                // non-list object
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let vec = match cloned {
                     ObjectValue::List(l) => l.into_iter().collect(),
@@ -406,16 +403,6 @@ impl LispValue {
         }
     }
 
-    pub fn expect_func(&self) -> Result<&LispFunc> {
-        match self {
-            Self::Object(o) => match o.deref() {
-                ObjectValue::Func(f) => Ok(f),
-                ObjectValue::Macro(f) => Ok(f),
-                _ => Err(LispError::InvalidDataType("function", o.type_of())),
-            },
-            _ => Err(LispError::InvalidDataType("function", self.type_of())),
-        }
-    }
     pub fn expect_string(&self) -> Result<&str> {
         match self {
             Self::Object(o) => match o.deref() {

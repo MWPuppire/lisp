@@ -50,7 +50,8 @@ pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, LispEn
         let Some(head) = list.next() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
-        let Ok(f) = var.expect_func() else { unreachable!() };
+        let LispValue::Object(obj) = var else { unreachable!() };
+        let ObjectValue::Macro(f) = obj.deref() else { unreachable!() };
         // some code duplication from `expand_fn`, but I didn't want `is_macro`
         // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
