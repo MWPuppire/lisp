@@ -14,9 +14,20 @@ pub type LispSymbol = DefaultSymbol;
 #[derive(Clone, Debug)]
 struct InnerEnv {
     data: HashMap<LispSymbol, LispValue>,
-    global: Weak<RwLock<InnerEnv>>,
+    this: Weak<RwLock<InnerEnv>>,
     enclosing: Option<LispEnv>,
     stdlib: &'static HashMap<LispSymbol, LispValue>,
+}
+
+// creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
+#[inline]
+fn assign_this_self(inner: InnerEnv) -> LispEnv {
+    let mut boxed = RwLock::new(inner);
+    let arc = Arc::new_cyclic(|weak| {
+        boxed.get_mut().this = weak.clone();
+        boxed
+    });
+    LispEnv(arc)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -27,22 +38,22 @@ impl LispClosure {
         let lock = self.0.0.read();
         let inner = InnerEnv {
             data: args.into(),
+            this: Weak::new(),
             enclosing: Some(enclosing),
-            global: lock.global.clone(),
             stdlib: lock.stdlib,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        assign_this_self(inner)
     }
     pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> LispEnv {
         let enclosing = LispEnv(self.0.0.clone());
         let lock = self.0.0.read();
         let inner = InnerEnv {
             data: args.into(),
+            this: Weak::new(),
             enclosing: Some(enclosing.union(surrounding)),
-            global: lock.global.clone(),
             stdlib: lock.stdlib,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        assign_this_self(inner)
     }
 }
 
@@ -56,47 +67,36 @@ lazy_static! {
     };
 }
 
-// creates a `LispEnv` where `global` refers to `self` from an `InnerEnv`
-#[inline]
-fn assign_global_self(inner: InnerEnv) -> LispEnv {
-    let mut boxed = RwLock::new(inner);
-    let arc = Arc::new_cyclic(|weak| {
-        boxed.get_mut().global = weak.clone();
-        boxed
-    });
-    LispEnv(arc)
-}
-
 impl LispEnv {
     #[cfg(feature = "io-stdlib")]
     pub fn new_stdlib() -> Self {
         let inner = InnerEnv {
             data: HashMap::new(),
+            this: Weak::new(),
             enclosing: None,
-            global: Weak::new(),
             stdlib: &builtins::BUILTINS,
         };
-        assign_global_self(inner)
+        assign_this_self(inner)
     }
     pub fn new_stdlib_protected() -> Self {
         let inner = InnerEnv {
             data: HashMap::new(),
+            this: Weak::new(),
             enclosing: None,
-            global: Weak::new(),
             stdlib: &builtins::BUILTINS_NO_IO,
         };
-        assign_global_self(inner)
+        assign_this_self(inner)
     }
     pub fn new_nested(&self) -> Self {
         let copy = self.clone();
         let lock = self.0.read();
         let inner = InnerEnv {
             data: HashMap::new(),
+            this: Weak::new(),
             enclosing: Some(copy),
-            global: lock.global.clone(),
             stdlib: lock.stdlib,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        assign_this_self(inner)
     }
 
     #[inline]
@@ -104,13 +104,15 @@ impl LispEnv {
         LispClosure(ByAddress(self.0.clone()))
     }
 
-    #[inline]
     pub fn global(&self) -> LispEnv {
-        let lock = self.0.read();
-        // if `self` still exists, the Arc chain must make `global` exist,
-        // since `global` has to be connected by `enclosing` (or be the same
-        // value as `self` in the case of the global environment)
-        LispEnv(lock.global.upgrade().unwrap())
+        let mut peekable = self.nested_envs().peekable();
+        while let Some(env) = peekable.next() {
+            if peekable.peek().is_none() {
+                let lock = env.0.read();
+                return LispEnv(lock.this.upgrade().unwrap());
+            }
+        }
+        unreachable!()
     }
 
     #[inline]
@@ -174,11 +176,11 @@ impl LispEnv {
         let reader = other.0.read();
         let inner = InnerEnv {
             data: lock.data.clone().union(reader.data.clone()),
+            this: Weak::new(),
             enclosing: lock.enclosing.clone(),
-            global: lock.global.clone(),
             stdlib: lock.stdlib,
         };
-        LispEnv(Arc::new(RwLock::new(inner)))
+        assign_this_self(inner)
     }
 
     pub fn keys(&self) -> impl Iterator<Item = LispSymbol> {
@@ -217,6 +219,7 @@ impl Iterator for NestedEnvIter {
         }
     }
 }
+impl std::iter::FusedIterator for NestedEnvIter { }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
