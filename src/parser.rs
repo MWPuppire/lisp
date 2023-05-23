@@ -565,3 +565,10 @@ impl Iterator for LispParser {
         out
     }
 }
+
+impl std::str::FromStr for LispValue {
+    type Err = LispError;
+    fn from_str(s: &str) -> Result<Self> {
+        LispParser::parse(s).unwrap_or(Ok(LispValue::Nil))
+    }
+}
