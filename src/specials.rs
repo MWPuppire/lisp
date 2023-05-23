@@ -29,7 +29,7 @@ pub(crate) fn inner_quasiquote(arg: LispValue, eval: fn(LispValue, &LispEnv) -> 
                     for val in l.into_iter() {
                         let (new_val, inplace) = inner_quasiquote(val, eval, env)?;
                         if inplace {
-                            out.append(new_val.into_list()?);
+                            out.extend(new_val.try_into_iter()?);
                         } else {
                             out.push_back(new_val);
                         }
@@ -54,7 +54,7 @@ macro_rules! special_form {
                 if let LispValue::Special(form) = &$list[0] {
                     return Err(LispError::CannotRedefineSpecialForm(*form));
                 }
-                let name = $list[0].expect_symbol()?;
+                let name = $list.pop_front().unwrap().try_into()?;
                 let val = $eval($list.pop_back().unwrap(), &$env)?;
                 $env.set(name, val.clone());
                 return Ok(val);
@@ -67,7 +67,7 @@ macro_rules! special_form {
                 if let LispValue::Special(form) = &$list[0] {
                     return Err(LispError::CannotRedefineSpecialForm(*form));
                 }
-                let name = $list[0].expect_symbol()?;
+                let name = $list.pop_front().unwrap().try_into()?;
                 let val = $eval($list.pop_back().unwrap(), &$env)?;
                 let val = match val {
                     LispValue::Object(o) => match o.deref() {
@@ -87,11 +87,10 @@ macro_rules! special_form {
                     $list.len(),
                 ));
                 let new_env = $env.new_nested();
-                let decls = $list.pop_front().unwrap().into_list()?;
-                let mut decl_iter = decls.into_iter();
-                while let Some(name) = decl_iter.next() {
-                    let name = name.expect_symbol()?;
-                    let Some(val_expr) = decl_iter.next() else {
+                let mut decls = $list.pop_front().unwrap().try_into_iter()?;
+                while let Some(name) = decls.next() {
+                    let name = name.try_into()?;
+                    let Some(val_expr) = decls.next() else {
                         return Err(LispError::MissingBinding);
                     };
                     let val = $eval(val_expr, &new_env)?;
@@ -140,7 +139,8 @@ macro_rules! special_form {
                                         &$env
                                     )?;
                                     if inplace {
-                                        out.append(new_val.into_list()?);
+                                        let mut iter = new_val.try_into_iter()?;
+                                        out.extend(&mut iter);
                                     } else {
                                         out.push_back(new_val);
                                     }
@@ -169,21 +169,20 @@ macro_rules! special_form {
                     $list.len(),
                 ));
                 let catch = $list.pop_back().unwrap();
-                let Ok(mut catch) = catch.into_list() else {
+                let Ok(mut catch) = catch.try_into_iter() else {
                     return Err(LispError::TryNoCatch);
                 };
                 expect!(catch.len() == 3, LispError::IncorrectArguments(
                     2,
                     catch.len() - 1,
                 ));
-                if catch.pop_front().unwrap() != $crate::specials::CATCH {
+                if catch.next().unwrap() != $crate::specials::CATCH {
                     return Err(LispError::TryNoCatch);
                 }
                 match $eval($list.pop_front().unwrap(), &$env) {
                     Ok(x) => return Ok(x),
                     Err(err) => {
-                        let err_name = catch.pop_front().unwrap()
-                            .expect_symbol()?;
+                        let err_name = catch.next().unwrap().try_into()?;
                         let caught_env = $env.new_nested();
                         if let LispError::UncaughtException(exc) = err {
                             caught_env.set(err_name, exc);
@@ -193,7 +192,7 @@ macro_rules! special_form {
                         }
                         // run the `catch*` body in the new environment
                         $env = caught_env;
-                        catch.pop_front().unwrap()
+                        catch.next().unwrap()
                     }
                 }
             },
@@ -229,12 +228,15 @@ macro_rules! special_form {
                     2,
                     $list.len()
                 ));
-                let args_list = $list.pop_front().unwrap().into_list()?;
+                // TODO I don't especially like this, but I'm not sure what the
+                // best approach would be, since `fn*` needs to support both
+                // vector and list arguments, by Mal's spec
+                let args_list: Vec<LispValue> = $list.pop_front().unwrap().try_into_iter()?.collect();
                 let variadic = args_list.last().map(|last| {
                     matches!(last, LispValue::VariadicSymbol(_))
                 }).unwrap_or(false);
                 let args = args_list.into_iter()
-                    .map(|x| x.expect_symbol())
+                    .map(|x| x.try_into())
                     .collect::<Result<Vec<LispSymbol>>>()?;
                 let body = $list.pop_front().unwrap();
                 let closure = $env.make_closure();
@@ -248,7 +250,7 @@ macro_rules! special_form {
             },
             LispSpecialForm::Deref => {
                 if let Some(atom) = $list.pop_front() {
-                    let atom = $eval(atom, &$env)?.into_atom()?;
+                    let atom: Arc<RwLock<LispValue>> = $eval(atom, &$env)?.try_into()?;
                     let out = atom.read().clone();
                     return Ok(out);
                 } else {
@@ -267,10 +269,10 @@ macro_rules! special_form {
                     2, $list.len()
                 ));
                 let f = $eval($list.pop_front().unwrap(), &$env)?;
-                let args = $eval($list.pop_back().unwrap(), &$env)?.into_list()?;
+                let mut args = $eval($list.pop_back().unwrap(), &$env)?.try_into_iter()?;
                 let mut full_list = vector![f];
                 full_list.append($list);
-                full_list.append(args);
+                full_list.extend(&mut args);
                 LispValue::list_from(full_list)
             },
             LispSpecialForm::Cond => {

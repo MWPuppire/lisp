@@ -2,6 +2,7 @@ use std::iter::zip;
 use std::sync::Arc;
 use std::ops::Deref;
 use im::{Vector, vector, HashMap};
+use parking_lot::RwLock;
 use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
 use crate::util::{LispFunc, ObjectValue, LispSpecialForm, expect};
@@ -18,20 +19,23 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
             ObjectValue::List(l) => {
                 if l.is_empty() {
                     false
-                } else if let Ok(sym) = l[0].expect_symbol() {
-                    if let Ok(var) = lookup_variable(sym, env) {
-                        match var {
-                            LispValue::Object(o) => matches!(
-                                o.deref(),
-                                ObjectValue::Macro(_),
-                            ),
-                            _ => false,
-                        }
-                    } else {
-                        false
-                    }
                 } else {
-                    false
+                    match &l[0] {
+                        LispValue::Symbol(s) | LispValue::VariadicSymbol(s) => {
+                            if let Ok(var) = lookup_variable(*s, env) {
+                                match var {
+                                    LispValue::Object(o) => matches!(
+                                        o.deref(),
+                                        ObjectValue::Macro(_),
+                                    ),
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        },
+                        _ => false,
+                    }
                 }
             },
             _ => false,
@@ -42,8 +46,8 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
 
 pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, LispEnv)> {
     if is_macro_call(&val, env) {
-        let mut list = val.into_list()?;
-        let Some(head) = list.pop_front() else { unreachable!() };
+        let mut list = val.try_into_iter()?;
+        let Some(head) = list.next() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
         let Ok(f) = var.expect_func() else { unreachable!() };
@@ -134,7 +138,7 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
         if !matches!(arc.deref(), ObjectValue::List(_)) {
             break eval_ast(ast, &env);
         }
-        let Ok(mut list) = ast.into_list() else { unreachable!() };
+        let Ok(mut list): Result<Vector<LispValue>> = ast.try_into() else { unreachable!() };
         let Some(head) = list.pop_front() else {
             // just return an empty list without evaluating anything
             break Ok(LispValue::list_from(list));

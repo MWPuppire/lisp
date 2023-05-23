@@ -383,35 +383,7 @@ impl LispValue {
         matches!(self, Self::Nil)
     }
 
-    // the `into_` vs. `expect_` functions is a quirk I'd like to get rid of,
-    // but it allowed some convenience where borrowing was acceptable versus
-    // where it really was better to own the data (like in a list or hashmap,
-    // where most use-cases will want to own the data instead of having an
-    // immutable reference to it)
-    pub fn expect_symbol(&self) -> Result<LispSymbol> {
-        match self {
-            Self::Symbol(s) => Ok(*s),
-            Self::VariadicSymbol(s) => Ok(*s),
-            _ => Err(LispError::InvalidDataType("symbol", self.type_of())),
-        }
-    }
-    pub fn expect_number(&self) -> Result<OrderedFloat<f64>> {
-        match self {
-            Self::Number(f) => Ok(*f),
-            _ => Err(LispError::InvalidDataType("number", self.type_of())),
-        }
-    }
-    pub fn expect_func(&self) -> Result<&LispFunc> {
-        match self {
-            Self::Object(o) => match o.deref() {
-                ObjectValue::Func(f) => Ok(f),
-                ObjectValue::Macro(f) => Ok(f),
-                _ => Err(LispError::InvalidDataType("function", o.type_of())),
-            },
-            _ => Err(LispError::InvalidDataType("function", self.type_of())),
-        }
-    }
-    pub fn into_list(self) -> Result<Vector<LispValue>> {
+    pub fn try_into_iter(self) -> Result<std::vec::IntoIter<LispValue>> {
         if let Self::Object(o) = self {
             if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
                 // `matches!` before the `match` to avoid potentially cloning
@@ -420,11 +392,12 @@ impl LispValue {
                 // value of the correct type, so incorrect types should be a
                 // rare case
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                match cloned {
-                    ObjectValue::List(l) => Ok(l),
-                    ObjectValue::Vector(l) => Ok(Vector::from(l)),
+                let vec = match cloned {
+                    ObjectValue::List(l) => l.into_iter().collect(),
+                    ObjectValue::Vector(l) => l,
                     _ => unreachable!(),
-                }
+                };
+                Ok(vec.into_iter())
             } else {
                 Err(LispError::InvalidDataType("list", o.type_of()))
             }
@@ -432,26 +405,15 @@ impl LispValue {
             Err(LispError::InvalidDataType("list", self.type_of()))
         }
     }
-    pub fn into_hashmap(self) -> Result<HashMap<LispValue, LispValue>> {
-        if let Self::Object(o) = self {
-            if matches!(o.deref(), ObjectValue::Map(_)) {
-                // `matches!` before the `match` explained in `into_list`
-                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                match cloned {
-                    ObjectValue::Map(m) => Ok(m),
-                    _ => unreachable!(),
-                }
-            } else {
-                Err(LispError::InvalidDataType("map", o.type_of()))
-            }
-        } else {
-            Err(LispError::InvalidDataType("map", self.type_of()))
-        }
-    }
-    pub fn into_atom(self) -> Result<Arc<RwLock<LispValue>>> {
+
+    pub fn expect_func(&self) -> Result<&LispFunc> {
         match self {
-            Self::Atom(x) => Ok(x.0),
-            _ => Err(LispError::InvalidDataType("atom", self.type_of())),
+            Self::Object(o) => match o.deref() {
+                ObjectValue::Func(f) => Ok(f),
+                ObjectValue::Macro(f) => Ok(f),
+                _ => Err(LispError::InvalidDataType("function", o.type_of())),
+            },
+            _ => Err(LispError::InvalidDataType("function", self.type_of())),
         }
     }
     pub fn expect_string(&self) -> Result<&str> {
@@ -464,21 +426,13 @@ impl LispValue {
         }
     }
 
-    #[cfg(feature = "async")]
-    pub fn into_future(self) -> Result<LispAsyncValue> {
-        match self {
-            Self::Future(f) => Ok(f),
-            _ => Err(LispError::InvalidDataType("future", self.type_of())),
-        }
-    }
-
     // recursively transforms vectors to lists; used for testing equality,
     // since the spec requires lists and vectors containing the same elements
     // to compare equal
     pub fn vector_to_list(self) -> Self {
         if let Self::Object(o) = self {
             if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
-                // `matches!` before the `match` explained in `into_list`
+                // `matches!` before the `match` explained in `try_into_iter`
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let list: Vector<LispValue> = match cloned {
                     ObjectValue::List(l) => l.into_iter().map(Self::vector_to_list).collect(),
@@ -551,6 +505,80 @@ impl From<BoxFuture<'static, Result<LispValue>>> for LispValue {
     fn from(item: BoxFuture<'static, Result<LispValue>>) -> Self {
         let wrapper = LispAsyncValue(item.shared());
         Self::Future(wrapper)
+    }
+}
+
+impl TryFrom<LispValue> for LispSymbol {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        match item {
+            LispValue::Symbol(s) => Ok(s),
+            LispValue::VariadicSymbol(s) => Ok(s),
+            _ => Err(LispError::InvalidDataType("symbol", item.type_of())),
+        }
+    }
+}
+impl TryFrom<LispValue> for OrderedFloat<f64> {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        match item {
+            LispValue::Number(f) => Ok(f),
+            _ => Err(LispError::InvalidDataType("number", item.type_of())),
+        }
+    }
+}
+impl TryFrom<LispValue> for Vector<LispValue> {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        if let LispValue::Object(o) = item {
+            // `matches!` instead of a `match` or `if let` guard to avoid
+            // potentially cloning a non-list object
+            if matches!(o.deref(), ObjectValue::List(_)) {
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::List(l) = cloned else { unreachable!() };
+                Ok(l)
+            } else {
+                Err(LispError::InvalidDataType("list", o.type_of()))
+            }
+        } else {
+            Err(LispError::InvalidDataType("list", item.type_of()))
+        }
+    }
+}
+impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        if let LispValue::Object(o) = item {
+            // `matches!` explained in `TryFrom` for `Vector`
+            if matches!(o.deref(), ObjectValue::Map(_)) {
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let ObjectValue::Map(l) = cloned else { unreachable!() };
+                Ok(l)
+            } else {
+                Err(LispError::InvalidDataType("map", o.type_of()))
+            }
+        } else {
+            Err(LispError::InvalidDataType("map", item.type_of()))
+        }
+    }
+}
+impl TryFrom<LispValue> for Arc<RwLock<LispValue>> {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        match item {
+            LispValue::Atom(x) => Ok(x.0),
+            _ => Err(LispError::InvalidDataType("atom", item.type_of())),
+        }
+    }
+}
+#[cfg(feature = "async")]
+impl TryFrom<LispValue> for LispAsyncValue {
+    type Error = LispError;
+    fn try_from(item: LispValue) -> Result<Self> {
+        match item {
+            LispValue::Future(f) => Ok(f),
+            _ => Err(LispError::InvalidDataType("future", item.type_of())),
+        }
     }
 }
 

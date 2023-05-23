@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::ops::Deref;
+use std::iter;
 use im::{hashmap, HashMap, vector, Vector};
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
@@ -39,7 +40,7 @@ macro_rules! eval_head {
 
 #[inline]
 fn eval_list_to_numbers<I: IntoIterator<Item = LispValue>>(args: I, env: &LispEnv) -> Result<Vec<OrderedFloat<f64>>> {
-    args.into_iter().map(|x| eval(x, env)?.expect_number()).collect()
+    args.into_iter().map(|x| eval(x, env)?.try_into()).collect()
 }
 
 // note: differs from Mal spec by allowing multiple parameters
@@ -54,7 +55,7 @@ fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 // note: differs from Mal spec by allowing multiple parameters
 fn lisp_minus(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
-    let first = eval_head!(args, env)?.expect_number()?;
+    let first: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     let nums = eval_list_to_numbers(args, env)?;
     Ok(LispValue::Number(
         first - nums.iter().fold(OrderedFloat(0.0), |acc, x| acc + x)
@@ -72,16 +73,16 @@ fn lisp_times(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 fn lisp_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let numerator = eval_head!(args, env)?.expect_number()?;
-    let denominator = eval_head!(args, env)?.expect_number()?;
+    let numerator: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let denominator: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Number(numerator / denominator))
 }
 
 // new function (not in Mal)
 fn lisp_int_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let numerator = eval_head!(args, env)?.expect_number()?;
-    let denominator = eval_head!(args, env)?.expect_number()?;
+    let numerator: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let denominator: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Number(OrderedFloat(
         (numerator / denominator).trunc()
     )))
@@ -129,8 +130,9 @@ fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     if val.is_nil() {
         Ok(LispValue::Bool(true))
     } else {
-        let list = val.into_list()?;
-        Ok(LispValue::Bool(list.is_empty()))
+        let list = val.try_into_iter()?;
+        // `is_empty()` is unstable for iterators
+        Ok(LispValue::Bool(list.len() == 0))
     }
 }
 
@@ -140,36 +142,36 @@ fn lisp_count(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if val.is_nil() {
         Ok(LispValue::Number(OrderedFloat(0.0)))
     } else {
-        let list = val.into_list()?;
+        let list = val.try_into_iter()?;
         Ok(LispValue::Number(OrderedFloat(list.len() as f64)))
     }
 }
 
 fn lisp_lt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let x = eval_head!(args, env)?.expect_number()?;
-    let y = eval_head!(args, env)?.expect_number()?;
+    let x: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let y: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Bool(x < y))
 }
 
 fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let x = eval_head!(args, env)?.expect_number()?;
-    let y = eval_head!(args, env)?.expect_number()?;
+    let x: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let y: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Bool(x <= y))
 }
 
 fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let x = eval_head!(args, env)?.expect_number()?;
-    let y = eval_head!(args, env)?.expect_number()?;
+    let x: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let y: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Bool(x > y))
 }
 
 fn lisp_gte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let x = eval_head!(args, env)?.expect_number()?;
-    let y = eval_head!(args, env)?.expect_number()?;
+    let x: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let y: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     Ok(LispValue::Bool(x >= y))
 }
 
@@ -193,7 +195,7 @@ fn lisp_atomq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let atom = eval_head!(args, env)?.into_atom()?;
+    let atom: Arc<RwLock<LispValue>> = eval_head!(args, env)?.try_into()?;
     let val = eval_head!(args, env)?;
     *atom.write() = val.clone();
     Ok(val)
@@ -201,7 +203,7 @@ fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
-    let atom = eval_head!(args, env)?.into_atom()?;
+    let atom: Arc<RwLock<LispValue>> = eval_head!(args, env)?.try_into()?;
     let val = eval_head!(args, env)?;
     let derefed = atom.read().clone();
     let mut list = vector![
@@ -289,27 +291,27 @@ fn lisp_typeof(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
 fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let cons = eval_head!(args, env)?;
-    let mut list = eval_head!(args, env)?.into_list()?;
-    list.push_front(cons);
-    Ok(LispValue::list_from(list))
+    let iter = eval_head!(args, env)?.try_into_iter()?;
+    let iter = iter::once(cons).chain(iter);
+    Ok(LispValue::list_from(iter))
 }
 
 fn lisp_concat(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let mut out = Vector::new();
     for arg in args.into_iter() {
         let arg = eval(arg, env)?;
-        let list = arg.into_list()?;
-        out.append(list);
+        let mut list = arg.try_into_iter()?;
+        out.extend(&mut list);
     }
     Ok(LispValue::list_from(out))
 }
 
 fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let mut list = eval_head!(args, env)?.into_list()?;
-    let idx = eval_head!(args, env)?.expect_number()?.into_inner() as usize;
-    expect!(idx < list.len(), LispError::IndexOutOfRange(idx));
-    Ok(list.remove(idx))
+    let mut iter = eval_head!(args, env)?.try_into_iter()?;
+    let floating: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
+    let idx = floating.into_inner() as usize;
+    iter.nth(idx).ok_or(LispError::IndexOutOfRange(idx))
 }
 
 // additionally aliased to `head`, which is not in Mal
@@ -319,8 +321,8 @@ fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::Nil);
     }
-    let mut list = arg.into_list()?;
-    if let Some(item) = list.pop_front() {
+    let mut list = arg.try_into_iter()?;
+    if let Some(item) = list.next() {
         Ok(item)
     } else {
         Ok(LispValue::Nil)
@@ -334,9 +336,10 @@ fn lisp_rest(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::list_from(vector![]));
     }
-    let mut list = arg.into_list()?;
-    list.pop_front();
-    Ok(LispValue::list_from(list))
+    let mut iter = arg.try_into_iter()?;
+    // drop the first item
+    let _ = iter.next();
+    Ok(LispValue::list_from(iter))
 }
 
 fn lisp_macroq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
@@ -470,7 +473,7 @@ fn lisp_sequentialq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispVa
 
 fn lisp_assoc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() & 1 == 1, LispError::MissingBinding);
-    let mut map = eval_head!(args, env)?.into_hashmap()?;
+    let mut map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let mut arg_iter = args.into_iter();
     while let Some(key_expr) = arg_iter.next() {
         let Some(val_expr) = arg_iter.next() else { unreachable!() };
@@ -483,7 +486,7 @@ fn lisp_assoc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 fn lisp_dissoc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
-    let base_map = eval_head!(args, env)?.into_hashmap()?;
+    let base_map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let keys = args.into_iter().map(|x| {
         Ok((eval(x, env)?, LispValue::Nil))
     }).collect::<Result<Vec<(LispValue, LispValue)>>>()?;
@@ -497,7 +500,7 @@ fn lisp_get(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if map.is_nil() {
         Ok(LispValue::Nil)
     } else {
-        let map = map.into_hashmap()?;
+        let map: HashMap<LispValue, LispValue> = map.try_into()?;
         if let Some(val) = map.get(&key) {
             Ok(val.clone())
         } else {
@@ -508,21 +511,21 @@ fn lisp_get(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 fn lisp_containsq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
-    let map = eval_head!(args, env)?.into_hashmap()?;
+    let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let key = eval_head!(args, env)?;
     Ok(LispValue::Bool(map.contains_key(&key)))
 }
 
 fn lisp_keys(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let map = eval_head!(args, env)?.into_hashmap()?;
+    let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let keys = map.keys().cloned();
     Ok(LispValue::list_from(keys))
 }
 
 fn lisp_vals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-    let map = eval_head!(args, env)?.into_hashmap()?;
+    let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let vals = map.values().cloned();
     Ok(LispValue::list_from(vals))
 }
@@ -530,8 +533,8 @@ fn lisp_vals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let f = eval_head!(args, env)?;
-    let list = eval_head!(args, env)?.into_list()?;
-    let out = list.into_iter().map(|x| {
+    let iter = eval_head!(args, env)?.try_into_iter()?;
+    let out = iter.map(|x| {
         let list = LispValue::list_from(vector![f.clone(), x]);
         eval(list, env)
     }).collect::<Result<Vector<LispValue>>>()?;
@@ -716,14 +719,14 @@ cfg_if::cfg_if! {
         // needs to be passed to every built-in
         fn lisp_await(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-            let fut = eval_head!(args, env)?.into_future()?;
-            futures::executor::block_on(fut).into()
+            let fut: LispAsyncValue = eval_head!(args, env)?.try_into()?;
+            futures::executor::block_on(fut)
         }
 
         fn lisp_join(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
             let futs = args.into_iter()
-                .map(|x| eval(x, env)?.into_future())
+                .map(|x| eval(x, env)?.try_into())
                 .collect::<Result<Vec<LispAsyncValue>>>()?;
             let joined = future::join_all(futs);
             Ok(joined.map(|x| {
