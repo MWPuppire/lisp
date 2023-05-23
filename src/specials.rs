@@ -158,7 +158,7 @@ macro_rules! special_form {
             },
             LispSpecialForm::Macroexpand => {
                 if let Some(quoted) = $list.pop_front() {
-                    return expand_macros(quoted, &$env);
+                    return Ok(expand_macros(quoted, &$env)?.0);
                 } else {
                     return Err(LispError::IncorrectArguments(1, 0));
                 }

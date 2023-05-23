@@ -40,45 +40,62 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
+pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, LispEnv)> {
     if is_macro_call(&val, env) {
         let mut list = val.into_list()?;
         let Some(head) = list.pop_front() else { unreachable!() };
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
         let Ok(f) = var.expect_func() else { unreachable!() };
-        let (out, _) = apply(f, list, env, true)?;
-        Ok(out)
+        // some code duplication from `expand_fn`, but I didn't want `is_macro`
+        // as a parameter for `expand_fn` to be in public API
+        if f.variadic && list.len() >= (f.args.len() - 1) {
+            let mut args = list.into_iter().map(|x| {
+                Ok(expand_macros(x, env)?.0)
+            }).collect::<Result<Vector<LispValue>>>()?;
+            let variadic_idx = f.args.len() - 1;
+            let last_args = args.split_off(variadic_idx);
+            let arg_names = f.args[0..variadic_idx].iter().copied();
+            let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
+            params.push((f.args[variadic_idx], LispValue::list_from(last_args)));
+            let fn_env = f.closure.make_macro_env(&params, env);
+            Ok((f.body.clone(), fn_env))
+        } else if list.len() != f.args.len() {
+            Err(LispError::IncorrectArguments(f.args.len(), list.len()))
+        } else {
+            let args = list.into_iter().map(|x| {
+                Ok(expand_macros(x, env)?.0)
+            }).collect::<Result<Vec<LispValue>>>()?;
+            let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
+            let fn_env = f.closure.make_macro_env(&params, env);
+            Ok((f.body.clone(), fn_env))
+        }
     } else {
-        Ok(val)
+        // TODO cloning environments is cheap since it's just bumping an Arc,
+        // but I should maybe still find a better solution to this
+        Ok((val, env.clone()))
     }
 }
 
-fn apply(f: &LispFunc, args: Vector<LispValue>, env: &LispEnv, is_macro: bool) -> Result<(LispValue, LispEnv)> {
-    let evaluator = if is_macro { expand_macros } else { eval };
+// doesn't actually execute the function with its arguments (to allow TCO), just
+// replaces the function with its body after creating the closure with all
+// arguments properly applied
+pub fn expand_fn(f: &LispFunc, args: Vector<LispValue>, env: &LispEnv) -> Result<(LispValue, LispEnv)> {
     if f.variadic && args.len() >= (f.args.len() - 1) {
-        let mut vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vector<LispValue>>>()?;
-        let last_vals = vals.split_off(f.args.len() - 1);
+        let mut args = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let variadic_idx = f.args.len() - 1;
+        let last_args = args.split_off(variadic_idx);
         let arg_names = f.args[0..variadic_idx].iter().copied();
-        let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, vals).collect();
-        params.push((f.args[variadic_idx], LispValue::list_from(last_vals)));
-        let fn_env = if is_macro {
-            f.closure.make_macro_env(&params, env)
-        } else {
-            f.closure.make_env(&params)
-        };
+        let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
+        params.push((f.args[variadic_idx], LispValue::list_from(last_args)));
+        let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
-        let vals = args.into_iter().map(|x| evaluator(x, env)).collect::<Result<Vec<LispValue>>>()?;
-        let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), vals).collect();
-        let fn_env = if is_macro {
-            f.closure.make_macro_env(&params, env)
-        } else {
-            f.closure.make_env(&params)
-        };
+        let args = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
+        let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
+        let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     }
 }
@@ -105,10 +122,11 @@ fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
 }
 
 pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
-    // cloning an environment is cheap, just bumping an Arc
+    // similar to in `expand_macros`, I should maybe find something better than
+    // this (really, the main problem is just that I clone in both places)
     let mut env = env.clone();
     loop {
-        ast = expand_macros(ast, &env)?;
+        (ast, env) = expand_macros(ast, &env)?;
         if !matches!(ast, LispValue::Object(_)) {
             break eval_ast(ast, &env);
         }
@@ -128,7 +146,7 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
             LispValue::Object(o) => match o.deref() {
                 ObjectValue::BuiltinFunc(f) => break (f.body)(list, &env),
                 ObjectValue::Func(f) => {
-                    let (new_ast, new_env) = apply(f, list, &env, false)?;
+                    let (new_ast, new_env) = expand_fn(f, list, &env)?;
                     ast = new_ast;
                     env = new_env;
                 },

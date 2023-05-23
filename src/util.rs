@@ -19,6 +19,7 @@ cfg_if::cfg_if! {
     }
 }
 
+// Utility macro, raise `err` if `cond` is false
 macro_rules! __expect__ {
     ($cond:expr, $err:expr) => {
         if !$cond {
@@ -83,6 +84,11 @@ impl fmt::Display for LispSpecialForm {
     }
 }
 
+// the map includes any reserved words (identifiers with special meanings)
+// this includes the built-in special forms, but also `true`, `false`, and
+// `nil`, which have the unique property of being handled by the parser rather
+// than the evaluator (e.g. `parse("true")` returns the boolean `true`, but
+// `parse("x")` returns the identifier `x` for any non-reserved `x`)
 static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
     "def!" => LispValue::Special(LispSpecialForm::Def),
     "defmacro!" => LispValue::Special(LispSpecialForm::Defmacro),
@@ -106,6 +112,7 @@ static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
     "false" => LispValue::Bool(false),
 };
 
+// convenience type
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -376,6 +383,11 @@ impl LispValue {
         matches!(self, Self::Nil)
     }
 
+    // the `into_` vs. `expect_` functions is a quirk I'd like to get rid of,
+    // but it allowed some convenience where borrowing was acceptable versus
+    // where it really was better to own the data (like in a list or hashmap,
+    // where most use-cases will want to own the data instead of having an
+    // immutable reference to it)
     pub fn expect_symbol(&self) -> Result<LispSymbol> {
         match self {
             Self::Symbol(s) => Ok(*s),
@@ -482,6 +494,8 @@ impl LispValue {
         }
     }
 
+    // separate methods instead of using the `FromIterator` method, because it
+    // would be unclear whether a `List` or `Vector` was intended
     #[inline]
     pub fn list_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
         let list = ObjectValue::List(iter.into_iter().collect());

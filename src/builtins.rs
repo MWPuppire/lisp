@@ -42,6 +42,7 @@ fn eval_list_to_numbers<I: IntoIterator<Item = LispValue>>(args: I, env: &LispEn
     args.into_iter().map(|x| eval(x, env)?.expect_number()).collect()
 }
 
+// note: differs from Mal spec by allowing multiple parameters
 fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(args, env)?;
@@ -50,6 +51,7 @@ fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     ))
 }
 
+// note: differs from Mal spec by allowing multiple parameters
 fn lisp_minus(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first = eval_head!(args, env)?.expect_number()?;
@@ -59,6 +61,7 @@ fn lisp_minus(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     ))
 }
 
+// note: differs from Mal spec by allowing multiple parameters
 fn lisp_times(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let nums = eval_list_to_numbers(args, env)?;
@@ -74,6 +77,7 @@ fn lisp_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     Ok(LispValue::Number(numerator / denominator))
 }
 
+// new function (not in Mal)
 fn lisp_int_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 2, LispError::IncorrectArguments(2, args.len()));
     let numerator = eval_head!(args, env)?.expect_number()?;
@@ -275,6 +279,7 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValu
     Ok(LispValue::Nil)
 }
 
+// new function (not in Mal)
 fn lisp_typeof(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let x = eval_head!(args, env)?;
@@ -307,6 +312,7 @@ fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(list.remove(idx))
 }
 
+// additionally aliased to `head`, which is not in Mal
 fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
@@ -321,6 +327,7 @@ fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
 }
 
+// additionally aliased to `tail`, which is not in Mal
 fn lisp_rest(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let arg = eval_head!(args, env)?;
@@ -341,6 +348,7 @@ fn lisp_macroq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     }))
 }
 
+// new function (not in Mal)
 fn lisp_inspect(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
     let val = eval_head!(args, env)?;
@@ -677,6 +685,7 @@ fn lisp_with_meta(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue>
     Err(LispError::NoMeta)
 }
 
+// asynchronous functionality and promises are not in the Mal specification
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
         fn lisp_promise(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
@@ -701,6 +710,10 @@ cfg_if::cfg_if! {
             Ok(fut.into())
         }
 
+        // TODO try to figure out some way to have `await` be in an `async`
+        // function; maybe add a new `async_eval` and make `await` a special
+        // form, but then the current evaluator (i.e. `eval` vs. `async_eval`)
+        // needs to be passed to every built-in
         fn lisp_await(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
             expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
             let fut = eval_head!(args, env)?.into_future()?;
@@ -720,6 +733,7 @@ cfg_if::cfg_if! {
     }
 }
 
+// asynchronous functionality and promises are not in the Mal specification
 #[cfg(feature = "async-io")]
 fn lisp_readline_async(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let env = env.clone();
@@ -742,6 +756,7 @@ fn lisp_readline_async(mut args: Vector<LispValue>, env: &LispEnv) -> Result<Lis
     }.boxed().into())
 }
 
+// asynchronous functionality and promises are not in the Mal specification
 #[cfg(feature = "async-io")]
 fn lisp_slurp_async(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
