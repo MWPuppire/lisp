@@ -1,6 +1,7 @@
+use std::mem::ManuallyDrop;
 use std::iter::zip;
 use std::sync::Arc;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use im::{Vector, vector, HashMap};
 use parking_lot::RwLock;
 use crate::{LispValue, LispError, Result};
@@ -44,7 +45,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, LispEnv)> {
+pub fn expand_macros(val: LispValue, env: &mut LispEnv) -> Result<(LispValue, Arc<RwLock<LispEnv>>)> {
     if is_macro_call(&val, env) {
         let mut list = val.try_into_iter()?;
         let Some(head) = list.next() else { unreachable!() };
@@ -78,14 +79,14 @@ pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, LispEn
     } else {
         // TODO cloning environments is cheap since it's just bumping an Arc,
         // but I should maybe still find a better solution to this
-        Ok((val, env.clone()))
+        Ok((val, env.clone_arc()))
     }
 }
 
 // doesn't actually execute the function with its arguments (to allow TCO), just
 // replaces the function with its body after creating the closure with all
 // arguments properly applied
-pub fn expand_fn(f: &LispFunc, args: Vector<LispValue>, env: &LispEnv) -> Result<(LispValue, LispEnv)> {
+pub fn expand_fn(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Result<(LispValue, Arc<RwLock<LispEnv>>)> {
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut args = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vector<LispValue>>>()?;
         let variadic_idx = f.args.len() - 1;
@@ -105,7 +106,7 @@ pub fn expand_fn(f: &LispFunc, args: Vector<LispValue>, env: &LispEnv) -> Result
     }
 }
 
-fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
+fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(match ast {
         LispValue::Symbol(s) => lookup_variable(s, env)?,
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
@@ -126,34 +127,62 @@ fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
     })
 }
 
-pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
-    // similar to in `expand_macros`, I should maybe find something better than
-    // this (really, the main problem is just that I clone in both places)
-    let mut env = env.clone();
-    loop {
-        (ast, env) = expand_macros(ast, &env)?;
+pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
+    let mut locks_to_drop = vec![];
+    let mut stash_env = |new_env: Arc<RwLock<LispEnv>>| {
+        unsafe {
+            let ptr = Arc::into_raw(new_env);
+            let lock = ManuallyDrop::new(ptr.as_ref().unwrap().write());
+            let idx = locks_to_drop.len();
+            locks_to_drop.push((ptr, lock));
+            if idx > 0 {
+                let last_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx - 1].1);
+                ManuallyDrop::drop(last_ptr.as_mut().unwrap());
+            }
+            let lock_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx].1);
+            lock_ptr.as_mut().unwrap().deref_mut()
+        }
+    };
+    let out = 'outer: loop {
+        if is_macro_call(&ast, env) {
+            let (new_ast, new_env) = expand_macros(ast, env)?;
+            ast = new_ast;
+            /*
+            let lock = new_env.write();
+            let idx = locks_to_drop.len();
+            locks_to_drop.push((new_env, lock));
+            env = locks_to_drop[idx].1.deref_mut();
+            */
+            env = stash_env(new_env);
+        }
         if !matches!(ast, LispValue::Object(_)) {
-            break eval_ast(ast, &env);
+            break eval_ast(ast, env);
         }
         let LispValue::Object(ref arc) = ast else { unreachable!() };
         if !matches!(arc.deref(), ObjectValue::List(_)) {
-            break eval_ast(ast, &env);
+            break eval_ast(ast, env);
         }
         let Ok(mut list): Result<Vector<LispValue>> = ast.try_into() else { unreachable!() };
         let Some(head) = list.pop_front() else {
             // just return an empty list without evaluating anything
             break Ok(LispValue::list_from(list));
         };
-        match eval(head, &env)? {
+        match eval(head, env)? {
             LispValue::Special(form) => {
-                ast = special_form!(form, list, eval, env);
+                ast = special_form!(form, list, eval, env, stash_env, 'outer);
             },
             LispValue::Object(o) => match o.deref() {
-                ObjectValue::BuiltinFunc(f) => break (f.body)(list, &env),
+                ObjectValue::BuiltinFunc(f) => break (f.body)(list, env),
                 ObjectValue::Func(f) => {
-                    let (new_ast, new_env) = expand_fn(f, list, &env)?;
+                    let (new_ast, new_env) = expand_fn(f, list, env)?;
                     ast = new_ast;
-                    env = new_env;
+                    /*
+                    let lock = new_env.write();
+                    let idx = locks_to_drop.len();
+                    locks_to_drop.push((new_env, lock));
+                    env = locks_to_drop[idx].1.deref_mut();
+                    */
+                    env = stash_env(new_env);
                 },
                 x => break Err(
                     LispError::InvalidDataType("function", x.type_of())
@@ -163,5 +192,14 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
                 LispError::InvalidDataType("function", x.type_of())
             ),
         }
+    };
+    if let Some((_, lock)) = locks_to_drop.last_mut() {
+        unsafe { ManuallyDrop::drop(lock) };
     }
+    locks_to_drop.into_iter().for_each(|(arc_ptr, _)| {
+        unsafe {
+            drop(Arc::from_raw(arc_ptr));
+        }
+    });
+    out
 }

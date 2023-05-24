@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+pub use std::sync::Arc;
+pub use std::ops::DerefMut;
+pub use parking_lot::RwLock;
 pub use im::{Vector, vector, HashMap, hashmap};
 pub use lazy_static::lazy_static;
 pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval};
@@ -44,7 +47,7 @@ lazy_static! {
     };
 }
 
-pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     if args.len() != 1 {
         return Err(LispError::IncorrectArguments(1, args.len()));
     }
@@ -53,7 +56,7 @@ pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<Lis
     let f = MOCK_FS.get(file_name).unwrap();
     Ok(f.to_string().into())
 }
-pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     if args.len() != 1 {
         return Err(LispError::IncorrectArguments(1, args.len()));
     }
@@ -64,18 +67,21 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result
     let mut parser = LispParser::new();
     parser.add_tokenize(f);
     let mut global = env.global();
+    let mut lock = global.write();
     for val in parser {
-        eval(val?, &global)?;
+        eval(val?, lock.deref_mut())?;
     }
     Ok(LispValue::Nil)
 }
 
-pub fn testing_env() -> LispEnv {
-    let mut env = LispEnv::new_stdlib_protected();
+pub fn testing_env() -> Arc<RwLock<LispEnv>> {
+    let env = LispEnv::new_stdlib_protected();
+    let mut lock = env.write();
     // mock filesystem; other functionality could be mocked later as needed
-    env.bind_func("slurp", lisp_test_slurp);
-    env.bind_func("load-file", lisp_test_load_file);
+    lock.bind_func("slurp", lisp_test_slurp);
+    lock.bind_func("load-file", lisp_test_load_file);
 
+    drop(lock);
     // TODO mock println and family?
     env
 }
@@ -83,14 +89,15 @@ pub fn testing_env() -> LispEnv {
 #[inline]
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = input.parse()?;
-    let mut env = testing_env();
-    eval(parsed, &env)
+    let env = testing_env();
+    let x = eval(parsed, env.write().deref_mut());
+    x
 }
 
 #[inline]
-pub fn eval_str_in_env(input: &str, env: &LispEnv) -> Result<LispValue> {
+pub fn eval_str_in_env(input: &str, env: &mut LispEnv) -> Result<LispValue> {
     let parsed = input.parse()?;
-    eval(parsed, &env)
+    eval(parsed, env)
 }
 
 #[macro_export]

@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 
 extern crate cfg_if;
 extern crate lazy_static;
@@ -16,6 +16,7 @@ extern crate ordered_float;
 extern crate nom;
 extern crate by_address;
 extern crate phf;
+extern crate parking_lot;
 
 // Also with Miri test fails, Miri reports a memory leak in the test suite
 // (starting at step 4 tests)

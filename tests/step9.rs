@@ -50,10 +50,11 @@ fn apply() {
 
 #[test]
 fn map() {
-    let mut env = testing_env();
-    eval!("(def! nums (list 1 2 3))", &mut env);
-    eval!("(def! double (fn* (a) (* 2 a)))", &mut env);
-    assert_eq!(eval!("(map double nums)", &mut env), LispValue::list_from(vector![
+    let env = testing_env();
+    let mut lock = env.write();
+    eval!("(def! nums (list 1 2 3))", lock.deref_mut());
+    eval!("(def! double (fn* (a) (* 2 a)))", lock.deref_mut());
+    assert_eq!(eval!("(map double nums)", lock.deref_mut()), LispValue::list_from(vector![
         2.0.into(),
         4.0.into(),
         6.0.into(),

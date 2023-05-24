@@ -2,6 +2,7 @@ extern crate rustyline;
 
 use std::fs::File;
 use std::io::prelude::*;
+use std::ops::DerefMut;
 
 use lisp::{Result, LispParser, LispEnv, eval};
 
@@ -9,8 +10,13 @@ fn main() -> Result<()> {
     let mut rl = rustyline::DefaultEditor::new().unwrap();
 
     let mut parser = LispParser::new();
-    let mut env = LispEnv::default();
+    #[cfg(feature = "io-stdlib")]
+    let env = LispEnv::new_stdlib();
+    #[cfg(not(feature = "io-stdlib"))]
+    let env = LispEnv::new_stdlib_protected();
     let mut buffer = String::new();
+
+    let mut env_writer = env.write();
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && &args[1] != "--" {
@@ -18,7 +24,7 @@ fn main() -> Result<()> {
         file.read_to_string(&mut buffer).unwrap();
         parser.add_tokenize(&buffer)?;
         for val in parser {
-            eval(val?, &mut env)?;
+            eval(val?, env_writer.deref_mut())?;
         }
         return Ok(());
     }
@@ -35,7 +41,7 @@ fn main() -> Result<()> {
             buffer = String::new();
             for val in &mut parser {
                 match val {
-                    Ok(tok) => match eval(tok, &mut env) {
+                    Ok(tok) => match eval(tok, env_writer.deref_mut()) {
                         Ok(out) => println!("{}", out.inspect()),
                         Err(err) => println!("Err: {}", err),
                     },

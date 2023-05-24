@@ -1,39 +1,43 @@
 mod common;
 use common::*;
 
-fn basic_macros() -> LispEnv {
-    let mut env = testing_env();
-    eval!("(defmacro! one (fn* () 1))", &mut env);
-    eval!("(defmacro! two (fn* () 2))", &mut env);
-    eval!("(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))", &mut env);
-    eval!("(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))", &mut env);
-    eval!("(defmacro! identity (fn* (x) x))", &mut env);
+fn basic_macros() -> Arc<RwLock<LispEnv>> {
+    let env = testing_env();
+    let mut lock = env.write();
+    eval!("(defmacro! one (fn* () 1))", lock.deref_mut());
+    eval!("(defmacro! two (fn* () 2))", lock.deref_mut());
+    eval!("(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))", lock.deref_mut());
+    eval!("(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))", lock.deref_mut());
+    eval!("(defmacro! identity (fn* (x) x))", lock.deref_mut());
+    drop(lock);
     env
 }
 
 #[test]
 fn macros() {
-    let mut env = basic_macros();
-    assert_eq!(eval!("(one)", &mut env), 1.0.into());
-    assert_eq!(eval!("(two)", &mut env), 2.0.into());
-    assert_eq!(eval!("(unless false 7 8)", &mut env), 7.0.into());
-    assert_eq!(eval!("(unless true 7 8)", &mut env), 8.0.into());
-    assert_eq!(eval!("(unless2 false 7 8)", &mut env), 7.0.into());
-    assert_eq!(eval!("(unless2 true 7 8)", &mut env), 8.0.into());
-    assert_eq!(eval!("(let* (a 123) (identity a))", &mut env), 123.0.into());
+    let env = basic_macros();
+    let mut lock = env.write();
+    assert_eq!(eval!("(one)", lock.deref_mut()), 1.0.into());
+    assert_eq!(eval!("(two)", lock.deref_mut()), 2.0.into());
+    assert_eq!(eval!("(unless false 7 8)", lock.deref_mut()), 7.0.into());
+    assert_eq!(eval!("(unless true 7 8)", lock.deref_mut()), 8.0.into());
+    assert_eq!(eval!("(unless2 false 7 8)", lock.deref_mut()), 7.0.into());
+    assert_eq!(eval!("(unless2 true 7 8)", lock.deref_mut()), 8.0.into());
+    assert_eq!(eval!("(let* (a 123) (identity a))", lock.deref_mut()), 123.0.into());
 }
 
 #[test]
 fn macroexpand() {
-    let mut env = basic_macros();
-    assert_eq!(eval!("(macroexpand (one))", &mut env), 1.0.into());
-    assert_eq!(eval!("(macroexpand (unless PRED A B))", &mut env), LispValue::list_from(vector![
+    let env = basic_macros();
+    let mut lock = env.write();
+    assert_eq!(eval!("(macroexpand (one))", lock.deref_mut()), 1.0.into());
+    assert_eq!(eval!("(macroexpand (unless PRED A B))", lock.deref_mut()), LispValue::list_from(vector![
         LispValue::symbol_for_static("if"),
         LispValue::symbol_for_static("PRED"),
         LispValue::symbol_for_static("B"),
         LispValue::symbol_for_static("A"),
     ]));
-    assert_eq!(eval!("(macroexpand (unless2 PRED A B))", &mut env), LispValue::list_from(vector![
+    assert_eq!(eval!("(macroexpand (unless2 PRED A B))", lock.deref_mut()), LispValue::list_from(vector![
         LispValue::symbol_for_static("if"),
         LispValue::list_from(vector![
             LispValue::symbol_for_static("not"),
@@ -42,7 +46,7 @@ fn macroexpand() {
         LispValue::symbol_for_static("A"),
         LispValue::symbol_for_static("B"),
     ]));
-    assert_eq!(eval!("(macroexpand (unless2 2 3 4))", &mut env), LispValue::list_from(vector![
+    assert_eq!(eval!("(macroexpand (unless2 2 3 4))", lock.deref_mut()), LispValue::list_from(vector![
         LispValue::symbol_for_static("if"),
         LispValue::list_from(vector![
             LispValue::symbol_for_static("not"),
@@ -51,7 +55,7 @@ fn macroexpand() {
         3.0.into(),
         4.0.into(),
     ]));
-    assert_eq!(eval!("(let* (a 123) (macroexpand (identity a)))", &mut env),
+    assert_eq!(eval!("(let* (a 123) (macroexpand (identity a)))", lock.deref_mut()),
         LispValue::symbol_for_static("a"),
     );
 }
@@ -103,9 +107,10 @@ fn cond_uneven() {
 
 #[test]
 fn macro_closure() {
-    let mut env = testing_env();
-    eval!("(def! x 2)", &mut env);
-    eval!("(defmacro! a (fn* [] x))", &mut env);
-    assert_eq!(eval!("(a)", &mut env), 2.0.into());
-    assert_eq!(eval!("(let* (x 3) (a))", &mut env), 2.0.into());
+    let env = testing_env();
+    let mut lock = env.write();
+    eval!("(def! x 2)", lock.deref_mut());
+    eval!("(defmacro! a (fn* [] x))", lock.deref_mut());
+    assert_eq!(eval!("(a)", lock.deref_mut()), 2.0.into());
+    assert_eq!(eval!("(let* (x 3) (a))", lock.deref_mut()), 2.0.into());
 }

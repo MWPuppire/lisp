@@ -126,7 +126,7 @@ pub struct LispFunc {
 #[derive(Clone, Copy)]
 pub struct LispBuiltinFunc {
     pub name: &'static str,
-    pub body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>,
+    pub body: fn(Vector<LispValue>, &mut LispEnv) -> Result<LispValue>,
 }
 impl PartialEq for LispBuiltinFunc {
     #[inline]
@@ -145,7 +145,7 @@ impl fmt::Debug for LispBuiltinFunc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LispBuiltinFunc")
             .field("name", &self.name)
-            .field("body", &self.body as &fn(Vector<LispValue>, &'static LispEnv) -> Result<LispValue>)
+            .field("body", &self.body as &fn(Vector<LispValue>, &'static mut LispEnv) -> Result<LispValue>)
             .finish()
     }
 }
