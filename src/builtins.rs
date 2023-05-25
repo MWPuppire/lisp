@@ -275,6 +275,10 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Lisp
     let mut parser = LispParser::new();
     parser.add_tokenize(&contents)?;
     let global = env.global();
+    // This is NOT an optimization. This is required to avoid a dead-lock;
+    // attempting to lock the same environment calling a function will always
+    // result in a dead-lock, so built-in functions which lock an environment
+    // need to be aware of this and handle the case accordingly.
     if Arc::ptr_eq(&global, &env.clone_arc()) {
         for val in parser {
             eval(val?, env)?;

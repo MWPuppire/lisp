@@ -67,6 +67,8 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Re
     let mut parser = LispParser::new();
     parser.add_tokenize(f);
     let mut global = env.global();
+    // `ptr_eq` explained in `lisp_load_file` (the built-in function). Needed to
+    // avoid a dead-lock.
     if Arc::ptr_eq(&global, &env.clone_arc()) {
         for val in parser {
             eval(val?, env)?;

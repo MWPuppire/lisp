@@ -44,7 +44,7 @@ pub(crate) fn inner_quasiquote(arg: LispValue, eval: fn(LispValue, &mut LispEnv)
 }
 
 macro_rules! special_form {
-    ($form:expr, $list:expr, $eval:ident, $env:ident, $stash_env:expr, $outer:lifetime) => {
+    ($form:expr, $list:expr, $eval:ident, $env:ident, $stash_env:expr) => {
         match $form {
             LispSpecialForm::Def => {
                 expect!($list.len() == 2, LispError::IncorrectArguments(
@@ -92,7 +92,7 @@ macro_rules! special_form {
                 while let Some(name) = decls.next() {
                     let name = name.try_into()?;
                     let Some(val_expr) = decls.next() else {
-                        break $outer Err(LispError::MissingBinding)
+                        return Err(LispError::MissingBinding)
                     };
                     let val = $eval(val_expr, $env)?;
                     $env.set(name, val);
@@ -191,8 +191,10 @@ macro_rules! special_form {
                             let s = err.to_string();
                             lock.set(err_name, s.into());
                         }
-                        // run the `catch*` body in the new environment
+                        // lock needs to be dropped before $stash_env can be
+                        // called
                         drop(lock);
+                        // run the `catch*` body in the new environment
                         $env = $stash_env(caught_env);
                         catch.next().unwrap()
                     }

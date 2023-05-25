@@ -133,7 +133,13 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
         ManuallyDrop<RwLockWriteGuard<'_, LispEnv>>
     )> = vec![];
     let env_copy = env.clone_arc();
+    // whether the environment was unlocked in `stash_env` and needs to be
+    // re-locked before returning (bad design)
     let mut relock = false;
+    // This whole function is an unsafe mess, and it almost certainly breaks
+    // Stacked Borrows. (Unfortunately, `im` violating Stacked Borrows means
+    // testing never gets far enough to see whether `eval` breaks it, too).
+    // I'm not a huge fan, but I'm not sure how to do it better.
     let mut stash_env = |new_env: Arc<RwLock<LispEnv>>| {
         unsafe {
             let idx = locks_to_drop.len();
@@ -154,7 +160,12 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             lock_ptr.as_mut().unwrap().deref_mut()
         }
     };
-    let out = (|| 'outer: loop {
+    // Not a fan of this immediately invoked closure, but specific clean-up
+    // needs to be performed at end-of-function (and the `?` syntax is too
+    // convenient to give up), so this keeps the early-return from exiting the
+    // whole function (and thereby skipping the clean-up, which needs to be
+    // performed even in an error-case).
+    let out = (|| loop {
         if is_macro_call(&ast, env) {
             let (new_ast, new_env) = expand_macros(ast, env)?;
             ast = new_ast;
@@ -174,7 +185,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
         };
         match eval(head, env)? {
             LispValue::Special(form) => {
-                ast = special_form!(form, list, eval, env, stash_env, 'outer);
+                ast = special_form!(form, list, eval, env, stash_env);
             },
             LispValue::Object(o) => match o.deref() {
                 ObjectValue::BuiltinFunc(f) => break (f.body)(list, env),
@@ -192,6 +203,8 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             ),
         }
     })();
+    // Release those environments we've been holding on to, and release the lock
+    // we've got, if any.
     if let Some((_, lock)) = locks_to_drop.last_mut() {
         unsafe { ManuallyDrop::drop(lock) };
     }
@@ -200,6 +213,10 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             drop(Arc::from_raw(arc_ptr));
         }
     });
+    // If `stash_env` unlocked an outer write-lock, a new lock needs to be
+    // acquired before returning (otherwise, the write-lock that was NOT passed
+    // to this function will stop working, causing UB [and making an error
+    // that's a pain to track down with no compiler aid]).
     if relock {
         std::mem::forget(env_copy.deref().write());
     }
