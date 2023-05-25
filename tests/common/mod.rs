@@ -67,9 +67,15 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Re
     let mut parser = LispParser::new();
     parser.add_tokenize(f);
     let mut global = env.global();
-    let mut lock = global.write();
-    for val in parser {
-        eval(val?, lock.deref_mut())?;
+    if Arc::ptr_eq(&global, &env.clone_arc()) {
+        for val in parser {
+            eval(val?, env)?;
+        }
+    } else {
+        let mut lock = global.write();
+        for val in parser {
+            eval(val?, lock.deref_mut())?;
+        }
     }
     Ok(LispValue::Nil)
 }

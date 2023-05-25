@@ -141,7 +141,7 @@ impl LispEnv {
     }
 
     #[inline]
-    pub(crate) fn clone_arc(&self) -> Arc<RwLock<Self>> {
+    pub fn clone_arc(&self) -> Arc<RwLock<Self>> {
         self.this.upgrade().unwrap()
     }
 

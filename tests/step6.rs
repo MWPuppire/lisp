@@ -59,16 +59,7 @@ fn test_slurp() {
     assert_eq!(eval!("(slurp \"test.txt\")"), "A line of text".to_owned().into());
 }
 
-// Due to current design, `load-file` needs to be a special form
-// Unless and until that changes, this code won't work, since `testing_env()`
-// has a dummied `load-file` implemented as a normal function (and, currently,
-// even the stdlib's `load-file` is a normal function, meaning it will probably
-// dead-lock if invoked, like this one) (specifically, I think `load-file` will
-// dead-lock if the global environment is also the one where `load-file` is
-// called from, so a `load-file` called from within a `let*` or similar should
-// work)
 #[test]
-#[ignore]
 fn test_load_file() {
     let env = testing_env();
     let mut lock = env.write();

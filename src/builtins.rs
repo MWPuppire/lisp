@@ -275,9 +275,15 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Lisp
     let mut parser = LispParser::new();
     parser.add_tokenize(&contents)?;
     let global = env.global();
-    let mut lock = global.write();
-    for val in parser {
-        eval(val?, lock.deref_mut())?;
+    if Arc::ptr_eq(&global, &env.clone_arc()) {
+        for val in parser {
+            eval(val?, env)?;
+        }
+    } else {
+        let mut lock = global.write();
+        for val in parser {
+            eval(val?, lock.deref_mut())?;
+        }
     }
     Ok(LispValue::Nil)
 }
