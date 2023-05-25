@@ -32,24 +32,37 @@ fn assign_this_self(inner: LispEnv) -> Arc<RwLock<LispEnv>> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LispClosure(ByAddress<Arc<RwLock<LispEnv>>>);
 impl LispClosure {
-    pub fn make_env(&self, args: &[(LispSymbol, LispValue)]) -> Arc<RwLock<LispEnv>> {
+    pub fn make_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> Arc<RwLock<LispEnv>> {
         let enclosing = self.0.0.clone();
-        let lock = self.0.0.read();
+        let surrounding_arc = surrounding.clone_arc();
+        let stdlib = if Arc::ptr_eq(&enclosing, &surrounding_arc) {
+            surrounding.stdlib
+        } else {
+            let lock = self.0.0.read();
+            lock.stdlib
+        };
         let inner = LispEnv {
             data: args.into(),
             this: Weak::new(),
             enclosing: Some(enclosing),
-            stdlib: lock.stdlib,
+            stdlib,
         };
         assign_this_self(inner)
     }
     pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> Arc<RwLock<LispEnv>> {
-        let lock = self.0.0.read();
+        let surrounding_arc = surrounding.clone_arc();
+        let (enclosing, stdlib) = if Arc::ptr_eq(&self.0.0, &surrounding_arc) {
+            (Some(surrounding.clone_arc()), surrounding.stdlib)
+        } else {
+            let lock = self.0.0.read();
+            let enclosing = lock.union(surrounding);
+            (Some(enclosing), lock.stdlib)
+        };
         let inner = LispEnv {
             data: args.into(),
             this: Weak::new(),
-            enclosing: Some(lock.union(surrounding)),
-            stdlib: lock.stdlib,
+            enclosing,
+            stdlib,
         };
         assign_this_self(inner)
     }
@@ -98,13 +111,13 @@ impl LispEnv {
     }
 
     pub fn global(&self) -> Arc<RwLock<Self>> {
-        let mut peekable = self.nested_envs().peekable();
+        let mut peekable = self.nested_envs().skip(1).peekable();
         while let Some(env) = peekable.next() {
             if peekable.peek().is_none() {
                 return env;
             }
         }
-        unreachable!()
+        self.clone_arc()
     }
 
     #[inline]

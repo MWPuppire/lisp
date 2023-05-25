@@ -3,7 +3,7 @@ use std::iter::zip;
 use std::sync::Arc;
 use std::ops::{Deref, DerefMut};
 use im::{Vector, vector, HashMap};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use crate::{LispValue, LispError, Result};
 use crate::env::{LispEnv, LispSymbol};
 use crate::util::{LispFunc, ObjectValue, LispSpecialForm, expect};
@@ -94,14 +94,14 @@ pub fn expand_fn(f: &LispFunc, args: Vector<LispValue>, env: &mut LispEnv) -> Re
         let arg_names = f.args[0..variadic_idx].iter().copied();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
         params.push((f.args[variadic_idx], LispValue::list_from(last_args)));
-        let fn_env = f.closure.make_env(&params);
+        let fn_env = f.closure.make_env(&params, env);
         Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
         let args = args.into_iter().map(|x| eval(x, env)).collect::<Result<Vec<LispValue>>>()?;
         let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
-        let fn_env = f.closure.make_env(&params);
+        let fn_env = f.closure.make_env(&params, env);
         Ok((f.body.clone(), fn_env))
     }
 }
@@ -128,31 +128,36 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
 }
 
 pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
-    let mut locks_to_drop = vec![];
+    let mut locks_to_drop: Vec<(
+        *const RwLock<LispEnv>,
+        ManuallyDrop<RwLockWriteGuard<'_, LispEnv>>
+    )> = vec![];
+    let env_copy = env.clone_arc();
+    let mut relock = false;
     let mut stash_env = |new_env: Arc<RwLock<LispEnv>>| {
         unsafe {
-            let ptr = Arc::into_raw(new_env);
-            let lock = ManuallyDrop::new(ptr.as_ref().unwrap().write());
             let idx = locks_to_drop.len();
-            locks_to_drop.push((ptr, lock));
             if idx > 0 {
                 let last_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx - 1].1);
                 ManuallyDrop::drop(last_ptr.as_mut().unwrap());
+            } else {
+                let lock = env_copy.deref();
+                if lock.is_locked_exclusive() {
+                    lock.force_unlock_write();
+                    relock = true;
+                }
             }
+            let ptr = Arc::into_raw(new_env);
+            let lock = ManuallyDrop::new(ptr.as_ref().unwrap().write());
+            locks_to_drop.push((ptr, lock));
             let lock_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx].1);
             lock_ptr.as_mut().unwrap().deref_mut()
         }
     };
-    let out = 'outer: loop {
+    let out = (|| 'outer: loop {
         if is_macro_call(&ast, env) {
             let (new_ast, new_env) = expand_macros(ast, env)?;
             ast = new_ast;
-            /*
-            let lock = new_env.write();
-            let idx = locks_to_drop.len();
-            locks_to_drop.push((new_env, lock));
-            env = locks_to_drop[idx].1.deref_mut();
-            */
             env = stash_env(new_env);
         }
         if !matches!(ast, LispValue::Object(_)) {
@@ -176,12 +181,6 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
                 ObjectValue::Func(f) => {
                     let (new_ast, new_env) = expand_fn(f, list, env)?;
                     ast = new_ast;
-                    /*
-                    let lock = new_env.write();
-                    let idx = locks_to_drop.len();
-                    locks_to_drop.push((new_env, lock));
-                    env = locks_to_drop[idx].1.deref_mut();
-                    */
                     env = stash_env(new_env);
                 },
                 x => break Err(
@@ -192,7 +191,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
                 LispError::InvalidDataType("function", x.type_of())
             ),
         }
-    };
+    })();
     if let Some((_, lock)) = locks_to_drop.last_mut() {
         unsafe { ManuallyDrop::drop(lock) };
     }
@@ -201,5 +200,8 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             drop(Arc::from_raw(arc_ptr));
         }
     });
+    if relock {
+        std::mem::forget(env_copy.deref().write());
+    }
     out
 }

@@ -98,11 +98,6 @@ macro_rules! special_form {
                     $env.set(name, val);
                 }
                 // continue with the `let` body, but in the new environment
-                /*
-                let idx = $to_drop.len();
-                $to_drop.push((new_env, lock));
-                $env = $to_drop[idx].1.deref_mut();
-                */
                 $list.pop_front().unwrap()
             },
             LispSpecialForm::Quote => {
@@ -197,11 +192,6 @@ macro_rules! special_form {
                             lock.set(err_name, s.into());
                         }
                         // run the `catch*` body in the new environment
-                        /*
-                        let idx = $to_drop.len();
-                        $to_drop.push((caught_env, lock));
-                        $env = $to_drop[idx].1.deref_mut();
-                        */
                         drop(lock);
                         $env = $stash_env(caught_env);
                         catch.next().unwrap()
@@ -274,12 +264,6 @@ macro_rules! special_form {
                     break Err(LispError::IncorrectArguments(1, 0));
                 };
                 let global = $env.global();
-                /*
-                let lock = global.write();
-                let idx = $to_drop.len();
-                $to_drop.push((global, lock));
-                $env = $to_drop[idx].1.deref_mut();
-                */
                 $env = $stash_env(global);
                 $eval(expr, $env)?
             },
