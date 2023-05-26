@@ -1,14 +1,14 @@
-use std::fmt;
-use std::sync::Arc;
-use std::ops::Deref;
-use std::convert::Infallible;
-use thiserror::Error;
-use ordered_float::OrderedFloat;
-use im::{HashMap, Vector};
+use crate::env::{LispClosure, LispEnv, LispSymbol};
 use by_address::ByAddress;
-use phf::phf_map;
+use im::{HashMap, Vector};
+use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
-use crate::env::{LispEnv, LispClosure, LispSymbol};
+use phf::phf_map;
+use std::convert::Infallible;
+use std::fmt;
+use std::ops::Deref;
+use std::sync::Arc;
+use thiserror::Error;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "async")] {
@@ -25,7 +25,7 @@ macro_rules! __expect__ {
         if !$cond {
             Err($err)?;
         }
-    }
+    };
 }
 pub(crate) use __expect__ as expect;
 
@@ -134,7 +134,7 @@ impl PartialEq for LispBuiltinFunc {
         self.name == other.name
     }
 }
-impl Eq for LispBuiltinFunc { }
+impl Eq for LispBuiltinFunc {}
 impl std::hash::Hash for LispBuiltinFunc {
     #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -145,7 +145,10 @@ impl fmt::Debug for LispBuiltinFunc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LispBuiltinFunc")
             .field("name", &self.name)
-            .field("body", &self.body as &fn(Vector<LispValue>, &'static mut LispEnv) -> Result<LispValue>)
+            .field(
+                "body",
+                &self.body as &fn(Vector<LispValue>, &'static mut LispEnv) -> Result<LispValue>,
+            )
             .finish()
     }
 }
@@ -211,17 +214,18 @@ impl ObjectValue {
             Self::List(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("'({})", xs.join(" "))
-            },
+            }
             Self::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect_inner() + " " + &val.inspect()
-                ).collect();
+                let xs: Vec<String> = m
+                    .iter()
+                    .map(|(key, val)| key.inspect_inner() + " " + &val.inspect())
+                    .collect();
                 format!("'{{{}}}", xs.join(" "))
-            },
+            }
             Self::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("'[{}]", xs.join(" "))
-            },
+            }
             _ => self.inspect_inner(),
         }
     }
@@ -235,25 +239,34 @@ impl ObjectValue {
             Self::Func(f) => format!(
                 "({} ({}) {})",
                 "fn*",
-                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<_>>().join(" "),
+                f.args
+                    .iter()
+                    .map(|x| LispEnv::symbol_string(*x).unwrap())
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 f.body.inspect()
             ),
             Self::Macro(f) => format!(
                 "({} ({}) {})",
                 "#<macro-fn*>",
-                f.args.iter().map(|x| LispEnv::symbol_string(*x).unwrap()).collect::<Vec<_>>().join(" "),
+                f.args
+                    .iter()
+                    .map(|x| LispEnv::symbol_string(*x).unwrap())
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 f.body.inspect()
             ),
             Self::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.inspect_inner() + " " + &val.inspect()
-                ).collect();
+                let xs: Vec<String> = m
+                    .iter()
+                    .map(|(key, val)| key.inspect_inner() + " " + &val.inspect())
+                    .collect();
                 format!("{{{}}}", xs.join(" "))
-            },
+            }
             Self::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
                 format!("'[{}]", xs.join(" "))
-            },
+            }
             Self::String(s) => format!(r#""{}""#, s.escape_default()),
             Self::Keyword(s) => format!(":{}", s),
         }
@@ -266,20 +279,21 @@ impl fmt::Display for ObjectValue {
             Self::List(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "({})", xs.join(" "))
-            },
+            }
             Self::BuiltinFunc(_) => write!(f, "#<native function>"),
             Self::Func(_) => write!(f, "#<function>"),
             Self::Macro(_) => write!(f, "#<macro>"),
             Self::Vector(l) => {
                 let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
                 write!(f, "[{}]", xs.join(" "))
-            },
+            }
             Self::Map(m) => {
-                let xs: Vec<String> = m.iter().map(|(key, val)|
-                    key.to_string() + " " + &val.to_string()
-                ).collect();
+                let xs: Vec<String> = m
+                    .iter()
+                    .map(|(key, val)| key.to_string() + " " + &val.to_string())
+                    .collect();
                 write!(f, "{{{}}}", xs.join(" "))
-            },
+            }
             Self::String(s) => write!(f, "{}", s),
             Self::Keyword(s) => write!(f, ":{}", s),
         }
@@ -319,16 +333,12 @@ impl LispValue {
 
     #[inline]
     pub fn string_for(s: String) -> Self {
-        Self::Object(Arc::new(
-            ObjectValue::String(s.to_owned())
-        ))
+        Self::Object(Arc::new(ObjectValue::String(s.to_owned())))
     }
 
     #[inline]
     pub fn keyword_for(s: String) -> Self {
-        Self::Object(Arc::new(
-            ObjectValue::Keyword(s.to_owned())
-        ))
+        Self::Object(Arc::new(ObjectValue::Keyword(s.to_owned())))
     }
 
     pub fn type_of(&self) -> &'static str {
@@ -636,9 +646,9 @@ impl Clone for LispError {
     fn clone(&self) -> Self {
         match self {
             // HACK to get around io::Error being non-cloneable
-            Self::OSFailure(x) => Self::UncaughtException(
-                format!("error calling into native function: {}", x).into()
-            ),
+            Self::OSFailure(x) => {
+                Self::UncaughtException(format!("error calling into native function: {}", x).into())
+            }
             x => x.clone(),
         }
     }

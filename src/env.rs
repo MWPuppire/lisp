@@ -1,13 +1,13 @@
-use std::sync::{Arc, Weak};
-use std::ops::DerefMut;
-use im::{HashMap, Vector};
-use lazy_static::lazy_static;
-use string_interner::{StringInterner, DefaultSymbol};
-use by_address::ByAddress;
-use parking_lot::RwLock;
-use crate::LispValue;
 use crate::builtins;
 use crate::util::{LispBuiltinFunc, ObjectValue, Result};
+use crate::LispValue;
+use by_address::ByAddress;
+use im::{HashMap, Vector};
+use lazy_static::lazy_static;
+use parking_lot::RwLock;
+use std::ops::DerefMut;
+use std::sync::{Arc, Weak};
+use string_interner::{DefaultSymbol, StringInterner};
 
 pub type LispSymbol = DefaultSymbol;
 
@@ -32,13 +32,17 @@ fn assign_this_self(inner: LispEnv) -> Arc<RwLock<LispEnv>> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LispClosure(ByAddress<Arc<RwLock<LispEnv>>>);
 impl LispClosure {
-    pub fn make_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> Arc<RwLock<LispEnv>> {
-        let enclosing = self.0.0.clone();
+    pub fn make_env(
+        &self,
+        args: &[(LispSymbol, LispValue)],
+        surrounding: &LispEnv,
+    ) -> Arc<RwLock<LispEnv>> {
+        let enclosing = self.0 .0.clone();
         let surrounding_arc = surrounding.clone_arc();
         let stdlib = if Arc::ptr_eq(&enclosing, &surrounding_arc) {
             surrounding.stdlib
         } else {
-            let lock = self.0.0.read();
+            let lock = self.0 .0.read();
             lock.stdlib
         };
         let inner = LispEnv {
@@ -49,12 +53,16 @@ impl LispClosure {
         };
         assign_this_self(inner)
     }
-    pub fn make_macro_env(&self, args: &[(LispSymbol, LispValue)], surrounding: &LispEnv) -> Arc<RwLock<LispEnv>> {
+    pub fn make_macro_env(
+        &self,
+        args: &[(LispSymbol, LispValue)],
+        surrounding: &LispEnv,
+    ) -> Arc<RwLock<LispEnv>> {
         let surrounding_arc = surrounding.clone_arc();
-        let (enclosing, stdlib) = if Arc::ptr_eq(&self.0.0, &surrounding_arc) {
+        let (enclosing, stdlib) = if Arc::ptr_eq(&self.0 .0, &surrounding_arc) {
             (Some(surrounding.clone_arc()), surrounding.stdlib)
         } else {
-            let lock = self.0.0.read();
+            let lock = self.0 .0.read();
             let enclosing = lock.union(surrounding);
             (Some(enclosing), lock.stdlib)
         };
@@ -70,9 +78,7 @@ impl LispClosure {
 
 // TODO I'd probably rather not have a single static interner
 lazy_static! {
-    static ref INTERNER: RwLock<StringInterner> = {
-        RwLock::new(StringInterner::new())
-    };
+    static ref INTERNER: RwLock<StringInterner> = { RwLock::new(StringInterner::new()) };
 }
 
 impl LispEnv {
@@ -177,13 +183,15 @@ impl LispEnv {
         self.set(sym, val);
     }
     #[inline]
-    pub fn bind_func(&mut self, name: &'static str, body: fn(Vector<LispValue>, &mut Self) -> Result<LispValue>) {
-        let f = LispValue::Object(
-            Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
-                name,
-                body,
-            }))
-        );
+    pub fn bind_func(
+        &mut self,
+        name: &'static str,
+        body: fn(Vector<LispValue>, &mut Self) -> Result<LispValue>,
+    ) {
+        let f = LispValue::Object(Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
+            name,
+            body,
+        })));
         let sym = Self::symbol_for_static(name);
         self.set(sym, f);
     }
@@ -199,25 +207,33 @@ impl LispEnv {
     }
 
     pub fn keys(&self) -> impl Iterator<Item = LispSymbol> + '_ {
-        self.data.keys().copied().chain(self.stdlib.keys().copied()).chain(
-            // like in `get`, skip(1) to avoid potential dead-lock
-            self.nested_envs().skip(1).map(|env| {
-                let lock = env.read();
-                // `collect()` + `into_iter()` to avoid borrowing `lock`, which
-                // goes out of scope right away
-                lock.data.keys().copied().collect::<Vec<_>>().into_iter()
-            }).flatten()
-        )
+        self.data
+            .keys()
+            .copied()
+            .chain(self.stdlib.keys().copied())
+            .chain(
+                // like in `get`, skip(1) to avoid potential dead-lock
+                self.nested_envs()
+                    .skip(1)
+                    .map(|env| {
+                        let lock = env.read();
+                        // `collect()` + `into_iter()` to avoid borrowing `lock`, which
+                        // goes out of scope right away
+                        lock.data.keys().copied().collect::<Vec<_>>().into_iter()
+                    })
+                    .flatten(),
+            )
     }
 
     #[inline]
-    pub fn nested_envs(&self) -> impl Iterator<Item = Arc<RwLock<Self>>> + std::iter::FusedIterator {
+    pub fn nested_envs(
+        &self,
+    ) -> impl Iterator<Item = Arc<RwLock<Self>>> + std::iter::FusedIterator {
         // as with a couple other places, taking care to avoid dead-lock if the
         // owner of `self` has a write-lock
-        std::iter::once(self.this.upgrade().unwrap())
-            .chain(NestedEnvIter {
-                current: self.enclosing.clone(),
-            })
+        std::iter::once(self.this.upgrade().unwrap()).chain(NestedEnvIter {
+            current: self.enclosing.clone(),
+        })
     }
 }
 
@@ -237,4 +253,4 @@ impl Iterator for NestedEnvIter {
         }
     }
 }
-impl std::iter::FusedIterator for NestedEnvIter { }
+impl std::iter::FusedIterator for NestedEnvIter {}

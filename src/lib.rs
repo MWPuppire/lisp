@@ -10,13 +10,13 @@ extern crate thiserror;
 // at some point, but I should decide what I'm going to do
 // the hardest part is finding a `HashMap` that also implements `Hash`, since
 // Mal allows (or encourages allowing) hashmaps to be keys in other hashmaps
-extern crate im;
-extern crate string_interner;
-extern crate ordered_float;
-extern crate nom;
 extern crate by_address;
-extern crate phf;
+extern crate im;
+extern crate nom;
+extern crate ordered_float;
 extern crate parking_lot;
+extern crate phf;
+extern crate string_interner;
 
 // Also with Miri test fails, Miri reports a memory leak in the test suite
 // (starting at step 4 tests)

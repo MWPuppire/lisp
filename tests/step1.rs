@@ -25,48 +25,58 @@ fn read_symbols() {
 
 #[test]
 fn read_lists() {
-    assert_eq!(parse("(+ 1 2)"), LispValue::list_from(vector![
-        LispValue::symbol_for_static("+"),
-        1.0.into(),
-        2.0.into(),
-    ]));
+    assert_eq!(
+        parse("(+ 1 2)"),
+        LispValue::list_from(vector![
+            LispValue::symbol_for_static("+"),
+            1.0.into(),
+            2.0.into(),
+        ])
+    );
     assert_eq!(parse("()"), LispValue::list_from(vector![]));
     assert_eq!(parse("( )"), LispValue::list_from(vector![]));
-    assert_eq!(parse("(nil)"), LispValue::list_from(vector![
-        LispValue::Nil,
-    ]));
+    assert_eq!(
+        parse("(nil)"),
+        LispValue::list_from(vector![LispValue::Nil,])
+    );
 }
 
 #[test]
 fn nested_lists() {
-    assert_eq!(parse("((3 4))"), LispValue::list_from(vector![
-        LispValue::list_from(vector![
+    assert_eq!(
+        parse("((3 4))"),
+        LispValue::list_from(vector![LispValue::list_from(vector![
             3.0.into(),
             4.0.into(),
-        ]),
-    ]));
-    assert_eq!(parse("(+ 1 (+ 2 3))"), LispValue::list_from(vector![
-        LispValue::symbol_for_static("+"),
-        1.0.into(),
+        ]),])
+    );
+    assert_eq!(
+        parse("(+ 1 (+ 2 3))"),
         LispValue::list_from(vector![
             LispValue::symbol_for_static("+"),
-            2.0.into(),
-            3.0.into(),
-        ]),
-    ]));
-    assert_eq!(parse("(()())"), LispValue::list_from(vector![
-        LispValue::list_from(vector![]),
-        LispValue::list_from(vector![]),
-    ]));
+            1.0.into(),
+            LispValue::list_from(vector![
+                LispValue::symbol_for_static("+"),
+                2.0.into(),
+                3.0.into(),
+            ]),
+        ])
+    );
+    assert_eq!(
+        parse("(()())"),
+        LispValue::list_from(vector![
+            LispValue::list_from(vector![]),
+            LispValue::list_from(vector![]),
+        ])
+    );
 }
 
 #[test]
 fn ignore_commas() {
-    assert_eq!(parse("(1 2, 3,,,,),,"), LispValue::list_from(vector![
-        1.0.into(),
-        2.0.into(),
-        3.0.into(),
-    ]));
+    assert_eq!(
+        parse("(1 2, 3,,,,),,"),
+        LispValue::list_from(vector![1.0.into(), 2.0.into(), 3.0.into(),])
+    );
 }
 
 #[test]

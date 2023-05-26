@@ -1,15 +1,15 @@
 #![allow(unused)]
 
-pub use std::sync::Arc;
-pub use std::ops::DerefMut;
-pub use parking_lot::RwLock;
-pub use im::{Vector, vector, HashMap, hashmap};
+pub use im::{hashmap, vector, HashMap, Vector};
 pub use lazy_static::lazy_static;
-pub use lisp::{LispValue, LispError, Result, LispParser, LispEnv, eval};
+pub use lisp::{eval, LispEnv, LispError, LispParser, LispValue, Result};
+pub use parking_lot::RwLock;
+pub use std::ops::DerefMut;
+pub use std::sync::Arc;
 
 lazy_static! {
     pub static ref MOCK_FS: HashMap<String, &'static str> = {
-        hashmap!{
+        hashmap! {
             "inc.mal".to_owned() => r#"
                 (def! inc1 (fn* (a) (+ 1 a)))
                 (def! inc2 (fn* (a) (+ 2 a)))
@@ -115,5 +115,5 @@ macro_rules! eval {
     };
     ($code:expr, $env:expr) => {
         eval_str_in_env($code, $env).unwrap()
-    }
+    };
 }

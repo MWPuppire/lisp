@@ -27,15 +27,20 @@ fn empty_collection_nop() {
 
 #[test]
 fn evaluate_in_collections() {
-    assert_eq!(eval!("[1 2 (+ 1 2)]"), LispValue::vector_from(vec![
-        1.0.into(),
-        2.0.into(),
-        3.0.into(),
-    ]));
-    assert_eq!(eval!("{\"a\" (+ 7 8)}"), LispValue::map_from(hashmap!{
-        "a".to_owned().into() => 15.0.into(),
-    }));
-    assert_eq!(eval!("{:a (+ 7 8)}"), LispValue::map_from(hashmap!{
-        LispValue::keyword_for("a".to_owned()) => 15.0.into(),
-    }));
+    assert_eq!(
+        eval!("[1 2 (+ 1 2)]"),
+        LispValue::vector_from(vec![1.0.into(), 2.0.into(), 3.0.into(),])
+    );
+    assert_eq!(
+        eval!("{\"a\" (+ 7 8)}"),
+        LispValue::map_from(hashmap! {
+            "a".to_owned().into() => 15.0.into(),
+        })
+    );
+    assert_eq!(
+        eval!("{:a (+ 7 8)}"),
+        LispValue::map_from(hashmap! {
+            LispValue::keyword_for("a".to_owned()) => 15.0.into(),
+        })
+    );
 }

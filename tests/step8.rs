@@ -6,8 +6,14 @@ fn basic_macros() -> Arc<RwLock<LispEnv>> {
     let mut lock = env.write();
     eval!("(defmacro! one (fn* () 1))", lock.deref_mut());
     eval!("(defmacro! two (fn* () 2))", lock.deref_mut());
-    eval!("(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))", lock.deref_mut());
-    eval!("(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))", lock.deref_mut());
+    eval!(
+        "(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))",
+        lock.deref_mut()
+    );
+    eval!(
+        "(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))",
+        lock.deref_mut()
+    );
     eval!("(defmacro! identity (fn* (x) x))", lock.deref_mut());
     drop(lock);
     env
@@ -23,7 +29,10 @@ fn macros() {
     assert_eq!(eval!("(unless true 7 8)", lock.deref_mut()), 8.0.into());
     assert_eq!(eval!("(unless2 false 7 8)", lock.deref_mut()), 7.0.into());
     assert_eq!(eval!("(unless2 true 7 8)", lock.deref_mut()), 8.0.into());
-    assert_eq!(eval!("(let* (a 123) (identity a))", lock.deref_mut()), 123.0.into());
+    assert_eq!(
+        eval!("(let* (a 123) (identity a))", lock.deref_mut()),
+        123.0.into()
+    );
 }
 
 #[test]
@@ -31,31 +40,41 @@ fn macroexpand() {
     let env = basic_macros();
     let mut lock = env.write();
     assert_eq!(eval!("(macroexpand (one))", lock.deref_mut()), 1.0.into());
-    assert_eq!(eval!("(macroexpand (unless PRED A B))", lock.deref_mut()), LispValue::list_from(vector![
-        LispValue::symbol_for_static("if"),
-        LispValue::symbol_for_static("PRED"),
-        LispValue::symbol_for_static("B"),
-        LispValue::symbol_for_static("A"),
-    ]));
-    assert_eq!(eval!("(macroexpand (unless2 PRED A B))", lock.deref_mut()), LispValue::list_from(vector![
-        LispValue::symbol_for_static("if"),
+    assert_eq!(
+        eval!("(macroexpand (unless PRED A B))", lock.deref_mut()),
         LispValue::list_from(vector![
-            LispValue::symbol_for_static("not"),
+            LispValue::symbol_for_static("if"),
             LispValue::symbol_for_static("PRED"),
-        ]),
-        LispValue::symbol_for_static("A"),
-        LispValue::symbol_for_static("B"),
-    ]));
-    assert_eq!(eval!("(macroexpand (unless2 2 3 4))", lock.deref_mut()), LispValue::list_from(vector![
-        LispValue::symbol_for_static("if"),
+            LispValue::symbol_for_static("B"),
+            LispValue::symbol_for_static("A"),
+        ])
+    );
+    assert_eq!(
+        eval!("(macroexpand (unless2 PRED A B))", lock.deref_mut()),
         LispValue::list_from(vector![
-            LispValue::symbol_for_static("not"),
-            2.0.into(),
-        ]),
-        3.0.into(),
-        4.0.into(),
-    ]));
-    assert_eq!(eval!("(let* (a 123) (macroexpand (identity a)))", lock.deref_mut()),
+            LispValue::symbol_for_static("if"),
+            LispValue::list_from(vector![
+                LispValue::symbol_for_static("not"),
+                LispValue::symbol_for_static("PRED"),
+            ]),
+            LispValue::symbol_for_static("A"),
+            LispValue::symbol_for_static("B"),
+        ])
+    );
+    assert_eq!(
+        eval!("(macroexpand (unless2 2 3 4))", lock.deref_mut()),
+        LispValue::list_from(vector![
+            LispValue::symbol_for_static("if"),
+            LispValue::list_from(vector![LispValue::symbol_for_static("not"), 2.0.into(),]),
+            3.0.into(),
+            4.0.into(),
+        ])
+    );
+    assert_eq!(
+        eval!(
+            "(let* (a 123) (macroexpand (identity a)))",
+            lock.deref_mut()
+        ),
         LispValue::symbol_for_static("a"),
     );
 }
@@ -70,15 +89,15 @@ fn list_functions() {
     assert_eq!(eval!("(first (list 7 8 9))"), 7.0.into());
     assert_eq!(eval!("(rest (list))"), LispValue::list_from(vector![]));
     assert_eq!(eval!("(rest (list 6))"), LispValue::list_from(vector![]));
-    assert_eq!(eval!("(rest (list 7 8 9))"), LispValue::list_from(vector![
-        8.0.into(),
-        9.0.into(),
-    ]));
+    assert_eq!(
+        eval!("(rest (list 7 8 9))"),
+        LispValue::list_from(vector![8.0.into(), 9.0.into(),])
+    );
     assert_eq!(eval!("(first [10])"), 10.0.into());
-    assert_eq!(eval!("(rest [10 11 12])"), LispValue::list_from(vector![
-        11.0.into(),
-        12.0.into(),
-    ]));
+    assert_eq!(
+        eval!("(rest [10 11 12])"),
+        LispValue::list_from(vector![11.0.into(), 12.0.into(),])
+    );
 }
 
 #[test]
@@ -96,7 +115,10 @@ fn cond() {
     assert_eq!(eval!("(cond false 7 true 8)"), 8.0.into());
     assert_eq!(eval!("(cond false 7 false 8 \"else\" 9)"), 9.0.into());
     assert_eq!(eval!("(cond false 7 false 8 false 9)"), LispValue::Nil);
-    assert_eq!(eval!("(let* (x (cond false \"no\" true \"yes\")) x)"), "yes".to_owned().into());
+    assert_eq!(
+        eval!("(let* (x (cond false \"no\" true \"yes\")) x)"),
+        "yes".to_owned().into()
+    );
 }
 
 #[test]

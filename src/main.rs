@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::ops::DerefMut;
 
-use lisp::{Result, LispParser, LispEnv, eval};
+use lisp::{eval, LispEnv, LispParser, Result};
 
 fn main() -> Result<()> {
     let mut rl = rustyline::DefaultEditor::new().unwrap();

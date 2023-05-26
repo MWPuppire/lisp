@@ -20,21 +20,24 @@ fn inspect_outputs_code() {
 
 #[test]
 fn read_string() {
-    assert_eq!(eval!("(read-string \"(1 2 (3 4) nil)\")"), LispValue::list_from(vector![
-        1.0.into(),
-        2.0.into(),
+    assert_eq!(
+        eval!("(read-string \"(1 2 (3 4) nil)\")"),
         LispValue::list_from(vector![
-            3.0.into(),
-            4.0.into(),
-        ]),
-        LispValue::Nil,
-    ]));
+            1.0.into(),
+            2.0.into(),
+            LispValue::list_from(vector![3.0.into(), 4.0.into(),]),
+            LispValue::Nil,
+        ])
+    );
     assert_eq!(eval!("(read-string \"nil\")"), LispValue::Nil);
-    assert_eq!(eval!("(read-string \"(+ 2 3)\")"), LispValue::list_from(vector![
-        LispValue::symbol_for_static("+"),
-        2.0.into(),
-        3.0.into(),
-    ]));
+    assert_eq!(
+        eval!("(read-string \"(+ 2 3)\")"),
+        LispValue::list_from(vector![
+            LispValue::symbol_for_static("+"),
+            2.0.into(),
+            3.0.into(),
+        ])
+    );
     assert_eq!(eval!("(read-string \"7 ;; comment\")"), 7.0.into());
     assert_eq!(eval!("(read-string \";; comment\")"), LispValue::Nil);
 }
@@ -47,16 +50,25 @@ fn test_eval() {
 
 #[test]
 fn test_eval_global_scope() {
-    assert_eq!(eval!("(let* (b 12) (do (eval (read-string \"(def! aa 7)\")) aa))"), 7.0.into());
+    assert_eq!(
+        eval!("(let* (b 12) (do (eval (read-string \"(def! aa 7)\")) aa))"),
+        7.0.into()
+    );
     let env = testing_env();
     let mut lock = env.write();
     eval!("(def! a 1)", lock.deref_mut());
-    assert_eq!(eval!("(let* (a 2) (eval (read-string \"a\")))", lock.deref_mut()), 1.0.into());
+    assert_eq!(
+        eval!("(let* (a 2) (eval (read-string \"a\")))", lock.deref_mut()),
+        1.0.into()
+    );
 }
 
 #[test]
 fn test_slurp() {
-    assert_eq!(eval!("(slurp \"test.txt\")"), "A line of text".to_owned().into());
+    assert_eq!(
+        eval!("(slurp \"test.txt\")"),
+        "A line of text".to_owned().into()
+    );
 }
 
 #[test]
@@ -74,9 +86,12 @@ fn test_load_file() {
     assert_eq!(eval!("(inc4 7)", lock.deref_mut()), 11.0.into());
     assert_eq!(eval!("(inc5 7)", lock.deref_mut()), 12.0.into());
     eval!("(load-file \"incC.mal\")", lock.deref_mut());
-    assert_eq!(eval!("mymap", lock.deref_mut()), LispValue::map_from(hashmap!{
-        "a".to_owned().into() => 1.0.into(),
-    }));
+    assert_eq!(
+        eval!("mymap", lock.deref_mut()),
+        LispValue::map_from(hashmap! {
+            "a".to_owned().into() => 1.0.into(),
+        })
+    );
 }
 
 #[test]
@@ -109,7 +124,10 @@ fn atom_closure() {
     eval!("(def! f (fn* () (swap! atm inc-it)))", lock.deref_mut());
     assert_eq!(eval!("(f)", lock.deref_mut()), 8.0.into());
     assert_eq!(eval!("(f)", lock.deref_mut()), 9.0.into());
-    eval!("(def! g (let* (atm (atom 0)) (fn* () @atm)))", lock.deref_mut());
+    eval!(
+        "(def! g (let* (atm (atom 0)) (fn* () @atm)))",
+        lock.deref_mut()
+    );
     assert_eq!(eval!("(f)", lock.deref_mut()), 10.0.into());
     assert_eq!(eval!("(g)", lock.deref_mut()), 0.0.into());
 }
