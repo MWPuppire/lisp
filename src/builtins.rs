@@ -525,7 +525,7 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
         LispError::IncorrectArguments(1, args.len())
     );
     let arg = eval_head!(args, env)?;
-    Ok(match arg {
+    match arg {
         LispValue::Object(o) => match o.deref() {
             ObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
             ObjectValue::String(_) => {
@@ -536,10 +536,10 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
             _ => Err(LispError::InvalidDataType("string", o.type_of())),
         },
         LispValue::Symbol(s) => Ok(LispValue::keyword_for(
-            LispEnv::symbol_string(s).unwrap().to_owned(),
+            LispEnv::symbol_string(s).unwrap(),
         )),
         x => Err(LispError::InvalidDataType("string", x.type_of())),
-    }?)
+    }
 }
 
 fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -722,7 +722,7 @@ fn lisp_stringq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
         LispError::IncorrectArguments(1, args.len())
     );
     let arg = eval_head!(args, env)?;
-    Ok(if let Ok(_) = arg.expect_string() {
+    Ok(if arg.expect_string().is_ok() {
         LispValue::Bool(true)
     } else {
         LispValue::Bool(false)

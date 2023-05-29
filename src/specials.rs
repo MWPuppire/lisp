@@ -96,8 +96,8 @@ macro_rules! special_form {
                 while let Some(name) = decls.next() {
                     let name = name.try_into()?;
                     let Some(val_expr) = decls.next() else {
-                                return Err(LispError::MissingBinding)
-                            };
+                                                return Err(LispError::MissingBinding)
+                                            };
                     let val = $eval(val_expr, $env)?;
                     $env.set(name, val);
                 }
@@ -113,8 +113,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Quasiquote => {
                 let Some(front) = $list.pop_front() else {
-                            break Err(LispError::IncorrectArguments(1, 0));
-                        };
+                                            break Err(LispError::IncorrectArguments(1, 0));
+                                        };
                 match front {
                     LispValue::Object(o) => match o.deref() {
                         ObjectValue::List(list) => {
@@ -123,8 +123,8 @@ macro_rules! special_form {
                             }
                             let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                             let ObjectValue::List(mut list) = cloned else {
-                                        unreachable!()
-                                    };
+                                                        unreachable!()
+                                                    };
                             if list[0] == $crate::specials::UNQUOTE
                                 || list[0] == $crate::specials::SPLICE_UNQUOTE
                             {
@@ -170,8 +170,8 @@ macro_rules! special_form {
                 );
                 let catch = $list.pop_back().unwrap();
                 let Ok(mut catch) = catch.try_into_iter() else {
-                            break Err(LispError::TryNoCatch);
-                        };
+                                            break Err(LispError::TryNoCatch);
+                                        };
                 expect!(
                     catch.len() == 3,
                     LispError::IncorrectArguments(2, catch.len() - 1,)
@@ -205,8 +205,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Do => {
                 let Some(tail) = $list.pop_back() else {
-                            break Err(LispError::IncorrectArguments(1, 0));
-                        };
+                                            break Err(LispError::IncorrectArguments(1, 0));
+                                        };
                 for val in $list.into_iter() {
                     $eval(val, &mut $env)?;
                 }
@@ -266,8 +266,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Eval => {
                 let Some(expr) = $list.pop_front() else {
-                            break Err(LispError::IncorrectArguments(1, 0));
-                        };
+                                            break Err(LispError::IncorrectArguments(1, 0));
+                                        };
                 let global = $env.global();
                 $env = $stash_env(global);
                 $eval(expr, $env)?

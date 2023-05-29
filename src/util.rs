@@ -209,93 +209,134 @@ impl ObjectValue {
             Self::Keyword(_) => "keyword",
         }
     }
+
+    /// Yields a string that, if parsed, will represent the same value as this.
+    /// Equivalent to formatting with the "alternate" form using `{:#}` instead
+    /// of `{}` in the format string.
+    #[inline]
     pub fn inspect(&self) -> String {
+        format!("{:#}", self)
+    }
+    // outputs the value fully-quoted
+    fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("'({})", xs.join(" "))
+                write!(f, "'(")?;
+                l.iter()
+                    .take(l.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", x))?;
+                // take the last value separate to avoid printing an extra space
+                // before the closing parenthesis
+                if let Some(last) = l.last() {
+                    write!(f, "{})", last)
+                } else {
+                    write!(f, ")")
+                }
             }
             Self::Map(m) => {
-                let xs: Vec<String> = m
-                    .iter()
-                    .map(|(key, val)| key.inspect_inner() + " " + &val.inspect())
-                    .collect();
-                format!("'{{{}}}", xs.join(" "))
+                write!(f, "'{{")?;
+                let mut iter = m.iter();
+                // just take the first one; Lisp maps are unordered, and there's
+                // no easy way to extract the last item from a hashmap like with
+                // a vector
+                let first = iter.next();
+                iter.try_for_each(|(key, val)| write!(f, "{} {:#} ", key, val))?;
+                if let Some((key, val)) = first {
+                    write!(f, "{} {:#}}}", key, val)
+                } else {
+                    write!(f, "}}")
+                }
             }
             Self::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("'[{}]", xs.join(" "))
+                write!(f, "'[")?;
+                l.iter()
+                    .take(l.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", x))?;
+                if let Some(last) = l.last() {
+                    write!(f, "{}]", last)
+                } else {
+                    write!(f, "]")
+                }
             }
-            _ => self.inspect_inner(),
+            _ => self.inspect_quoted_fmt(f),
         }
     }
-    fn inspect_inner(&self) -> String {
+    // outputs the value assuming it is already quoted
+    fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("({})", xs.join(" "))
+                write!(f, "(")?;
+                l.iter()
+                    .take(l.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", x))?;
+                if let Some(last) = l.last() {
+                    write!(f, "{})", last)
+                } else {
+                    write!(f, ")")
+                }
             }
-            Self::BuiltinFunc(f) => f.name.to_string(),
-            Self::Func(f) => format!(
-                "({} ({}) {})",
-                "fn*",
-                f.args
+            Self::BuiltinFunc(func) => write!(f, "{}", func.name),
+            Self::Func(func) => {
+                write!(f, "(fn* (")?;
+                func.args
                     .iter()
-                    .map(|x| LispEnv::symbol_string(*x).unwrap())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                f.body.inspect()
-            ),
-            Self::Macro(f) => format!(
-                "({} ({}) {})",
-                "#<macro-fn*>",
-                f.args
+                    .take(func.args.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", LispEnv::symbol_string(*x).unwrap()))?;
+                if let Some(last) = func.args.last() {
+                    write!(f, "{}", LispEnv::symbol_string(*last).unwrap())?;
+                }
+                write!(f, ") ({})", func.body)
+            }
+            Self::Macro(func) => {
+                // because macros have to be defined to a variable before they
+                // can be used, this is the only form that cannot be inspected
+                // properly (and hence uses "#<macro-fn*>")
+                write!(f, "(#<macro-fn*> (")?;
+                func.args
                     .iter()
-                    .map(|x| LispEnv::symbol_string(*x).unwrap())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                f.body.inspect()
-            ),
+                    .take(func.args.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", LispEnv::symbol_string(*x).unwrap()))?;
+                if let Some(last) = func.args.last() {
+                    write!(f, "{}", LispEnv::symbol_string(*last).unwrap())?;
+                }
+                write!(f, ") ({})", func.body)
+            }
             Self::Map(m) => {
-                let xs: Vec<String> = m
-                    .iter()
-                    .map(|(key, val)| key.inspect_inner() + " " + &val.inspect())
-                    .collect();
-                format!("{{{}}}", xs.join(" "))
+                // code explained above, in `inspect_fmt`
+                write!(f, "{{")?;
+                let mut iter = m.iter();
+                let first = iter.next();
+                iter.try_for_each(|(key, val)| write!(f, "{} {:#} ", key, val))?;
+                if let Some((key, val)) = first {
+                    write!(f, "{} {:#}}}", key, val)
+                } else {
+                    write!(f, "}}")
+                }
             }
             Self::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.inspect_inner()).collect();
-                format!("'[{}]", xs.join(" "))
+                write!(f, "[")?;
+                l.iter()
+                    .take(l.len() - 1)
+                    .try_for_each(|x| write!(f, "{} ", x))?;
+                if let Some(last) = l.last() {
+                    write!(f, "{}]", last)
+                } else {
+                    write!(f, "]")
+                }
             }
-            Self::String(s) => format!(r#""{}""#, s.escape_default()),
-            Self::Keyword(s) => format!(":{}", s),
+            Self::String(s) => write!(f, r#""{}""#, s.escape_default()),
+            Self::Keyword(s) => write!(f, ":{}", s),
         }
     }
 }
 
 impl fmt::Display for ObjectValue {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::List(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
-                write!(f, "({})", xs.join(" "))
-            }
-            Self::BuiltinFunc(_) => write!(f, "#<native function>"),
-            Self::Func(_) => write!(f, "#<function>"),
-            Self::Macro(_) => write!(f, "#<macro>"),
-            Self::Vector(l) => {
-                let xs: Vec<String> = l.iter().map(|x| x.to_string()).collect();
-                write!(f, "[{}]", xs.join(" "))
-            }
-            Self::Map(m) => {
-                let xs: Vec<String> = m
-                    .iter()
-                    .map(|(key, val)| key.to_string() + " " + &val.to_string())
-                    .collect();
-                write!(f, "{{{}}}", xs.join(" "))
-            }
-            Self::String(s) => write!(f, "{}", s),
-            Self::Keyword(s) => write!(f, ":{}", s),
+        if f.alternate() {
+            self.inspect_fmt(f)
+        } else {
+            self.inspect_quoted_fmt(f)
         }
     }
 }
@@ -333,12 +374,12 @@ impl LispValue {
 
     #[inline]
     pub fn string_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue::String(s.to_owned())))
+        Self::Object(Arc::new(ObjectValue::String(s)))
     }
 
     #[inline]
     pub fn keyword_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue::Keyword(s.to_owned())))
+        Self::Object(Arc::new(ObjectValue::Keyword(s)))
     }
 
     pub fn type_of(&self) -> &'static str {
@@ -357,26 +398,34 @@ impl LispValue {
         }
     }
 
+    #[inline]
     pub fn inspect(&self) -> String {
+        format!("{:#}", self)
+    }
+    fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => format!("'{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::Object(o) => o.inspect(),
-            _ => self.inspect_inner(),
+            Self::Symbol(s) => write!(f, "'{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::Object(o) => o.inspect_fmt(f),
+            _ => self.inspect_quoted_fmt(f),
         }
     }
-    fn inspect_inner(&self) -> String {
+    fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => format!("{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::VariadicSymbol(s) => format!("&{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::Number(n) => format!("{}", n),
-            Self::Bool(b) => format!("{}", b),
-            Self::Nil => "nil".to_owned(),
-            Self::Atom(x) => format!("(atom {})", x.read().inspect()),
-            Self::Object(o) => o.inspect_inner(),
-            Self::Special(s) => format!("{}", s),
+            Self::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::VariadicSymbol(s) => write!(f, "&{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Nil => write!(f, "nil"),
+            Self::Atom(x) => {
+                write!(f, "(atom ")?;
+                x.read().inspect_fmt(f)?;
+                write!(f, ")")
+            }
+            Self::Object(o) => o.inspect_quoted_fmt(f),
+            Self::Special(s) => write!(f, "{}", s),
 
             #[cfg(feature = "async")]
-            Self::Future(_) => format!("(promise ...)"),
+            Self::Future(_) => write!(f, "(promise ...)"),
         }
     }
 
@@ -580,18 +629,12 @@ impl TryFrom<LispValue> for LispAsyncValue {
 }
 
 impl fmt::Display for LispValue {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::VariadicSymbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::Number(n) => write!(f, "{}", n),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Nil => write!(f, "nil"),
-            Self::Atom(_) => write!(f, "#<atom>"),
-            Self::Object(o) => o.fmt(f),
-            Self::Special(s) => s.fmt(f),
-            #[cfg(feature = "async")]
-            Self::Future(_) => write!(f, "#<future>"),
+        if f.alternate() {
+            self.inspect_fmt(f)
+        } else {
+            self.inspect_quoted_fmt(f)
         }
     }
 }

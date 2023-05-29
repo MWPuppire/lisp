@@ -15,7 +15,7 @@ fn inspect_outputs_code() {
     assert!(test_inspect("['a 'b]"));
     assert!(test_inspect("(list 1 2 3)"));
     assert!(test_inspect("{:a 9 :b (+ 2 3)}"));
-    assert!(test_inspect("'(+ 2 3)"))
+    assert!(test_inspect("'(+ 2 3)"));
 }
 
 #[test]

@@ -25,13 +25,8 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
                 } else {
                     match &l[0] {
                         LispValue::Symbol(s) | LispValue::VariadicSymbol(s) => {
-                            if let Ok(var) = lookup_variable(*s, env) {
-                                match var {
-                                    LispValue::Object(o) => {
-                                        matches!(o.deref(), ObjectValue::Macro(_),)
-                                    }
-                                    _ => false,
-                                }
+                            if let Ok(LispValue::Object(o)) = lookup_variable(*s, env) {
+                                matches!(o.deref(), ObjectValue::Macro(_),)
                             } else {
                                 false
                             }
@@ -61,7 +56,6 @@ pub fn expand_macros(
         // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
             let mut args = list
-                .into_iter()
                 .map(|x| Ok(expand_macros(x, env)?.0))
                 .collect::<Result<Vector<LispValue>>>()?;
             let variadic_idx = f.args.len() - 1;
@@ -75,7 +69,6 @@ pub fn expand_macros(
             Err(LispError::IncorrectArguments(f.args.len(), list.len()))
         } else {
             let args = list
-                .into_iter()
                 .map(|x| Ok(expand_macros(x, env)?.0))
                 .collect::<Result<Vec<LispValue>>>()?;
             let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();

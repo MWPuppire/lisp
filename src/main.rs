@@ -42,7 +42,7 @@ fn main() -> Result<()> {
             for val in &mut parser {
                 match val {
                     Ok(tok) => match eval(tok, env_writer.deref_mut()) {
-                        Ok(out) => println!("{}", out.inspect()),
+                        Ok(out) => println!("{:#}", out),
                         Err(err) => println!("Err: {}", err),
                     },
                     Err(err) => println!("Err: {}", err),

@@ -22,11 +22,10 @@ pub struct LispEnv {
 #[inline]
 fn assign_this_self(inner: LispEnv) -> Arc<RwLock<LispEnv>> {
     let mut boxed = RwLock::new(inner);
-    let arc = Arc::new_cyclic(|weak| {
+    Arc::new_cyclic(|weak| {
         boxed.get_mut().this = weak.clone();
         boxed
-    });
-    arc
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -78,7 +77,7 @@ impl LispClosure {
 
 // TODO I'd probably rather not have a single static interner
 lazy_static! {
-    static ref INTERNER: RwLock<StringInterner> = { RwLock::new(StringInterner::new()) };
+    static ref INTERNER: RwLock<StringInterner> = RwLock::new(StringInterner::new());
 }
 
 impl LispEnv {
@@ -215,13 +214,12 @@ impl LispEnv {
                 // like in `get`, skip(1) to avoid potential dead-lock
                 self.nested_envs()
                     .skip(1)
-                    .map(|env| {
+                    .flat_map(|env| {
                         let lock = env.read();
                         // `collect()` + `into_iter()` to avoid borrowing `lock`, which
                         // goes out of scope right away
                         lock.data.keys().copied().collect::<Vec<_>>().into_iter()
                     })
-                    .flatten(),
             )
     }
 
