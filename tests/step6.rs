@@ -22,21 +22,18 @@ fn inspect_outputs_code() {
 fn read_string() {
     assert_eq!(
         eval!("(read-string \"(1 2 (3 4) nil)\")"),
-        LispValue::list_from(vector![
+        vector![
             1.0.into(),
             2.0.into(),
-            LispValue::list_from(vector![3.0.into(), 4.0.into(),]),
+            vector![3.0.into(), 4.0.into(),].into(),
             LispValue::Nil,
-        ])
+        ]
+        .into()
     );
     assert_eq!(eval!("(read-string \"nil\")"), LispValue::Nil);
     assert_eq!(
         eval!("(read-string \"(+ 2 3)\")"),
-        LispValue::list_from(vector![
-            LispValue::symbol_for_static("+"),
-            2.0.into(),
-            3.0.into(),
-        ])
+        vector![LispValue::symbol_for_static("+"), 2.0.into(), 3.0.into(),].into()
     );
     assert_eq!(eval!("(read-string \"7 ;; comment\")"), 7.0.into());
     assert_eq!(eval!("(read-string \";; comment\")"), LispValue::Nil);
@@ -88,9 +85,10 @@ fn test_load_file() {
     eval!("(load-file \"incC.mal\")", lock.deref_mut());
     assert_eq!(
         eval!("mymap", lock.deref_mut()),
-        LispValue::map_from(hashmap! {
+        hashmap! {
             "a".to_owned().into() => 1.0.into(),
-        })
+        }
+        .into()
     );
 }
 

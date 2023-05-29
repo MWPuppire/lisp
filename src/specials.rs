@@ -38,7 +38,7 @@ pub(crate) fn inner_quasiquote(
                             out.push_back(new_val);
                         }
                     }
-                    Ok((LispValue::list_from(out), false))
+                    Ok((out.into_iter().collect(), false))
                 }
             }
             _ => Ok((LispValue::Object(o.clone()), false)),
@@ -96,8 +96,8 @@ macro_rules! special_form {
                 while let Some(name) = decls.next() {
                     let name = name.try_into()?;
                     let Some(val_expr) = decls.next() else {
-                                                return Err(LispError::MissingBinding)
-                                            };
+                                                        return Err(LispError::MissingBinding)
+                                                    };
                     let val = $eval(val_expr, $env)?;
                     $env.set(name, val);
                 }
@@ -113,8 +113,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Quasiquote => {
                 let Some(front) = $list.pop_front() else {
-                                            break Err(LispError::IncorrectArguments(1, 0));
-                                        };
+                                                    break Err(LispError::IncorrectArguments(1, 0));
+                                                };
                 match front {
                     LispValue::Object(o) => match o.deref() {
                         ObjectValue::List(list) => {
@@ -123,8 +123,8 @@ macro_rules! special_form {
                             }
                             let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                             let ObjectValue::List(mut list) = cloned else {
-                                                        unreachable!()
-                                                    };
+                                                                unreachable!()
+                                                            };
                             if list[0] == $crate::specials::UNQUOTE
                                 || list[0] == $crate::specials::SPLICE_UNQUOTE
                             {
@@ -145,7 +145,7 @@ macro_rules! special_form {
                                         out.push_back(new_val);
                                     }
                                 }
-                                break Ok(LispValue::list_from(out));
+                                break Ok(out.into_iter().collect());
                             }
                         }
                         _ => break Ok(LispValue::Object(o.clone())),
@@ -170,8 +170,8 @@ macro_rules! special_form {
                 );
                 let catch = $list.pop_back().unwrap();
                 let Ok(mut catch) = catch.try_into_iter() else {
-                                            break Err(LispError::TryNoCatch);
-                                        };
+                                                    break Err(LispError::TryNoCatch);
+                                                };
                 expect!(
                     catch.len() == 3,
                     LispError::IncorrectArguments(2, catch.len() - 1,)
@@ -205,8 +205,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Do => {
                 let Some(tail) = $list.pop_back() else {
-                                            break Err(LispError::IncorrectArguments(1, 0));
-                                        };
+                                                    break Err(LispError::IncorrectArguments(1, 0));
+                                                };
                 for val in $list.into_iter() {
                     $eval(val, &mut $env)?;
                 }
@@ -241,10 +241,7 @@ macro_rules! special_form {
                     .last()
                     .map(|last| matches!(last, LispValue::VariadicSymbol(_)))
                     .unwrap_or(false);
-                let args = args_list
-                    .into_iter()
-                    .map(|x| x.try_into())
-                    .collect::<Result<Vec<LispSymbol>>>()?;
+                let args = args_list.into_iter().map(|x| x.try_into()).try_collect()?;
                 let body = $list.pop_front().unwrap();
                 let closure = $env.make_closure();
                 let inner = ObjectValue::Func(LispFunc {
@@ -266,8 +263,8 @@ macro_rules! special_form {
             }
             LispSpecialForm::Eval => {
                 let Some(expr) = $list.pop_front() else {
-                                            break Err(LispError::IncorrectArguments(1, 0));
-                                        };
+                                                    break Err(LispError::IncorrectArguments(1, 0));
+                                                };
                 let global = $env.global();
                 $env = $stash_env(global);
                 $eval(expr, $env)?
@@ -282,7 +279,7 @@ macro_rules! special_form {
                 let mut full_list = vector![f];
                 full_list.append($list);
                 full_list.extend(&mut args);
-                LispValue::list_from(full_list)
+                full_list.into_iter().collect()
             }
             LispSpecialForm::Cond => {
                 expect!($list.len() & 1 == 0, LispError::OddCondArguments);

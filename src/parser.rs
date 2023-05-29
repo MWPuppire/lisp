@@ -319,7 +319,9 @@ macro_rules! token_prefix {
             LispError::MissingToken($prefix),
         )
         .map(|inner| {
-            LispValue::list_from(vector![LispValue::Special(LispSpecialForm::$name), inner,])
+            vector![LispValue::Special(LispSpecialForm::$name), inner,]
+                .into_iter()
+                .collect()
         })
     };
 }
@@ -459,7 +461,7 @@ impl LispParser {
                     ..
                 }) => {
                     tokens.pop_front();
-                    return Ok(LispValue::list_from(res));
+                    return Ok(res.into_iter().collect());
                 }
                 None => return Err(LispError::UnbalancedDelim(1, ")")),
                 _ => (),
@@ -509,7 +511,7 @@ impl LispParser {
                     ..
                 }) => {
                     tokens.pop_front();
-                    return Ok(LispValue::map_from(res));
+                    return Ok(res.into_iter().collect());
                 }
                 None => return Err(LispError::UnbalancedDelim(1, "}")),
                 _ => (),

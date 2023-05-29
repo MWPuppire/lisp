@@ -5,6 +5,7 @@ use crate::util::{expect, LispBuiltinFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use by_address::ByAddress;
 use im::{hashmap, vector, HashMap, Vector};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
@@ -116,11 +117,7 @@ fn lisp_prn(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
 }
 
 fn lisp_list(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    let vals = args
-        .into_iter()
-        .map(|x| eval(x, env))
-        .collect::<Result<Vector<LispValue>>>()?;
-    Ok(LispValue::list_from(vals))
+    args.into_iter().map(|x| eval(x, env)).try_collect()
 }
 
 fn lisp_listq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -249,7 +246,7 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     let derefed = atom.read().clone();
     let mut list = vector![val, derefed,];
     list.append(args);
-    let out_val = eval(LispValue::list_from(list), env)?;
+    let out_val = eval(list.into(), env)?;
     *atom.write() = out_val.clone();
     Ok(out_val)
 }
@@ -357,17 +354,14 @@ fn lisp_cons(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     let cons = eval_head!(args, env)?;
     let iter = eval_head!(args, env)?.try_into_iter()?;
     let iter = iter::once(cons).chain(iter);
-    Ok(LispValue::list_from(iter))
+    Ok(iter.collect())
 }
 
 fn lisp_concat(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    let mut out = Vector::new();
-    for arg in args.into_iter() {
-        let arg = eval(arg, env)?;
-        let mut list = arg.try_into_iter()?;
-        out.extend(&mut list);
-    }
-    Ok(LispValue::list_from(out))
+    args.into_iter()
+        .map(|arg| Ok(eval(arg, env)?.try_into_iter()?))
+        .flatten_ok()
+        .try_collect()
 }
 
 fn lisp_nth(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -407,12 +401,12 @@ fn lisp_rest(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     );
     let arg = eval_head!(args, env)?;
     if arg.is_nil() {
-        return Ok(LispValue::list_from(vector![]));
+        return Ok(vector![].into());
     }
     let mut iter = arg.try_into_iter()?;
     // drop the first item
     let _ = iter.next();
-    Ok(LispValue::list_from(iter))
+    Ok(iter.collect())
 }
 
 fn lisp_macroq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -493,10 +487,7 @@ fn lisp_symbol(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
 }
 
 fn lisp_vector(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    let vals: Vec<LispValue> = args
-        .into_iter()
-        .map(|x| eval(x, env))
-        .collect::<Result<Vec<LispValue>>>()?;
+    let vals: Vec<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
     Ok(LispValue::vector_from(vals))
 }
 
@@ -528,9 +519,7 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
             }
             _ => Err(LispError::InvalidDataType("string", o.type_of())),
         },
-        LispValue::Symbol(s) => Ok(LispValue::keyword_for(
-            LispEnv::symbol_string(s).unwrap(),
-        )),
+        LispValue::Symbol(s) => Ok(LispValue::keyword_for(LispEnv::symbol_string(s).unwrap())),
         x => Err(LispError::InvalidDataType("string", x.type_of())),
     }
 }
@@ -549,15 +538,10 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispV
 
 fn lisp_hashmap(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() & 1 == 0, LispError::MissingBinding);
-    let mut pairs = vec![];
-    let mut arg_iter = args.into_iter();
-    while let Some(key_expr) = arg_iter.next() {
-        let Some(val_expr) = arg_iter.next() else { unreachable!() };
-        let k = eval(key_expr, env)?;
-        let v = eval(val_expr, env)?;
-        pairs.push((k, v))
-    }
-    Ok(LispValue::map_from(pairs))
+    args.into_iter()
+        .tuples()
+        .map(|(key, val)| Ok((eval(key, env)?, eval(val, env)?)))
+        .try_collect()
 }
 
 fn lisp_mapq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -586,25 +570,26 @@ fn lisp_sequentialq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Li
 
 fn lisp_assoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     expect!(args.len() & 1 == 1, LispError::MissingBinding);
-    let mut map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
-    let mut arg_iter = args.into_iter();
-    while let Some(key_expr) = arg_iter.next() {
-        let Some(val_expr) = arg_iter.next() else { unreachable!() };
-        let k = eval(key_expr, env)?;
-        let v = eval(val_expr, env)?;
-        map.insert(k, v);
-    }
-    Ok(LispValue::map_from(map))
+    let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
+    args.into_iter()
+        .tuples()
+        .try_fold(map, |mut map, (key, val)| {
+            let k = eval(key, env)?;
+            let v = eval(val, env)?;
+            map.insert(k, v);
+            Ok(map)
+        })
+        .map(LispValue::from)
 }
 
 fn lisp_dissoc(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let base_map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
-    let keys = args
+    let keys: Vec<(LispValue, LispValue)> = args
         .into_iter()
-        .map(|x| Ok((eval(x, env)?, LispValue::Nil)))
-        .collect::<Result<Vec<(LispValue, LispValue)>>>()?;
-    Ok(LispValue::map_from(base_map.difference(keys.into())))
+        .map(|x| Ok::<_, LispError>((eval(x, env)?, LispValue::Nil)))
+        .try_collect()?;
+    Ok(base_map.difference(keys.into()).into())
 }
 
 fn lisp_get(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -643,7 +628,7 @@ fn lisp_keys(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     );
     let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let keys = map.keys().cloned();
-    Ok(LispValue::list_from(keys))
+    Ok(keys.collect())
 }
 
 fn lisp_vals(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -653,7 +638,7 @@ fn lisp_vals(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     );
     let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
     let vals = map.values().cloned();
-    Ok(LispValue::list_from(vals))
+    Ok(vals.collect())
 }
 
 fn lisp_map(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
@@ -663,20 +648,18 @@ fn lisp_map(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     );
     let f = eval_head!(args, env)?;
     let iter = eval_head!(args, env)?.try_into_iter()?;
-    let out = iter
-        .map(|x| {
-            let list = LispValue::list_from(vector![f.clone(), x]);
-            eval(list, env)
-        })
-        .collect::<Result<Vector<LispValue>>>()?;
-    Ok(LispValue::list_from(out))
+    iter.map(|x| {
+        let list = vector![f.clone(), x].into();
+        eval(list, env)
+    })
+    .try_collect()
 }
 
 fn lisp_pr_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    let full_str = args
+    let full_str: Vec<String> = args
         .into_iter()
-        .map(|x| Ok(eval(x, env)?.inspect()))
-        .collect::<Result<Vec<String>>>()?;
+        .map(|x| Ok::<_, LispError>(eval(x, env)?.inspect()))
+        .try_collect()?;
     Ok(LispValue::string_for(full_str.join(" ")))
 }
 
@@ -776,12 +759,12 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
             ObjectValue::Vector(l) => Ok(if l.is_empty() {
                 LispValue::Nil
             } else {
-                LispValue::list_from(l.iter().cloned())
+                l.iter().cloned().collect()
             }),
             ObjectValue::String(s) => Ok(if s.is_empty() {
                 LispValue::Nil
             } else {
-                LispValue::list_from(s.chars().map(|x| x.to_string().into()))
+                s.chars().map(|x| LispValue::from(x.to_string())).collect()
             }),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
         },
@@ -797,7 +780,7 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     match first {
         LispValue::Object(o) => match o.deref() {
             ObjectValue::Vector(l) => {
-                let mut args = args.collect::<Result<Vec<LispValue>>>()?;
+                let mut args: Vec<LispValue> = args.try_collect()?;
                 if l.is_empty() {
                     return Ok(LispValue::vector_from(args));
                 }
@@ -807,14 +790,14 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
                 Ok(LispValue::vector_from(l))
             }
             ObjectValue::List(l) => {
-                let mut args = args.rev().collect::<Result<Vector<LispValue>>>()?;
+                let mut args: Vector<LispValue> = args.rev().try_collect()?;
                 if l.is_empty() {
-                    return Ok(LispValue::list_from(args));
+                    return Ok(args.into());
                 }
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let ObjectValue::List(l) = cloned else { unreachable!() };
                 args.append(l);
-                Ok(LispValue::list_from(args))
+                Ok(args.into())
             }
             x => Err(LispError::InvalidDataType("list", x.type_of())),
         },
@@ -942,7 +925,7 @@ lazy_static! {
         lisp_argv.push_front(LispValue::Symbol(strs.get_or_intern_static("list")));
         ext.insert(
             strs.get_or_intern_static("*ARGV*"),
-            LispValue::list_from(lisp_argv),
+            lisp_argv.into(),
         );
 
         base.union(ext)

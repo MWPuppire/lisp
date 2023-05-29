@@ -12,6 +12,7 @@ extern crate thiserror;
 // Mal allows (or encourages allowing) hashmaps to be keys in other hashmaps
 extern crate by_address;
 extern crate im;
+extern crate itertools;
 extern crate nom;
 extern crate ordered_float;
 extern crate parking_lot;

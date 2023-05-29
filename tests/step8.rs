@@ -42,33 +42,37 @@ fn macroexpand() {
     assert_eq!(eval!("(macroexpand (one))", lock.deref_mut()), 1.0.into());
     assert_eq!(
         eval!("(macroexpand (unless PRED A B))", lock.deref_mut()),
-        LispValue::list_from(vector![
+        vector![
             LispValue::symbol_for_static("if"),
             LispValue::symbol_for_static("PRED"),
             LispValue::symbol_for_static("B"),
             LispValue::symbol_for_static("A"),
-        ])
+        ]
+        .into()
     );
     assert_eq!(
         eval!("(macroexpand (unless2 PRED A B))", lock.deref_mut()),
-        LispValue::list_from(vector![
+        vector![
             LispValue::symbol_for_static("if"),
-            LispValue::list_from(vector![
+            vector![
                 LispValue::symbol_for_static("not"),
                 LispValue::symbol_for_static("PRED"),
-            ]),
+            ]
+            .into(),
             LispValue::symbol_for_static("A"),
             LispValue::symbol_for_static("B"),
-        ])
+        ]
+        .into()
     );
     assert_eq!(
         eval!("(macroexpand (unless2 2 3 4))", lock.deref_mut()),
-        LispValue::list_from(vector![
+        vector![
             LispValue::symbol_for_static("if"),
-            LispValue::list_from(vector![LispValue::symbol_for_static("not"), 2.0.into(),]),
+            vector![LispValue::symbol_for_static("not"), 2.0.into(),].into(),
             3.0.into(),
             4.0.into(),
-        ])
+        ]
+        .into()
     );
     assert_eq!(
         eval!(
@@ -87,16 +91,16 @@ fn list_functions() {
     assert_eq!(eval!("(first (list))"), LispValue::Nil);
     assert_eq!(eval!("(first (list 6))"), 6.0.into());
     assert_eq!(eval!("(first (list 7 8 9))"), 7.0.into());
-    assert_eq!(eval!("(rest (list))"), LispValue::list_from(vector![]));
-    assert_eq!(eval!("(rest (list 6))"), LispValue::list_from(vector![]));
+    assert_eq!(eval!("(rest (list))"), vector![].into());
+    assert_eq!(eval!("(rest (list 6))"), vector![].into());
     assert_eq!(
         eval!("(rest (list 7 8 9))"),
-        LispValue::list_from(vector![8.0.into(), 9.0.into(),])
+        vector![8.0.into(), 9.0.into(),].into()
     );
     assert_eq!(eval!("(first [10])"), 10.0.into());
     assert_eq!(
         eval!("(rest [10 11 12])"),
-        LispValue::list_from(vector![11.0.into(), 12.0.into(),])
+        vector![11.0.into(), 12.0.into(),].into()
     );
 }
 

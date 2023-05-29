@@ -27,47 +27,31 @@ fn read_symbols() {
 fn read_lists() {
     assert_eq!(
         parse("(+ 1 2)"),
-        LispValue::list_from(vector![
-            LispValue::symbol_for_static("+"),
-            1.0.into(),
-            2.0.into(),
-        ])
+        vector![LispValue::symbol_for_static("+"), 1.0.into(), 2.0.into(),].into()
     );
-    assert_eq!(parse("()"), LispValue::list_from(vector![]));
-    assert_eq!(parse("( )"), LispValue::list_from(vector![]));
-    assert_eq!(
-        parse("(nil)"),
-        LispValue::list_from(vector![LispValue::Nil,])
-    );
+    assert_eq!(parse("()"), vector![].into());
+    assert_eq!(parse("( )"), vector![].into());
+    assert_eq!(parse("(nil)"), vector![LispValue::Nil,].into());
 }
 
 #[test]
 fn nested_lists() {
     assert_eq!(
         parse("((3 4))"),
-        LispValue::list_from(vector![LispValue::list_from(vector![
-            3.0.into(),
-            4.0.into(),
-        ]),])
+        vector![vector![3.0.into(), 4.0.into(),].into(),].into()
     );
     assert_eq!(
         parse("(+ 1 (+ 2 3))"),
-        LispValue::list_from(vector![
+        vector![
             LispValue::symbol_for_static("+"),
             1.0.into(),
-            LispValue::list_from(vector![
-                LispValue::symbol_for_static("+"),
-                2.0.into(),
-                3.0.into(),
-            ]),
-        ])
+            vector![LispValue::symbol_for_static("+"), 2.0.into(), 3.0.into(),].into(),
+        ]
+        .into()
     );
     assert_eq!(
         parse("(()())"),
-        LispValue::list_from(vector![
-            LispValue::list_from(vector![]),
-            LispValue::list_from(vector![]),
-        ])
+        vector![vector![].into(), vector![].into(),].into()
     );
 }
 
@@ -75,7 +59,7 @@ fn nested_lists() {
 fn ignore_commas() {
     assert_eq!(
         parse("(1 2, 3,,,,),,"),
-        LispValue::list_from(vector![1.0.into(), 2.0.into(), 3.0.into(),])
+        vector![1.0.into(), 2.0.into(), 3.0.into(),].into()
     );
 }
 

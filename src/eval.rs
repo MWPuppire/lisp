@@ -2,7 +2,8 @@ use crate::env::{LispEnv, LispSymbol};
 use crate::specials::special_form;
 use crate::util::{expect, LispFunc, LispSpecialForm, ObjectValue};
 use crate::{LispError, LispValue, Result};
-use im::{vector, HashMap, Vector};
+use im::{vector, Vector};
+use itertools::Itertools;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use std::iter::zip;
 use std::mem::ManuallyDrop;
@@ -55,22 +56,22 @@ pub fn expand_macros(
         // some code duplication from `expand_fn`, but I didn't want `is_macro`
         // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
-            let mut args = list
-                .map(|x| Ok(expand_macros(x, env)?.0))
-                .collect::<Result<Vector<LispValue>>>()?;
+            let mut args: Vector<LispValue> = list
+                .map(|x| Ok::<_, LispError>(expand_macros(x, env)?.0))
+                .try_collect()?;
             let variadic_idx = f.args.len() - 1;
             let last_args = args.split_off(variadic_idx);
             let arg_names = f.args[0..variadic_idx].iter().copied();
             let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
-            params.push((f.args[variadic_idx], LispValue::list_from(last_args)));
+            params.push((f.args[variadic_idx], last_args.into_iter().collect()));
             let fn_env = f.closure.make_macro_env(&params, env);
             Ok((f.body.clone(), fn_env))
         } else if list.len() != f.args.len() {
             Err(LispError::IncorrectArguments(f.args.len(), list.len()))
         } else {
-            let args = list
-                .map(|x| Ok(expand_macros(x, env)?.0))
-                .collect::<Result<Vec<LispValue>>>()?;
+            let args: Vec<LispValue> = list
+                .map(|x| Ok::<_, LispError>(expand_macros(x, env)?.0))
+                .try_collect()?;
             let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
             let fn_env = f.closure.make_macro_env(&params, env);
             Ok((f.body.clone(), fn_env))
@@ -91,24 +92,18 @@ pub fn expand_fn(
     env: &mut LispEnv,
 ) -> Result<(LispValue, Arc<RwLock<LispEnv>>)> {
     if f.variadic && args.len() >= (f.args.len() - 1) {
-        let mut args = args
-            .into_iter()
-            .map(|x| eval(x, env))
-            .collect::<Result<Vector<LispValue>>>()?;
+        let mut args: Vector<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
         let variadic_idx = f.args.len() - 1;
         let last_args = args.split_off(variadic_idx);
         let arg_names = f.args[0..variadic_idx].iter().copied();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
-        params.push((f.args[variadic_idx], LispValue::list_from(last_args)));
+        params.push((f.args[variadic_idx], last_args.into_iter().collect()));
         let fn_env = f.closure.make_env(&params, env);
         Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
-        let args = args
-            .into_iter()
-            .map(|x| eval(x, env))
-            .collect::<Result<Vec<LispValue>>>()?;
+        let args: Vec<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
         let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
         let fn_env = f.closure.make_env(&params, env);
         Ok((f.body.clone(), fn_env))
@@ -121,15 +116,12 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
         LispValue::Object(o) => LispValue::Object(match o.deref() {
             ObjectValue::Vector(l) => Arc::new(ObjectValue::Vector(
-                l.iter()
-                    .cloned()
-                    .map(|x| eval(x, env))
-                    .collect::<Result<Vec<LispValue>>>()?,
+                l.iter().cloned().map(|x| eval(x, env)).try_collect()?,
             )),
             ObjectValue::Map(m) => Arc::new(ObjectValue::Map(
                 m.iter()
-                    .map(|(key, val)| Ok((key.clone(), eval(val.clone(), env)?)))
-                    .collect::<Result<HashMap<LispValue, LispValue>>>()?,
+                    .map(|(key, val)| Ok::<_, LispError>((key.clone(), eval(val.clone(), env)?)))
+                    .try_collect()?,
             )),
             _ => o.clone(),
         }),
@@ -189,7 +181,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
         let Ok(mut list): Result<Vector<LispValue>> = ast.try_into() else { unreachable!() };
         let Some(head) = list.pop_front() else {
             // just return an empty list without evaluating anything
-            break Ok(LispValue::list_from(list));
+            break Ok(list.into_iter().collect());
         };
         match eval(head, env)? {
             LispValue::Special(form) => {

@@ -444,24 +444,10 @@ impl LispValue {
         }
     }
 
-    // separate methods instead of using the `FromIterator` method, because it
-    // would be unclear whether a `List` or `Vector` was intended
-    #[inline]
-    pub fn list_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
-        let list = ObjectValue::List(iter.into_iter().collect());
-        Self::Object(Arc::new(list))
-    }
-
     #[inline]
     pub fn vector_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
-        let list = ObjectValue::Vector(iter.into_iter().collect());
-        Self::Object(Arc::new(list))
-    }
-
-    #[inline]
-    pub fn map_from<T: IntoIterator<Item = (Self, Self)>>(iter: T) -> Self {
-        let list = ObjectValue::Map(iter.into_iter().collect());
-        Self::Object(Arc::new(list))
+        let vector = ObjectValue::Vector(iter.into_iter().collect());
+        Self::Object(Arc::new(vector))
     }
 }
 
@@ -495,9 +481,37 @@ impl From<LispSymbol> for LispValue {
         Self::Symbol(item)
     }
 }
+impl From<Vector<LispValue>> for LispValue {
+    #[inline]
+    fn from(item: Vector<LispValue>) -> Self {
+        Self::Object(Arc::new(ObjectValue::List(item)))
+    }
+}
+impl From<HashMap<LispValue, LispValue>> for LispValue {
+    #[inline]
+    fn from(item: HashMap<LispValue, LispValue>) -> Self {
+        Self::Object(Arc::new(ObjectValue::Map(item)))
+    }
+}
+impl FromIterator<LispValue> for LispValue {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = LispValue>>(iter: T) -> Self {
+        let list = ObjectValue::List(iter.into_iter().collect());
+        Self::Object(Arc::new(list))
+    }
+}
+
+impl FromIterator<(LispValue, LispValue)> for LispValue {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (LispValue, LispValue)>>(iter: T) -> Self {
+        let map = ObjectValue::Map(iter.into_iter().collect());
+        Self::Object(Arc::new(map))
+    }
+}
 
 impl TryFrom<LispValue> for LispSymbol {
     type Error = LispError;
+    #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         match item {
             LispValue::Symbol(s) => Ok(s),
@@ -506,8 +520,19 @@ impl TryFrom<LispValue> for LispSymbol {
         }
     }
 }
+impl TryFrom<LispValue> for f64 {
+    type Error = LispError;
+    #[inline]
+    fn try_from(item: LispValue) -> Result<Self> {
+        match item {
+            LispValue::Number(f) => Ok(f.0),
+            _ => Err(LispError::InvalidDataType("number", item.type_of())),
+        }
+    }
+}
 impl TryFrom<LispValue> for OrderedFloat<f64> {
     type Error = LispError;
+    #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         match item {
             LispValue::Number(f) => Ok(f),
@@ -517,6 +542,7 @@ impl TryFrom<LispValue> for OrderedFloat<f64> {
 }
 impl TryFrom<LispValue> for Vector<LispValue> {
     type Error = LispError;
+    #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         if let LispValue::Object(o) = item {
             // `matches!` instead of a `match` or `if let` guard to avoid
@@ -535,6 +561,7 @@ impl TryFrom<LispValue> for Vector<LispValue> {
 }
 impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
     type Error = LispError;
+    #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         if let LispValue::Object(o) = item {
             // `matches!` explained in `TryFrom` for `Vector`
@@ -552,6 +579,7 @@ impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
 }
 impl TryFrom<LispValue> for Arc<RwLock<LispValue>> {
     type Error = LispError;
+    #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         match item {
             LispValue::Atom(x) => Ok(x.0),

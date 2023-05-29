@@ -212,14 +212,12 @@ impl LispEnv {
             .chain(self.stdlib.keys().copied())
             .chain(
                 // like in `get`, skip(1) to avoid potential dead-lock
-                self.nested_envs()
-                    .skip(1)
-                    .flat_map(|env| {
-                        let lock = env.read();
-                        // `collect()` + `into_iter()` to avoid borrowing `lock`, which
-                        // goes out of scope right away
-                        lock.data.keys().copied().collect::<Vec<_>>().into_iter()
-                    })
+                self.nested_envs().skip(1).flat_map(|env| {
+                    let lock = env.read();
+                    // `collect()` + `into_iter()` to avoid borrowing `lock`, which
+                    // goes out of scope right away
+                    lock.data.keys().copied().collect::<Vec<_>>().into_iter()
+                }),
             )
     }
 

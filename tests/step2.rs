@@ -20,9 +20,9 @@ fn fail_undefined_func() {
 
 #[test]
 fn empty_collection_nop() {
-    assert_eq!(eval!("()"), LispValue::list_from(vector![]));
+    assert_eq!(eval!("()"), vector![].into());
     assert_eq!(eval!("[]"), LispValue::vector_from(vec![]));
-    assert_eq!(eval!("{}"), LispValue::map_from(HashMap::new()));
+    assert_eq!(eval!("{}"), hashmap! {}.into());
 }
 
 #[test]
@@ -33,14 +33,16 @@ fn evaluate_in_collections() {
     );
     assert_eq!(
         eval!("{\"a\" (+ 7 8)}"),
-        LispValue::map_from(hashmap! {
+        hashmap! {
             "a".to_owned().into() => 15.0.into(),
-        })
+        }
+        .into()
     );
     assert_eq!(
         eval!("{:a (+ 7 8)}"),
-        LispValue::map_from(hashmap! {
+        hashmap! {
             LispValue::keyword_for("a".to_owned()) => 15.0.into(),
-        })
+        }
+        .into()
     );
 }
