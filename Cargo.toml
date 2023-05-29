@@ -22,13 +22,9 @@ async-std = { version = "1.12", optional = true }
 rustyline = { version = "11.0", optional = true }
 
 [features]
-default = ["io-stdlib", "rustyline", "async", "async-io"]
+default = ["io-stdlib", "rustyline"]
 # Enable functions in the Lisp standard library which require I/O
 io-stdlib = []
-# Add promises to the Lisp standard library
-async = ["futures"]
-# Add asynchronous versions of some I/O functions
-async-io = ["io-stdlib", "async", "async-std"]
 
 [[bin]]
 name = "lisp-repl"

@@ -4,20 +4,10 @@ use im::{HashMap, Vector};
 use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 use phf::phf_map;
-use std::convert::Infallible;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "async")] {
-        use std::pin::Pin;
-        use futures::prelude::*;
-        use futures::future::{Shared, BoxFuture};
-        use futures::task::{Context, Poll};
-    }
-}
 
 // Utility macro, raise `err` if `cond` is false
 macro_rules! __expect__ {
@@ -150,37 +140,6 @@ impl fmt::Debug for LispBuiltinFunc {
                 &self.body as &fn(Vector<LispValue>, &'static mut LispEnv) -> Result<LispValue>,
             )
             .finish()
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "async")] {
-        #[derive(Clone, Debug)]
-        #[repr(transparent)]
-        pub struct LispAsyncValue(Shared<BoxFuture<'static, Result<LispValue>>>);
-
-        impl PartialEq for LispAsyncValue {
-            #[inline]
-            fn eq(&self, other: &Self) -> bool {
-                self.0.ptr_eq(&other.0)
-            }
-        }
-        impl Eq for LispAsyncValue { }
-
-        impl std::hash::Hash for LispAsyncValue {
-            #[inline]
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.0.ptr_hash(state);
-            }
-        }
-
-        impl Future for LispAsyncValue {
-            type Output = Result<LispValue>;
-            #[inline]
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                Pin::new(&mut self.0).poll(cx)
-            }
-        }
     }
 }
 
@@ -351,9 +310,6 @@ pub enum LispValue {
     Atom(ByAddress<Arc<RwLock<LispValue>>>),
     Object(Arc<ObjectValue>),
     Special(LispSpecialForm),
-
-    #[cfg(feature = "async")]
-    Future(LispAsyncValue),
 }
 
 impl LispValue {
@@ -392,9 +348,6 @@ impl LispValue {
             Self::Atom(_) => "atom",
             Self::Object(obj) => obj.type_of(),
             Self::Special(_) => "function",
-
-            #[cfg(feature = "async")]
-            Self::Future(_) => "future",
         }
     }
 
@@ -423,9 +376,6 @@ impl LispValue {
             }
             Self::Object(o) => o.inspect_quoted_fmt(f),
             Self::Special(s) => write!(f, "{}", s),
-
-            #[cfg(feature = "async")]
-            Self::Future(_) => write!(f, "(promise ...)"),
         }
     }
 
@@ -545,14 +495,6 @@ impl From<LispSymbol> for LispValue {
         Self::Symbol(item)
     }
 }
-#[cfg(feature = "async")]
-impl From<BoxFuture<'static, Result<LispValue>>> for LispValue {
-    #[inline]
-    fn from(item: BoxFuture<'static, Result<LispValue>>) -> Self {
-        let wrapper = LispAsyncValue(item.shared());
-        Self::Future(wrapper)
-    }
-}
 
 impl TryFrom<LispValue> for LispSymbol {
     type Error = LispError;
@@ -617,16 +559,6 @@ impl TryFrom<LispValue> for Arc<RwLock<LispValue>> {
         }
     }
 }
-#[cfg(feature = "async")]
-impl TryFrom<LispValue> for LispAsyncValue {
-    type Error = LispError;
-    fn try_from(item: LispValue) -> Result<Self> {
-        match item {
-            LispValue::Future(f) => Ok(f),
-            _ => Err(LispError::InvalidDataType("future", item.type_of())),
-        }
-    }
-}
 
 impl fmt::Display for LispValue {
     #[inline]
@@ -675,24 +607,4 @@ pub enum LispError {
     #[cfg(feature = "io-stdlib")]
     #[error("error calling into native function: {0}")]
     OSFailure(#[from] std::io::Error),
-}
-impl<F: Into<LispError>> From<std::result::Result<Infallible, F>> for LispError {
-    #[inline]
-    fn from(item: std::result::Result<Infallible, F>) -> Self {
-        match item {
-            Err(e) => e.into(),
-            Ok(_) => unreachable!(),
-        }
-    }
-}
-impl Clone for LispError {
-    fn clone(&self) -> Self {
-        match self {
-            // HACK to get around io::Error being non-cloneable
-            Self::OSFailure(x) => {
-                Self::UncaughtException(format!("error calling into native function: {}", x).into())
-            }
-            x => x.clone(),
-        }
-    }
 }

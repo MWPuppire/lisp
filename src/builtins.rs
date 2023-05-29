@@ -19,13 +19,6 @@ cfg_if::cfg_if! {
         use std::time::{SystemTime, UNIX_EPOCH};
     }
 }
-cfg_if::cfg_if! {
-    if #[cfg(feature = "async")] {
-        use futures::prelude::*;
-        use futures::future;
-        use crate::util::LispAsyncValue;
-    }
-}
 
 macro_rules! pop_head {
     ($args:expr) => {
@@ -837,97 +830,6 @@ fn lisp_with_meta(_args: Vector<LispValue>, _env: &mut LispEnv) -> Result<LispVa
     Err(LispError::NoMeta)
 }
 
-// asynchronous functionality and promises are not in the Mal specification
-cfg_if::cfg_if! {
-    if #[cfg(feature = "async")] {
-        fn lisp_promise(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-            expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-            let expr = pop_head!(args);
-            let env = env.clone_arc();
-            let fut = future::lazy(move |_| {
-                eval(expr, env.write().deref_mut())
-            }).boxed();
-            Ok(fut.into())
-        }
-
-        fn lisp_resolve(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-            expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-            let result = eval_head!(args, env)?;
-            let fut = future::ready(Ok(result)).boxed();
-            Ok(fut.into())
-        }
-
-        fn lisp_reject(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-            expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-            let result = eval_head!(args, env)?;
-            let fut = future::ready(Err(LispError::UncaughtException(result))).boxed();
-            Ok(fut.into())
-        }
-
-        // TODO try to figure out some way to have `await` be in an `async`
-        // function; maybe add a new `async_eval` and make `await` a special
-        // form, but then the current evaluator (i.e. `eval` vs. `async_eval`)
-        // needs to be passed to every built-in
-        fn lisp_await(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-            expect!(args.len() == 1, LispError::IncorrectArguments(1, args.len()));
-            let fut: LispAsyncValue = eval_head!(args, env)?.try_into()?;
-            futures::executor::block_on(fut)
-        }
-
-        fn lisp_join(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-            expect!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
-            let futs = args.into_iter()
-                .map(|x| eval(x, env)?.try_into())
-                .collect::<Result<Vec<LispAsyncValue>>>()?;
-            let joined = future::join_all(futs);
-            Ok(joined.map(|x| {
-                Ok(LispValue::list_from(x.into_iter().collect::<Result<Vector<LispValue>>>()?))
-            }).boxed().into())
-        }
-    }
-}
-
-// asynchronous functionality and promises are not in the Mal specification
-#[cfg(feature = "async-io")]
-fn lisp_readline_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    if !args.is_empty() {
-        let s_owner = eval_head!(args, env)?;
-        let s = s_owner.expect_string()?;
-        let _ = async_std::io::stdout().write(s.as_bytes());
-    }
-    Ok(async move {
-        async_std::io::stdout().flush().await?;
-        let mut buffer = String::new();
-        let len = async_std::io::stdin().read_line(&mut buffer).await?;
-        if len == 0 {
-            // eof
-            Ok(LispValue::Nil)
-        } else {
-            buffer.pop(); // remove newline
-            Ok(LispValue::string_for(buffer))
-        }
-    }
-    .boxed()
-    .into())
-}
-
-// asynchronous functionality and promises are not in the Mal specification
-#[cfg(feature = "async-io")]
-fn lisp_slurp_async(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
-    expect!(
-        args.len() == 1,
-        LispError::IncorrectArguments(1, args.len())
-    );
-    let file_value = eval_head!(args, env)?;
-    Ok(async move {
-        let file_name = file_value.expect_string()?;
-        let contents = async_std::fs::read_to_string(file_name).await?;
-        Ok(LispValue::string_for(contents))
-    }
-    .boxed()
-    .into())
-}
-
 macro_rules! make_lisp_funcs {
     ($interner:expr, $($name:literal => $f:path,)*) => {
         hashmap! {
@@ -1013,20 +915,7 @@ lazy_static! {
             LispValue::string_for("Rust".to_owned()),
         );
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "async")] {
-                let async_funcs = make_lisp_funcs!(strs,
-                    "promise" => lisp_promise,
-                    "resolve" => lisp_resolve,
-                    "reject" => lisp_reject,
-                    "await" => lisp_await,
-                    "join" => lisp_join,
-                );
-                funcs.union(async_funcs)
-            } else {
-                funcs
-            }
-        }
+        funcs
     };
 }
 
@@ -1056,16 +945,6 @@ lazy_static! {
             LispValue::list_from(lisp_argv),
         );
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "async-io")] {
-                let async_funcs = make_lisp_funcs!(strs,
-                    "readline-async" => lisp_readline_async,
-                    "slurp-async" => lisp_slurp_async,
-                );
-                base.union(ext).union(async_funcs)
-            } else {
-                base.union(ext)
-            }
-        }
+        base.union(ext)
     };
 }
