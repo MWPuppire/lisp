@@ -10,14 +10,14 @@ use std::sync::Arc;
 use thiserror::Error;
 
 // Utility macro, raise `err` if `cond` is false
-macro_rules! __expect__ {
+macro_rules! assert_or_err {
     ($cond:expr, $err:expr) => {
         if !$cond {
             Err($err)?;
         }
     };
 }
-pub(crate) use __expect__ as expect;
+pub(crate) use assert_or_err;
 
 // criteria for becoming a special form are somewhat nebulous
 // `deref`, for example, is only a special form because of the `@atom` syntax,

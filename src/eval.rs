@@ -1,8 +1,8 @@
 use crate::env::{LispEnv, LispSymbol};
 use crate::specials::special_form;
-use crate::util::{expect, LispFunc, LispSpecialForm, ObjectValue};
+use crate::util::{LispFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
-use im::{vector, Vector};
+use im::Vector;
 use itertools::Itertools;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use std::iter::zip;
