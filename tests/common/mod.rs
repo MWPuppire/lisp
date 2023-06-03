@@ -4,7 +4,6 @@ pub use im::{hashmap, vector, HashMap, Vector};
 pub use lazy_static::lazy_static;
 pub use lisp::{eval, LispEnv, LispError, LispParser, LispValue, Result};
 pub use parking_lot::RwLock;
-pub use std::ops::DerefMut;
 pub use std::sync::Arc;
 
 lazy_static! {
@@ -76,7 +75,7 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Re
     } else {
         let mut lock = global.write();
         for val in parser {
-            eval(val?, lock.deref_mut())?;
+            eval(val?, &mut lock)?;
         }
     }
     Ok(LispValue::Nil)
@@ -98,7 +97,7 @@ pub fn testing_env() -> Arc<RwLock<LispEnv>> {
 pub fn eval_str(input: &str) -> Result<LispValue> {
     let parsed = input.parse()?;
     let env = testing_env();
-    let x = eval(parsed, env.write().deref_mut());
+    let x = eval(parsed, &mut env.write());
     x
 }
 

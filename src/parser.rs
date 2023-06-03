@@ -12,7 +12,6 @@ use nom::{
 };
 use ordered_float::OrderedFloat;
 use std::collections::VecDeque;
-use std::ops::DerefMut;
 use string_interner::StringInterner;
 
 // numbers can't start an identifier, but they're valid in one
@@ -354,7 +353,7 @@ impl LispParser {
             Ok(_) => (),
             Err(e) => return Some(Err(e)),
         }
-        Self::read_form(&mut tokens, LispEnv::interner_mut().deref_mut())
+        Self::read_form(&mut tokens, &mut LispEnv::interner_mut())
     }
     pub fn advance_line(&mut self) {
         self.row += 1;
@@ -555,15 +554,14 @@ impl Iterator for LispParser {
     type Item = Result<LispValue>;
     fn next(&mut self) -> Option<Result<LispValue>> {
         let mut interner = LispEnv::interner_mut();
-        let out = match Self::read_form(&mut self.tokens, interner.deref_mut()) {
+        match Self::read_form(&mut self.tokens, &mut interner) {
             Some(Err(err)) => {
                 // forget all processed tokens to clear the error
                 self.tokens.clear();
                 Some(Err(err))
             }
             x => x,
-        };
-        out
+        }
     }
 }
 

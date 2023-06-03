@@ -5,37 +5,37 @@ use common::*;
 fn def() {
     let env = testing_env();
     let mut lock = env.write();
-    eval!("(def! x 3)", lock.deref_mut());
-    assert_eq!(eval!("x", lock.deref_mut()), 3.0.into());
-    eval!("(def! x 4)", lock.deref_mut());
-    assert_eq!(eval!("x", lock.deref_mut()), 4.0.into());
+    eval!("(def! x 3)", &mut lock);
+    assert_eq!(eval!("x", &mut lock), 3.0.into());
+    eval!("(def! x 4)", &mut lock);
+    assert_eq!(eval!("x", &mut lock), 4.0.into());
 }
 
 #[test]
 fn def_immediate_evaluation() {
     let env = testing_env();
     let mut lock = env.write();
-    assert_eq!(eval!("(def! x (+ 1 7))", lock.deref_mut()), 8.0.into());
-    assert_eq!(eval!("x", lock.deref_mut()), 8.0.into());
+    assert_eq!(eval!("(def! x (+ 1 7))", &mut lock), 8.0.into());
+    assert_eq!(eval!("x", &mut lock), 8.0.into());
 }
 
 #[test]
 fn case_sensitive_symbols() {
     let env = testing_env();
     let mut lock = env.write();
-    eval!("(def! mynum 111)", lock.deref_mut());
-    eval!("(def! MYNUM 222)", lock.deref_mut());
-    assert_eq!(eval!("mynum", lock.deref_mut()), 111.0.into());
-    assert_eq!(eval!("MYNUM", lock.deref_mut()), 222.0.into());
+    eval!("(def! mynum 111)", &mut lock);
+    eval!("(def! MYNUM 222)", &mut lock);
+    assert_eq!(eval!("mynum", &mut lock), 111.0.into());
+    assert_eq!(eval!("MYNUM", &mut lock), 222.0.into());
 }
 
 #[test]
 fn cancel_def_on_error() {
     let env = testing_env();
     let mut lock = env.write();
-    eval!("(def! w 123)", lock.deref_mut());
-    assert!(eval_str_in_env("(def! w (abc))", lock.deref_mut()).is_err());
-    assert_eq!(eval!("w", lock.deref_mut()), 123.0.into());
+    eval!("(def! w 123)", &mut lock);
+    assert!(eval_str_in_env("(def! w (abc))", &mut lock).is_err());
+    assert_eq!(eval!("w", &mut lock), 123.0.into());
 }
 
 #[test]
@@ -49,10 +49,10 @@ fn let_statement() {
 fn let_scopes() {
     let env = testing_env();
     let mut lock = env.write();
-    eval!("(def! x 4)", lock.deref_mut());
-    assert_eq!(eval!("(let* (x 9) x)", lock.deref_mut()), 9.0.into());
-    assert_eq!(eval!("x", lock.deref_mut()), 4.0.into());
-    assert_eq!(eval!("(let* (q 9) x)", lock.deref_mut()), 4.0.into());
+    eval!("(def! x 4)", &mut lock);
+    assert_eq!(eval!("(let* (x 9) x)", &mut lock), 9.0.into());
+    assert_eq!(eval!("x", &mut lock), 4.0.into());
+    assert_eq!(eval!("(let* (q 9) x)", &mut lock), 4.0.into());
 }
 
 #[test]

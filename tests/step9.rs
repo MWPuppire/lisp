@@ -57,10 +57,10 @@ fn apply() {
 fn map() {
     let env = testing_env();
     let mut lock = env.write();
-    eval!("(def! nums (list 1 2 3))", lock.deref_mut());
-    eval!("(def! double (fn* (a) (* 2 a)))", lock.deref_mut());
+    eval!("(def! nums (list 1 2 3))", &mut lock);
+    eval!("(def! double (fn* (a) (* 2 a)))", &mut lock);
     assert_eq!(
-        eval!("(map double nums)", lock.deref_mut()),
+        eval!("(map double nums)", &mut lock),
         vector![2.0.into(), 4.0.into(), 6.0.into(),].into()
     );
     assert_eq!(

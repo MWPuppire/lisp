@@ -2,7 +2,6 @@ extern crate rustyline;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::ops::DerefMut;
 
 use lisp::{eval, LispEnv, LispParser, Result};
 
@@ -24,7 +23,7 @@ fn main() -> Result<()> {
         file.read_to_string(&mut buffer).unwrap();
         parser.add_tokenize(&buffer)?;
         for val in parser {
-            eval(val?, env_writer.deref_mut())?;
+            eval(val?, &mut env_writer)?;
         }
         return Ok(());
     }
@@ -41,7 +40,7 @@ fn main() -> Result<()> {
             buffer = String::new();
             for val in &mut parser {
                 match val {
-                    Ok(tok) => match eval(tok, env_writer.deref_mut()) {
+                    Ok(tok) => match eval(tok, &mut env_writer) {
                         Ok(out) => println!("{:#}", out),
                         Err(err) => println!("Err: {}", err),
                     },

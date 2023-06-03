@@ -7,7 +7,6 @@ use itertools::Itertools;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use std::iter::zip;
 use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 #[inline]
@@ -19,7 +18,7 @@ fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
 
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     match val {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &**o {
             ObjectValue::List(l) => {
                 if l.is_empty() {
                     false
@@ -27,7 +26,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
                     match &l[0] {
                         LispValue::Symbol(s) | LispValue::VariadicSymbol(s) => {
                             if let Ok(LispValue::Object(o)) = lookup_variable(*s, env) {
-                                matches!(o.deref(), ObjectValue::Macro(_),)
+                                matches!(&*o, ObjectValue::Macro(_),)
                             } else {
                                 false
                             }
@@ -52,7 +51,7 @@ pub fn expand_macros(
         let LispValue::Symbol(name) = head else { unreachable!() };
         let var = lookup_variable(name, env)?;
         let LispValue::Object(obj) = var else { unreachable!() };
-        let ObjectValue::Macro(f) = obj.deref() else { unreachable!() };
+        let ObjectValue::Macro(f) = &*obj else { unreachable!() };
         // some code duplication from `expand_fn`, but I didn't want `is_macro`
         // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
@@ -114,7 +113,7 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     Ok(match ast {
         LispValue::Symbol(s) => lookup_variable(s, env)?,
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
-        LispValue::Object(o) => LispValue::Object(match o.deref() {
+        LispValue::Object(o) => LispValue::Object(match &*o {
             ObjectValue::Vector(l) => Arc::new(ObjectValue::Vector(
                 l.iter().cloned().map(|x| eval(x, env)).try_collect()?,
             )),
@@ -148,7 +147,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             let last_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx - 1].1);
             ManuallyDrop::drop(last_ptr.as_mut().unwrap());
         } else {
-            let lock = env_copy.deref();
+            let lock = &*env_copy;
             if lock.is_locked_exclusive() {
                 lock.force_unlock_write();
                 relock = true;
@@ -158,7 +157,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
         let lock = ManuallyDrop::new(ptr.as_ref().unwrap().write());
         locks_to_drop.push((ptr, lock));
         let lock_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx].1);
-        lock_ptr.as_mut().unwrap().deref_mut()
+        &mut *lock_ptr.as_mut().unwrap()
     };
     // Not a fan of this immediately invoked closure, but specific clean-up
     // needs to be performed at end-of-function (and the `?` syntax is too
@@ -175,7 +174,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             break eval_ast(ast, env);
         }
         let LispValue::Object(ref arc) = ast else { unreachable!() };
-        if !matches!(arc.deref(), ObjectValue::List(_)) {
+        if !matches!(&**arc, ObjectValue::List(_)) {
             break eval_ast(ast, env);
         }
         let Ok(mut list): Result<Vector<LispValue>> = ast.try_into() else { unreachable!() };
@@ -187,7 +186,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             LispValue::Special(form) => {
                 ast = special_form!(form, list, eval, env, stash_env);
             }
-            LispValue::Object(o) => match o.deref() {
+            LispValue::Object(o) => match &*o {
                 ObjectValue::BuiltinFunc(f) => break (f.body)(list, env),
                 ObjectValue::Func(f) => {
                     let (new_ast, new_env) = expand_fn(f, list, env)?;
@@ -212,7 +211,7 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
     // to this function will stop working, causing UB [and making an error
     // that's a pain to track down with no compiler aid]).
     if relock {
-        std::mem::forget(env_copy.deref().write());
+        std::mem::forget(env_copy.write());
     }
     out
 }

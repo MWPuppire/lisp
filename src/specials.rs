@@ -1,7 +1,6 @@
 use crate::util::{assert_or_err, LispSpecialForm, ObjectValue};
 use crate::{LispEnv, LispError, LispValue, Result};
 use im::vector;
-use std::ops::Deref;
 use std::sync::Arc;
 
 pub(crate) const UNQUOTE: LispValue = LispValue::Special(LispSpecialForm::Unquote);
@@ -14,7 +13,7 @@ pub(crate) fn inner_quasiquote(
     env: &mut LispEnv,
 ) -> Result<(LispValue, bool)> {
     match arg {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &*o {
             ObjectValue::List(l) => {
                 if l.is_empty() {
                     return Ok((LispValue::Object(o.clone()), false));
@@ -48,12 +47,10 @@ pub(crate) fn inner_quasiquote(
 }
 
 macro_rules! special_form {
-    ($form:expr, $list:expr, $eval:ident, $env:ident, $stash_env:expr) => { {
-        use $crate::util::assert_or_err;
-        use std::ops::Deref;
+    ($form:expr, $list:expr, $eval:ident, $env:ident, $stash_env:expr) => {
         match $form {
             $crate::util::LispSpecialForm::Def => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
@@ -66,7 +63,7 @@ macro_rules! special_form {
                 break Ok(val);
             }
             $crate::util::LispSpecialForm::Defmacro => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
@@ -76,7 +73,7 @@ macro_rules! special_form {
                 let name = $list.pop_front().unwrap().try_into()?;
                 let val = $eval($list.pop_back().unwrap(), &mut $env)?;
                 let val = match val {
-                    $crate::LispValue::Object(o) => match o.deref() {
+                    $crate::LispValue::Object(o) => match &*o {
                         $crate::util::ObjectValue::Func(f) => {
                             $crate::LispValue::Object(std::sync::Arc::new($crate::util::ObjectValue::Macro(f.clone())))
                         }
@@ -88,7 +85,7 @@ macro_rules! special_form {
                 break Ok(val);
             }
             $crate::util::LispSpecialForm::Let => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
@@ -118,7 +115,7 @@ macro_rules! special_form {
                                                     break Err($crate::LispError::IncorrectArguments(1, 0));
                                                 };
                 match front {
-                    $crate::LispValue::Object(o) => match o.deref() {
+                    $crate::LispValue::Object(o) => match &*o {
                         $crate::util::ObjectValue::List(list) => {
                             if list.is_empty() {
                                 break Ok($crate::LispValue::Object(o.clone()));
@@ -130,7 +127,7 @@ macro_rules! special_form {
                             if list[0] == $crate::specials::UNQUOTE
                                 || list[0] == $crate::specials::SPLICE_UNQUOTE
                             {
-                                assert_or_err!(
+                                $crate::util::assert_or_err!(
                                     list.len() == 2,
                                     $crate::LispError::IncorrectArguments(1, list.len() - 1,)
                                 );
@@ -166,7 +163,7 @@ macro_rules! special_form {
                 }
             }
             $crate::util::LispSpecialForm::Try => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
@@ -174,7 +171,7 @@ macro_rules! special_form {
                 let Ok(mut catch) = catch.try_into_iter() else {
                                                     break Err($crate::LispError::TryNoCatch);
                                                 };
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     catch.len() == 3,
                     $crate::LispError::IncorrectArguments(2, catch.len() - 1,)
                 );
@@ -215,7 +212,7 @@ macro_rules! special_form {
                 tail
             }
             $crate::util::LispSpecialForm::If => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() > 1 && $list.len() < 4,
                     $crate::LispError::IncorrectArguments(2, $list.len())
                 );
@@ -230,7 +227,7 @@ macro_rules! special_form {
                 }
             }
             $crate::util::LispSpecialForm::Fn => {
-                assert_or_err!(
+                $crate::util::assert_or_err!(
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len())
                 );
@@ -297,7 +294,7 @@ macro_rules! special_form {
                 out
             }
         }
-    } };
+    };
 }
 
 pub(crate) use special_form;

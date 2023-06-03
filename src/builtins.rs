@@ -10,7 +10,6 @@ use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 use std::iter;
-use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 cfg_if::cfg_if! {
@@ -127,7 +126,7 @@ fn lisp_listq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValu
     );
     let val = eval_head!(args, env)?;
     Ok(LispValue::Bool(match val {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::List(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::List(_)),
         _ => false,
     }))
 }
@@ -330,7 +329,7 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Lisp
     } else {
         let mut lock = global.write();
         for val in parser {
-            eval(val?, lock.deref_mut())?;
+            eval(val?, &mut lock)?;
         }
     }
     Ok(LispValue::Nil)
@@ -416,7 +415,7 @@ fn lisp_macroq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVal
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::Macro(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::Macro(_)),
         _ => false,
     }))
 }
@@ -498,7 +497,7 @@ fn lisp_vectorq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::Vector(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::Vector(_)),
         _ => false,
     }))
 }
@@ -510,7 +509,7 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &*o {
             ObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
             ObjectValue::String(_) => {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
@@ -531,7 +530,7 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispV
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::Keyword(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::Keyword(_)),
         _ => false,
     }))
 }
@@ -551,7 +550,7 @@ fn lisp_mapq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::Map(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::Map(_)),
         _ => false,
     }))
 }
@@ -563,7 +562,7 @@ fn lisp_sequentialq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<Li
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)),
+        LispValue::Object(o) => matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)),
         _ => false,
     }))
 }
@@ -684,10 +683,9 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(
-            o.deref(),
-            ObjectValue::Func(_) | ObjectValue::BuiltinFunc { .. }
-        ),
+        LispValue::Object(o) => {
+            matches!(&*o, ObjectValue::Func(_) | ObjectValue::BuiltinFunc { .. })
+        }
         _ => false,
     }))
 }
@@ -721,7 +719,7 @@ fn lisp_vec(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &*o {
             ObjectValue::Vector(_) => Ok(LispValue::Object(o.clone())),
             ObjectValue::List(l) => Ok(LispValue::vector_from(l.iter().cloned())),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
@@ -750,7 +748,7 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &*o {
             ObjectValue::List(l) => Ok(if l.is_empty() {
                 LispValue::Nil
             } else {
@@ -778,7 +776,7 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue
     let first = eval_head!(args, env)?;
     let args = args.into_iter().map(|x| eval(x, env));
     match first {
-        LispValue::Object(o) => match o.deref() {
+        LispValue::Object(o) => match &*o {
             ObjectValue::Vector(l) => {
                 let mut args: Vec<LispValue> = args.try_collect()?;
                 if l.is_empty() {

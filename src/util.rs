@@ -5,7 +5,6 @@ use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 use phf::phf_map;
 use std::fmt;
-use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -394,7 +393,7 @@ impl LispValue {
 
     pub fn try_into_iter(self) -> Result<std::vec::IntoIter<LispValue>> {
         if let Self::Object(o) = self {
-            if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
+            if matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)) {
                 // `matches!` before the `match` to avoid potentially cloning a
                 // non-list object
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
@@ -414,7 +413,7 @@ impl LispValue {
 
     pub fn expect_string(&self) -> Result<&str> {
         match self {
-            Self::Object(o) => match o.deref() {
+            Self::Object(o) => match &**o {
                 ObjectValue::String(s) => Ok(s),
                 _ => Err(LispError::InvalidDataType("string", self.type_of())),
             },
@@ -427,7 +426,7 @@ impl LispValue {
     // to compare equal
     pub fn vector_to_list(self) -> Self {
         if let Self::Object(o) = self {
-            if matches!(o.deref(), ObjectValue::List(_) | ObjectValue::Vector(_)) {
+            if matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)) {
                 // `matches!` before the `match` explained in `try_into_iter`
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let list: Vector<LispValue> = match cloned {
@@ -547,7 +546,7 @@ impl TryFrom<LispValue> for Vector<LispValue> {
         if let LispValue::Object(o) = item {
             // `matches!` instead of a `match` or `if let` guard to avoid
             // potentially cloning a non-list object
-            if matches!(o.deref(), ObjectValue::List(_)) {
+            if matches!(&*o, ObjectValue::List(_)) {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let ObjectValue::List(l) = cloned else { unreachable!() };
                 Ok(l)
@@ -565,7 +564,7 @@ impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
     fn try_from(item: LispValue) -> Result<Self> {
         if let LispValue::Object(o) = item {
             // `matches!` explained in `TryFrom` for `Vector`
-            if matches!(o.deref(), ObjectValue::Map(_)) {
+            if matches!(&*o, ObjectValue::Map(_)) {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
                 let ObjectValue::Map(l) = cloned else { unreachable!() };
                 Ok(l)
