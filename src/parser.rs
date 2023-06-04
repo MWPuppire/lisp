@@ -5,7 +5,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while_m_n},
     character::complete::{char, line_ending, multispace1, none_of, one_of},
-    combinator::{map, map_opt, map_res, not, opt, peek, recognize, value},
+    combinator::{eof, map, map_opt, map_res, not, opt, peek, recognize, value},
     multi::{many0, many0_count, many1_count},
     sequence::{delimited, pair, preceded, terminated, tuple},
     Finish, IResult,
@@ -103,7 +103,7 @@ fn keyword(input: &str) -> IResult<&str, LispTokenType> {
 fn number(input: &str) -> IResult<&str, LispTokenType> {
     alt((
         map(
-            recognize(
+            terminated(recognize(
                 // Case one: .42
                 tuple((
                     opt(one_of("+-")),
@@ -111,11 +111,11 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
                     decimal,
                     opt(tuple((one_of("eE"), opt(one_of("+-")), decimal))),
                 )),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         map(
-            recognize(
+            terminated(recognize(
                 // Case two: 42e42 and 42.42e42
                 tuple((
                     decimal,
@@ -124,20 +124,26 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
                     opt(one_of("+-")),
                     decimal,
                 )),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         map(
-            recognize(
+            terminated(recognize(
                 // Case three: 42. and 42.42
                 tuple((decimal, char('.'), opt(decimal))),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         // Integers
-        map(decimal, |x| LispTokenType::Number(x.into())),
         map(
-            recognize(
+            terminated(
+                decimal,
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
+            |x| LispTokenType::Number(x.into()),
+        ),
+        map(
+            terminated(recognize(
                 // Binary integers
                 pair(
                     opt(one_of::<&str, _, _>("+-")),
@@ -149,7 +155,7 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
                         )),
                     ),
                 ),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
@@ -158,7 +164,7 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
             },
         ),
         map(
-            recognize(
+            terminated(recognize(
                 // Octal integers
                 pair(
                     opt(one_of::<&str, _, _>("+-")),
@@ -170,7 +176,7 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
                         )),
                     ),
                 ),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
@@ -179,7 +185,7 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
             },
         ),
         map(
-            recognize(
+            terminated(recognize(
                 // Hexadecimal integers
                 pair(
                     opt(one_of::<&str, _, _>("+-")),
@@ -194,7 +200,7 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
                         )),
                     ),
                 ),
-            ),
+            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
