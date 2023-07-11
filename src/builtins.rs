@@ -288,7 +288,11 @@ fn lisp_str(args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue> {
     let mut buffer = String::new();
     for arg in args.into_iter() {
         let x = eval(arg, env)?;
-        buffer.push_str(&x.to_string());
+        if let Ok(s) = x.expect_string() {
+            buffer.push_str(s);
+        } else {
+            buffer.push_str(&x.to_string());
+        }
     }
     Ok(LispValue::string_for(buffer))
 }
