@@ -3,13 +3,17 @@ use crate::util::{LispBuiltinFunc, ObjectValue, Result};
 use crate::LispValue;
 use by_address::ByAddress;
 use im::{HashMap, Vector};
-use lazy_static::lazy_static;
 use parking_lot::RwLock;
-use std::ops::DerefMut;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
-use string_interner::{DefaultSymbol, StringInterner};
 
-pub type LispSymbol = DefaultSymbol;
+pub type LispSymbol = u32;
+#[inline]
+pub(crate) fn hash(s: &str) -> LispSymbol {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut hasher);
+    hasher.finish() as LispSymbol
+}
 
 #[derive(Clone, Debug)]
 pub struct LispEnv {
@@ -75,11 +79,6 @@ impl LispClosure {
     }
 }
 
-// TODO I'd probably rather not have a single static interner
-lazy_static! {
-    static ref INTERNER: RwLock<StringInterner> = RwLock::new(StringInterner::new());
-}
-
 impl LispEnv {
     #[cfg(feature = "io-stdlib")]
     pub fn new_stdlib() -> Arc<RwLock<Self>> {
@@ -126,26 +125,6 @@ impl LispEnv {
     }
 
     #[inline]
-    pub(crate) fn interner_mut() -> impl DerefMut<Target = StringInterner> {
-        INTERNER.write()
-    }
-    #[inline]
-    pub(crate) fn symbol_for(s: &str) -> LispSymbol {
-        let mut interner = INTERNER.write();
-        interner.get_or_intern(s)
-    }
-    #[inline]
-    pub(crate) fn symbol_for_static(s: &'static str) -> LispSymbol {
-        let mut interner = INTERNER.write();
-        interner.get_or_intern_static(s)
-    }
-    #[inline]
-    pub(crate) fn symbol_string(sym: LispSymbol) -> Option<String> {
-        let interner = INTERNER.read();
-        interner.resolve(sym).map(ToString::to_string)
-    }
-
-    #[inline]
     pub fn clone_arc(&self) -> Arc<RwLock<Self>> {
         self.this.upgrade().unwrap()
     }
@@ -173,12 +152,12 @@ impl LispEnv {
     }
     #[inline]
     pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
-        let sym = Self::symbol_for(key);
+        let sym = hash(key);
         self.get(sym)
     }
     #[inline]
     pub fn set_by_str(&mut self, key: &str, val: LispValue) {
-        let sym = Self::symbol_for(key);
+        let sym = hash(key);
         self.set(sym, val);
     }
     #[inline]
@@ -191,7 +170,7 @@ impl LispEnv {
             name,
             body,
         })));
-        let sym = Self::symbol_for_static(name);
+        let sym = hash(name);
         self.set(sym, f);
     }
 

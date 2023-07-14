@@ -15,19 +15,19 @@ fn read_numbers() {
 
 #[test]
 fn read_symbols() {
-    assert_eq!(parse("+"), LispValue::symbol_for_static("+"));
-    assert_eq!(parse("abc"), LispValue::symbol_for_static("abc"));
-    assert_eq!(parse("abc5"), LispValue::symbol_for_static("abc5"));
-    assert_eq!(parse("abc-def"), LispValue::symbol_for_static("abc-def"));
-    assert_eq!(parse("-"), LispValue::symbol_for_static("-"));
-    assert_eq!(parse("-abc"), LispValue::symbol_for_static("-abc"));
+    assert_eq!(parse("+"), LispValue::symbol_for("+"));
+    assert_eq!(parse("abc"), LispValue::symbol_for("abc"));
+    assert_eq!(parse("abc5"), LispValue::symbol_for("abc5"));
+    assert_eq!(parse("abc-def"), LispValue::symbol_for("abc-def"));
+    assert_eq!(parse("-"), LispValue::symbol_for("-"));
+    assert_eq!(parse("-abc"), LispValue::symbol_for("-abc"));
 }
 
 #[test]
 fn read_lists() {
     assert_eq!(
         parse("(+ 1 2)"),
-        vector![LispValue::symbol_for_static("+"), 1.0.into(), 2.0.into(),].into()
+        vector![LispValue::symbol_for("+"), 1.0.into(), 2.0.into(),].into()
     );
     assert_eq!(parse("()"), vector![].into());
     assert_eq!(parse("( )"), vector![].into());
@@ -43,9 +43,9 @@ fn nested_lists() {
     assert_eq!(
         parse("(+ 1 (+ 2 3))"),
         vector![
-            LispValue::symbol_for_static("+"),
+            LispValue::symbol_for("+"),
             1.0.into(),
-            vector![LispValue::symbol_for_static("+"), 2.0.into(), 3.0.into(),].into(),
+            vector![LispValue::symbol_for("+"), 2.0.into(), 3.0.into(),].into(),
         ]
         .into()
     );

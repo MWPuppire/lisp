@@ -43,32 +43,28 @@ fn macroexpand() {
     assert_eq!(
         eval!("(macroexpand (unless PRED A B))", &mut lock),
         vector![
-            LispValue::symbol_for_static("if"),
-            LispValue::symbol_for_static("PRED"),
-            LispValue::symbol_for_static("B"),
-            LispValue::symbol_for_static("A"),
+            LispValue::symbol_for("if"),
+            LispValue::symbol_for("PRED"),
+            LispValue::symbol_for("B"),
+            LispValue::symbol_for("A"),
         ]
         .into()
     );
     assert_eq!(
         eval!("(macroexpand (unless2 PRED A B))", &mut lock),
         vector![
-            LispValue::symbol_for_static("if"),
-            vector![
-                LispValue::symbol_for_static("not"),
-                LispValue::symbol_for_static("PRED"),
-            ]
-            .into(),
-            LispValue::symbol_for_static("A"),
-            LispValue::symbol_for_static("B"),
+            LispValue::symbol_for("if"),
+            vector![LispValue::symbol_for("not"), LispValue::symbol_for("PRED"),].into(),
+            LispValue::symbol_for("A"),
+            LispValue::symbol_for("B"),
         ]
         .into()
     );
     assert_eq!(
         eval!("(macroexpand (unless2 2 3 4))", &mut lock),
         vector![
-            LispValue::symbol_for_static("if"),
-            vector![LispValue::symbol_for_static("not"), 2.0.into(),].into(),
+            LispValue::symbol_for("if"),
+            vector![LispValue::symbol_for("not"), 2.0.into(),].into(),
             3.0.into(),
             4.0.into(),
         ]
@@ -76,7 +72,7 @@ fn macroexpand() {
     );
     assert_eq!(
         eval!("(let* (a 123) (macroexpand (identity a)))", &mut lock),
-        LispValue::symbol_for_static("a"),
+        LispValue::symbol_for("a"),
     );
 }
 

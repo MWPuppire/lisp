@@ -1,7 +1,7 @@
 extern crate rustyline;
 
-use std::fs;
 use std::error::Error;
+use std::fs;
 
 use lisp::{eval, LispEnv, LispParser};
 

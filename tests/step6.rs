@@ -33,7 +33,7 @@ fn read_string() {
     assert_eq!(eval!("(read-string \"nil\")"), LispValue::Nil);
     assert_eq!(
         eval!("(read-string \"(+ 2 3)\")"),
-        vector![LispValue::symbol_for_static("+"), 2.0.into(), 3.0.into(),].into()
+        vector![LispValue::symbol_for("+"), 2.0.into(), 3.0.into(),].into()
     );
     assert_eq!(eval!("(read-string \"7 ;; comment\")"), 7.0.into());
     assert_eq!(eval!("(read-string \";; comment\")"), LispValue::Nil);

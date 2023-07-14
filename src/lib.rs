@@ -17,7 +17,6 @@ extern crate nom;
 extern crate ordered_float;
 extern crate parking_lot;
 extern crate phf;
-extern crate string_interner;
 
 // Also with Miri test fails, Miri reports a memory leak in the test suite
 // (starting at step 4 tests)
@@ -27,8 +26,7 @@ extern crate string_interner;
 // I could use a garbage collector crate, but none of the ones I'd investigated
 // earler quite seemed to fit:
 // `gc` has a single allocator per thread, while I would like the option of
-// creating a `LispContext` type including the allocator (I really need to do
-// this for the symbol interner, too)
+// creating a `LispContext` type including the allocator.
 // `gc-arena` looks good, but its `Gc` pointers don't derive `PartialEq`, `Eq`,
 // `Hash`, etc., and I'd rather avoid manually implementing those on `LispValue`
 // I haven't looked enough into `zerogc`, but it might be promising

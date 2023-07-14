@@ -11,9 +11,8 @@ use std::sync::Arc;
 
 #[inline]
 fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
-    env.get(val).ok_or(LispError::UndefinedVariable(
-        LispEnv::symbol_string(val).unwrap(),
-    ))
+    env.get(val)
+        .ok_or(LispError::UndefinedVariable(format!("\\{}", val)))
 }
 
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {

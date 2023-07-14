@@ -1,5 +1,6 @@
+use crate::env::{hash, LispSymbol};
 use crate::util::LispSpecialForm;
-use crate::{LispEnv, LispError, LispValue, Result};
+use crate::{LispError, LispValue, Result};
 use im::{vector, Vector};
 use nom::{
     branch::alt,
@@ -12,7 +13,6 @@ use nom::{
 };
 use ordered_float::OrderedFloat;
 use std::collections::VecDeque;
-use string_interner::StringInterner;
 
 // numbers can't start an identifier, but they're valid in one
 const IDEN_INVALID_CHARS_START: &str = "~@^{}()[]'\"&`\\,;:0123456789 \t\r\n\u{0}";
@@ -44,6 +44,7 @@ enum LispTokenType {
     String(String),
     Symbol(String),
     Keyword(String),
+    HashedSymbol(LispSymbol),
 }
 
 macro_rules! reserved_word_token {
@@ -87,6 +88,19 @@ fn identifier(input: &str) -> IResult<&str, LispTokenType> {
     )(input)
 }
 
+fn hashed_identifier(input: &str) -> IResult<&str, LispTokenType> {
+    map(
+        preceded(
+            char('\\'),
+            recognize(many1_count(terminated(
+                one_of("0123456789"),
+                opt(pair(many1_count(char('_')), one_of("0123456789"))),
+            ))),
+        ),
+        |x: &str| LispTokenType::HashedSymbol(x.parse().unwrap()),
+    )(input)
+}
+
 fn keyword(input: &str) -> IResult<&str, LispTokenType> {
     map(
         preceded(
@@ -103,35 +117,44 @@ fn keyword(input: &str) -> IResult<&str, LispTokenType> {
 fn number(input: &str) -> IResult<&str, LispTokenType> {
     alt((
         map(
-            terminated(recognize(
-                // Case one: .42
-                tuple((
-                    opt(one_of("+-")),
-                    char('.'),
-                    decimal,
-                    opt(tuple((one_of("eE"), opt(one_of("+-")), decimal))),
-                )),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+            terminated(
+                recognize(
+                    // Case one: .42
+                    tuple((
+                        opt(one_of("+-")),
+                        char('.'),
+                        decimal,
+                        opt(tuple((one_of("eE"), opt(one_of("+-")), decimal))),
+                    )),
+                ),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         map(
-            terminated(recognize(
-                // Case two: 42e42 and 42.42e42
-                tuple((
-                    decimal,
-                    opt(preceded(char('.'), decimal)),
-                    one_of("eE"),
-                    opt(one_of("+-")),
-                    decimal,
-                )),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+            terminated(
+                recognize(
+                    // Case two: 42e42 and 42.42e42
+                    tuple((
+                        decimal,
+                        opt(preceded(char('.'), decimal)),
+                        one_of("eE"),
+                        opt(one_of("+-")),
+                        decimal,
+                    )),
+                ),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         map(
-            terminated(recognize(
-                // Case three: 42. and 42.42
-                tuple((decimal, char('.'), opt(decimal))),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+            terminated(
+                recognize(
+                    // Case three: 42. and 42.42
+                    tuple((decimal, char('.'), opt(decimal))),
+                ),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| LispTokenType::Number(x.parse().unwrap()),
         ),
         // Integers
@@ -143,19 +166,22 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
             |x| LispTokenType::Number(x.into()),
         ),
         map(
-            terminated(recognize(
-                // Binary integers
-                pair(
-                    opt(one_of::<&str, _, _>("+-")),
-                    preceded(
-                        alt((tag("0b"), tag("0B"))),
-                        many1_count(terminated(
-                            one_of("01"),
-                            opt(pair(many1_count(char('_')), one_of("01"))),
-                        )),
+            terminated(
+                recognize(
+                    // Binary integers
+                    pair(
+                        opt(one_of::<&str, _, _>("+-")),
+                        preceded(
+                            alt((tag("0b"), tag("0B"))),
+                            many1_count(terminated(
+                                one_of("01"),
+                                opt(pair(many1_count(char('_')), one_of("01"))),
+                            )),
+                        ),
                     ),
                 ),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
@@ -164,19 +190,22 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
             },
         ),
         map(
-            terminated(recognize(
-                // Octal integers
-                pair(
-                    opt(one_of::<&str, _, _>("+-")),
-                    preceded(
-                        alt((tag("0o"), tag("0o"))),
-                        many1_count(terminated(
-                            one_of("01234567"),
-                            opt(pair(many1_count(char('_')), one_of("01234567"))),
-                        )),
+            terminated(
+                recognize(
+                    // Octal integers
+                    pair(
+                        opt(one_of::<&str, _, _>("+-")),
+                        preceded(
+                            alt((tag("0o"), tag("0o"))),
+                            many1_count(terminated(
+                                one_of("01234567"),
+                                opt(pair(many1_count(char('_')), one_of("01234567"))),
+                            )),
+                        ),
                     ),
                 ),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
@@ -185,22 +214,25 @@ fn number(input: &str) -> IResult<&str, LispTokenType> {
             },
         ),
         map(
-            terminated(recognize(
-                // Hexadecimal integers
-                pair(
-                    opt(one_of::<&str, _, _>("+-")),
-                    preceded(
-                        alt((tag("0x"), tag("0X"))),
-                        many1_count(terminated(
-                            one_of("0123456789abcdefABCDEF"),
-                            opt(pair(
-                                many1_count(char('_')),
+            terminated(
+                recognize(
+                    // Hexadecimal integers
+                    pair(
+                        opt(one_of::<&str, _, _>("+-")),
+                        preceded(
+                            alt((tag("0x"), tag("0X"))),
+                            many1_count(terminated(
                                 one_of("0123456789abcdefABCDEF"),
+                                opt(pair(
+                                    many1_count(char('_')),
+                                    one_of("0123456789abcdefABCDEF"),
+                                )),
                             )),
-                        )),
+                        ),
                     ),
                 ),
-            ), peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof)))),
+                peek(alt((recognize(one_of(IDEN_INVALID_CHARS)), eof))),
+            ),
             |x| {
                 let sign = if x.as_bytes()[0] == b'-' { -1 } else { 1 };
                 let index = if x.as_bytes()[0] == b'0' { 2 } else { 3 };
@@ -302,6 +334,7 @@ fn parse_lisp(input: &str) -> IResult<&str, LispTokenType> {
                 reserved_word_token!(special_form!(Cond), "cond"),
             )),
             identifier,
+            hashed_identifier,
             keyword,
         )),
         many0_count(alt((value((), multispace1), value((), char(','))))),
@@ -318,9 +351,9 @@ fn some_or_err<T>(opt: Option<Result<T>>, err: LispError) -> Result<T> {
 }
 
 macro_rules! token_prefix {
-    ($prefix:expr, $name:ident, $rest:expr, $interner:expr $(,)?) => {
+    ($prefix:expr, $name:ident, $rest:expr $(,)?) => {
         some_or_err(
-            LispParser::read_form($rest, $interner),
+            LispParser::read_form($rest),
             LispError::MissingToken($prefix),
         )
         .map(|inner| {
@@ -359,7 +392,7 @@ impl LispParser {
             Ok(_) => (),
             Err(e) => return Some(Err(e)),
         }
-        Self::read_form(&mut tokens, &mut LispEnv::interner_mut())
+        Self::read_form(&mut tokens)
     }
     pub fn advance_line(&mut self) {
         self.row += 1;
@@ -427,37 +460,34 @@ impl LispParser {
         Ok((row, col))
     }
 
-    fn read_form(
-        tokens: &mut VecDeque<LispToken>,
-        strs: &mut StringInterner,
-    ) -> Option<Result<LispValue>> {
+    fn read_form(tokens: &mut VecDeque<LispToken>) -> Option<Result<LispValue>> {
         let Some(LispToken { token, row, col }) = tokens.pop_front() else {
             return None;
         };
         Some(match token {
-            LispTokenType::Comment => Self::read_form(tokens, strs).unwrap_or(Ok(LispValue::Nil)),
-            LispTokenType::LParen => Self::read_list(tokens, strs),
+            LispTokenType::Comment => Self::read_form(tokens).unwrap_or(Ok(LispValue::Nil)),
+            LispTokenType::LParen => Self::read_list(tokens),
             LispTokenType::RParen => Err(LispError::SyntaxError(row, col)),
-            LispTokenType::LBracket => Self::read_vec(tokens, strs),
+            LispTokenType::LBracket => Self::read_vec(tokens),
             LispTokenType::RBracket => Err(LispError::SyntaxError(row, col)),
-            LispTokenType::LCurly => Self::read_map(tokens, strs),
+            LispTokenType::LCurly => Self::read_map(tokens),
             LispTokenType::RCurly => Err(LispError::SyntaxError(row, col)),
-            LispTokenType::AtSign => token_prefix!("@", Deref, tokens, strs),
-            LispTokenType::Apostrophe => token_prefix!("'", Quote, tokens, strs),
-            LispTokenType::Backtick => token_prefix!("`", Quasiquote, tokens, strs),
-            LispTokenType::Tilde => token_prefix!("~", Unquote, tokens, strs),
-            LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens, strs),
+            LispTokenType::AtSign => token_prefix!("@", Deref, tokens),
+            LispTokenType::Apostrophe => token_prefix!("'", Quote, tokens),
+            LispTokenType::Backtick => token_prefix!("`", Quasiquote, tokens),
+            LispTokenType::Tilde => token_prefix!("~", Unquote, tokens),
+            LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens),
             LispTokenType::Ampersand => {
-                match some_or_err(Self::read_form(tokens, strs), LispError::MissingToken("&")) {
+                match some_or_err(Self::read_form(tokens), LispError::MissingToken("&")) {
                     Ok(LispValue::Symbol(s)) => Ok(LispValue::VariadicSymbol(s)),
                     Ok(_) => Err(LispError::SyntaxError(row, col)),
                     Err(x) => Err(x),
                 }
             }
-            x => Ok(Self::read_atom(x, strs)),
+            x => Ok(Self::read_atom(x)),
         })
     }
-    fn read_list(tokens: &mut VecDeque<LispToken>, strs: &mut StringInterner) -> Result<LispValue> {
+    fn read_list(tokens: &mut VecDeque<LispToken>) -> Result<LispValue> {
         let mut res = Vector::new();
         loop {
             match tokens.get(0) {
@@ -471,18 +501,15 @@ impl LispParser {
                 None => return Err(LispError::UnbalancedDelim(1, ")")),
                 _ => (),
             };
-            let exp = some_or_err(
-                Self::read_form(tokens, strs),
-                LispError::UnbalancedDelim(0, ")"),
-            )
-            .map_err(|err| match err {
-                LispError::UnbalancedDelim(x, ")") => LispError::UnbalancedDelim(x + 1, ")"),
-                _ => err,
-            })?;
+            let exp = some_or_err(Self::read_form(tokens), LispError::UnbalancedDelim(0, ")"))
+                .map_err(|err| match err {
+                    LispError::UnbalancedDelim(x, ")") => LispError::UnbalancedDelim(x + 1, ")"),
+                    _ => err,
+                })?;
             res.push_back(exp);
         }
     }
-    fn read_vec(tokens: &mut VecDeque<LispToken>, strs: &mut StringInterner) -> Result<LispValue> {
+    fn read_vec(tokens: &mut VecDeque<LispToken>) -> Result<LispValue> {
         let mut res = vec![];
         loop {
             match tokens.get(0) {
@@ -496,18 +523,15 @@ impl LispParser {
                 None => return Err(LispError::UnbalancedDelim(1, "]")),
                 _ => (),
             };
-            let exp = some_or_err(
-                Self::read_form(tokens, strs),
-                LispError::UnbalancedDelim(0, "]"),
-            )
-            .map_err(|err| match err {
-                LispError::UnbalancedDelim(x, "]") => LispError::UnbalancedDelim(x + 1, "]"),
-                _ => err,
-            })?;
+            let exp = some_or_err(Self::read_form(tokens), LispError::UnbalancedDelim(0, "]"))
+                .map_err(|err| match err {
+                    LispError::UnbalancedDelim(x, "]") => LispError::UnbalancedDelim(x + 1, "]"),
+                    _ => err,
+                })?;
             res.push(exp);
         }
     }
-    fn read_map(tokens: &mut VecDeque<LispToken>, strs: &mut StringInterner) -> Result<LispValue> {
+    fn read_map(tokens: &mut VecDeque<LispToken>) -> Result<LispValue> {
         let mut res: Vec<(LispValue, LispValue)> = vec![];
         loop {
             match tokens.get(0) {
@@ -521,27 +545,29 @@ impl LispParser {
                 None => return Err(LispError::UnbalancedDelim(1, "}")),
                 _ => (),
             };
-            let key_exp = some_or_err(
-                Self::read_form(tokens, strs),
-                LispError::UnbalancedDelim(0, "}"),
-            )
-            .map_err(|err| match err {
-                LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
-                _ => err,
-            })?;
-            let val_exp = some_or_err(Self::read_form(tokens, strs), LispError::MissingBinding)
+            let key_exp = some_or_err(Self::read_form(tokens), LispError::UnbalancedDelim(0, "}"))
                 .map_err(|err| match err {
                     LispError::UnbalancedDelim(x, "}") => LispError::UnbalancedDelim(x + 1, "}"),
                     _ => err,
                 })?;
+            let val_exp =
+                some_or_err(Self::read_form(tokens), LispError::MissingBinding).map_err(|err| {
+                    match err {
+                        LispError::UnbalancedDelim(x, "}") => {
+                            LispError::UnbalancedDelim(x + 1, "}")
+                        }
+                        _ => err,
+                    }
+                })?;
             res.push((key_exp, val_exp));
         }
     }
-    fn read_atom(token: LispTokenType, strs: &mut StringInterner) -> LispValue {
+    fn read_atom(token: LispTokenType) -> LispValue {
         match token {
             LispTokenType::Number(num) => LispValue::Number(OrderedFloat(num)),
             LispTokenType::String(s) => LispValue::string_for(s),
-            LispTokenType::Symbol(sym) => LispValue::Symbol(strs.get_or_intern(&sym)),
+            LispTokenType::Symbol(sym) => LispValue::Symbol(hash(&sym)),
+            LispTokenType::HashedSymbol(sym) => LispValue::Symbol(sym),
             LispTokenType::Keyword(kw) => LispValue::keyword_for(kw),
             LispTokenType::True => LispValue::Bool(true),
             LispTokenType::False => LispValue::Bool(false),
@@ -559,8 +585,7 @@ impl Default for LispParser {
 impl Iterator for LispParser {
     type Item = Result<LispValue>;
     fn next(&mut self) -> Option<Result<LispValue>> {
-        let mut interner = LispEnv::interner_mut();
-        match Self::read_form(&mut self.tokens, &mut interner) {
+        match Self::read_form(&mut self.tokens) {
             Some(Err(err)) => {
                 // forget all processed tokens to clear the error
                 self.tokens.clear();

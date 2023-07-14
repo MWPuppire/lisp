@@ -78,7 +78,7 @@ fn quote() {
         ]
         .into()
     );
-    assert_eq!(eval!("(quote a)"), LispValue::symbol_for_static("a"));
+    assert_eq!(eval!("(quote a)"), LispValue::symbol_for("a"));
     assert_eq!(eval!("'7"), 7.0.into());
     assert_eq!(
         eval!("'(1 2 3)"),
@@ -126,12 +126,12 @@ fn unquote() {
     eval!("(def! a 8)", &mut lock);
     assert_eq!(
         eval!("(quasiquote a)", &mut lock),
-        LispValue::symbol_for_static("a")
+        LispValue::symbol_for("a")
     );
     assert_eq!(eval!("(quasiquote (unquote a))", &mut lock), 8.0.into());
     assert_eq!(
         eval!("(quasiquote (1 a 3))", &mut lock),
-        vector![1.0.into(), LispValue::symbol_for_static("a"), 3.0.into(),].into()
+        vector![1.0.into(), LispValue::symbol_for("a"), 3.0.into(),].into()
     );
     assert_eq!(
         eval!("(quasiquote (1 (unquote a) 3))", &mut lock),
@@ -140,7 +140,7 @@ fn unquote() {
     eval!("(def! b (quote (1 \"b\" \"d\")))", &mut lock);
     assert_eq!(
         eval!("(quasiquote (1 b 3))", &mut lock),
-        vector![1.0.into(), LispValue::symbol_for_static("b"), 3.0.into(),].into()
+        vector![1.0.into(), LispValue::symbol_for("b"), 3.0.into(),].into()
     );
     assert_eq!(
         eval!("(quasiquote (1 (unquote b) 3))", &mut lock),
@@ -182,7 +182,7 @@ fn splice_unquote() {
     eval!("(def! c (quote (1 \"b\" \"d\")))", &mut lock);
     assert_eq!(
         eval!("(quasiquote (1 c 3))", &mut lock),
-        vector![1.0.into(), LispValue::symbol_for_static("c"), 3.0.into(),].into()
+        vector![1.0.into(), LispValue::symbol_for("c"), 3.0.into(),].into()
     );
     assert_eq!(
         eval!("(quasiquote (1 (splice-unquote c) 3))", &mut lock),

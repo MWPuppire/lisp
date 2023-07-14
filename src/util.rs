@@ -1,4 +1,4 @@
-use crate::env::{LispClosure, LispEnv, LispSymbol};
+use crate::env::{hash, LispClosure, LispEnv, LispSymbol};
 use by_address::ByAddress;
 use im::{HashMap, Vector};
 use ordered_float::OrderedFloat;
@@ -239,9 +239,9 @@ impl ObjectValue {
                 func.args
                     .iter()
                     .take(func.args.len() - 1)
-                    .try_for_each(|x| write!(f, "{} ", LispEnv::symbol_string(*x).unwrap()))?;
+                    .try_for_each(|x| write!(f, "\\{} ", *x))?;
                 if let Some(last) = func.args.last() {
-                    write!(f, "{}", LispEnv::symbol_string(*last).unwrap())?;
+                    write!(f, "\\{}", *last)?;
                 }
                 write!(f, ") ({})", func.body)
             }
@@ -253,9 +253,9 @@ impl ObjectValue {
                 func.args
                     .iter()
                     .take(func.args.len() - 1)
-                    .try_for_each(|x| write!(f, "{} ", LispEnv::symbol_string(*x).unwrap()))?;
+                    .try_for_each(|x| write!(f, "\\{} ", *x))?;
                 if let Some(last) = func.args.last() {
-                    write!(f, "{}", LispEnv::symbol_string(*last).unwrap())?;
+                    write!(f, "\\{}", *last)?;
                 }
                 write!(f, ") ({})", func.body)
             }
@@ -316,14 +316,7 @@ impl LispValue {
         if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
             val.clone()
         } else {
-            Self::Symbol(LispEnv::symbol_for(s))
-        }
-    }
-    pub fn symbol_for_static(s: &'static str) -> Self {
-        if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
-            val.clone()
-        } else {
-            Self::Symbol(LispEnv::symbol_for_static(s))
+            Self::Symbol(hash(s))
         }
     }
 
@@ -356,15 +349,15 @@ impl LispValue {
     }
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => write!(f, "'{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::Symbol(s) => write!(f, "'\\{}", *s),
             Self::Object(o) => o.inspect_fmt(f),
             _ => self.inspect_quoted_fmt(f),
         }
     }
     fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => write!(f, "{}", LispEnv::symbol_string(*s).unwrap()),
-            Self::VariadicSymbol(s) => write!(f, "&{}", LispEnv::symbol_string(*s).unwrap()),
+            Self::Symbol(s) => write!(f, "\\{}", *s),
+            Self::VariadicSymbol(s) => write!(f, "&\\{}", *s),
             Self::Number(n) => write!(f, "{}", n),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Nil => write!(f, "nil"),

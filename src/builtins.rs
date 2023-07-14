@@ -1,4 +1,4 @@
-use crate::env::{LispEnv, LispSymbol};
+use crate::env::{hash, LispEnv, LispSymbol};
 use crate::eval::eval;
 use crate::parser::LispParser;
 use crate::util::{assert_or_err, LispBuiltinFunc, ObjectValue};
@@ -522,7 +522,6 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispVa
             }
             _ => Err(LispError::InvalidDataType("string", o.type_of())),
         },
-        LispValue::Symbol(s) => Ok(LispValue::keyword_for(LispEnv::symbol_string(s).unwrap())),
         x => Err(LispError::InvalidDataType("string", x.type_of())),
     }
 }
@@ -816,9 +815,9 @@ fn lisp_with_meta(_args: Vector<LispValue>, _env: &mut LispEnv) -> Result<LispVa
 }
 
 macro_rules! make_lisp_funcs {
-    ($interner:expr, $($name:literal => $f:path,)*) => {
+    ($($name:literal => $f:path,)*) => {
         hashmap! {
-            $($interner.get_or_intern_static($name) => LispValue::Object(
+            $(hash($name) => LispValue::Object(
                     Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
                         name: $name,
                         body: $f,
@@ -831,8 +830,7 @@ macro_rules! make_lisp_funcs {
 
 lazy_static! {
     pub(crate) static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
-        let mut strs = LispEnv::interner_mut();
-        let mut funcs = make_lisp_funcs!(strs,
+        let mut funcs = make_lisp_funcs!(
             "+" => lisp_plus,
             "-" => lisp_minus,
             "*" => lisp_times,
@@ -896,7 +894,7 @@ lazy_static! {
         );
 
         funcs.insert(
-            strs.get_or_intern_static("*host-language*"),
+            hash("*host-language*"),
             LispValue::string_for("Rust".to_owned()),
         );
 
@@ -908,8 +906,7 @@ lazy_static! {
 lazy_static! {
     pub(crate) static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
         let base = BUILTINS_NO_IO.clone();
-        let mut strs = LispEnv::interner_mut();
-        let mut ext = make_lisp_funcs!(strs,
+        let mut ext = make_lisp_funcs!(
             "prn" => lisp_prn,
             "readline" => lisp_readline,
             "slurp" => lisp_slurp,
@@ -924,9 +921,9 @@ lazy_static! {
             .skip(1)
             .map(LispValue::string_for)
             .collect();
-        lisp_argv.push_front(LispValue::Symbol(strs.get_or_intern_static("list")));
+        lisp_argv.push_front(LispValue::Symbol(hash("list")));
         ext.insert(
-            strs.get_or_intern_static("*ARGV*"),
+            hash("*ARGV*"),
             lisp_argv.into(),
         );
 

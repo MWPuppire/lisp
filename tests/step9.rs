@@ -10,9 +10,12 @@ fn test_throw() {
 #[test]
 fn try_catch() {
     assert_eq!(eval!("(try* 123 (catch* e 456))"), 123.0.into());
+    let hash_inspect = eval!("(inspect 'abc)");
+    let hash_str = hash_inspect.expect_string().unwrap();
     assert_eq!(
         eval!("(try* abc (catch* exc (str \"error: \" exc)))"),
-        "error: undefined variable `abc`".to_owned().into()
+        // skip the apostrophe at the beginning of the string
+        format!("error: undefined variable `{}`", &hash_str[1..]).into()
     );
     assert_eq!(
         eval!("(try* (nth () 1) (catch* exc (str \"error: \" exc)))"),
