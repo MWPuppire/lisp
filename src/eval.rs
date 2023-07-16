@@ -122,55 +122,40 @@ fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
     })
 }
 
-pub fn eval(mut ast: LispValue, mut env: &LispEnv) -> Result<LispValue> {
-    let mut envs_to_drop: Vec<*const LispEnv> = vec![];
-    let mut stash_env = |new_env: Arc<LispEnv>| unsafe {
-        let ptr = Arc::into_raw(new_env);
-        envs_to_drop.push(ptr);
-        &*ptr
-    };
-    // Not a fan of this immediately invoked closure, but specific clean-up
-    // needs to be performed at end-of-function (and the `?` syntax is too
-    // convenient to give up), so this keeps the early-return from exiting the
-    // whole function (and thereby skipping the clean-up, which needs to be
-    // performed even in an error-case).
-    let out = (|| loop {
-        if is_macro_call(&ast, env) {
-            let (new_ast, new_env) = expand_macros(ast, env)?;
+pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
+    let mut env = env.clone_arc();
+    loop {
+        if is_macro_call(&ast, &env) {
+            let (new_ast, new_env) = expand_macros(ast, &env)?;
             ast = new_ast;
-            env = stash_env(new_env);
+            env = new_env;
         }
         if !matches!(ast, LispValue::Object(_)) {
-            break eval_ast(ast, env);
+            break eval_ast(ast, &env);
         }
         let LispValue::Object(ref arc) = ast else { unreachable!() };
         if !matches!(&**arc, ObjectValue::List(_)) {
-            break eval_ast(ast, env);
+            break eval_ast(ast, &env);
         }
         let Ok(mut list): Result<Vector<LispValue>> = ast.try_into() else { unreachable!() };
         let Some(head) = list.pop_front() else {
             // just return an empty list without evaluating anything
             break Ok(list.into_iter().collect());
         };
-        match eval(head, env)? {
+        match eval(head, &env)? {
             LispValue::Special(form) => {
-                ast = special_form!(form, list, eval, env, stash_env);
+                ast = special_form!(form, list, eval, env);
             }
             LispValue::Object(o) => match &*o {
-                ObjectValue::BuiltinFunc(f) => break (f.body)(list, env),
+                ObjectValue::BuiltinFunc(f) => break (f.body)(list, &env),
                 ObjectValue::Func(f) => {
-                    let (new_ast, new_env) = expand_fn(f, list, env)?;
+                    let (new_ast, new_env) = expand_fn(f, list, &env)?;
                     ast = new_ast;
-                    env = stash_env(new_env);
+                    env = new_env;
                 }
                 x => break Err(LispError::InvalidDataType("function", x.type_of())),
             },
             x => break Err(LispError::InvalidDataType("function", x.type_of())),
         }
-    })();
-    // Release those environments we've been holding on to.
-    envs_to_drop.into_iter().for_each(|arc_ptr| unsafe {
-        drop(Arc::from_raw(arc_ptr));
-    });
-    out
+    }
 }

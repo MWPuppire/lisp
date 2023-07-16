@@ -47,7 +47,7 @@ pub(crate) fn inner_quasiquote(
 }
 
 macro_rules! special_form {
-    ($form:expr, $list:expr, $eval:ident, $env:ident, $stash_env:expr) => {
+    ($form:expr, $list:expr, $eval:ident, $env:ident) => {
         match $form {
             $crate::util::LispSpecialForm::Def => {
                 $crate::util::assert_or_err!(
@@ -91,13 +91,13 @@ macro_rules! special_form {
                 );
                 let new_env = $env.new_nested();
                 let mut decls = $list.pop_front().unwrap().try_into_iter()?;
-                $env = $stash_env(new_env);
+                $env = new_env;
                 while let Some(name) = decls.next() {
                     let name = name.try_into()?;
                     let Some(val_expr) = decls.next() else {
                                                         return Err($crate::LispError::MissingBinding)
                                                     };
-                    let val = $eval(val_expr, $env)?;
+                    let val = $eval(val_expr, &$env)?;
                     $env.set(name, val);
                 }
                 // continue with the `let` body, but in the new environment
@@ -190,7 +190,7 @@ macro_rules! special_form {
                             caught_env.set(err_name, s.into());
                         }
                         // run the `catch*` body in the new environment
-                        $env = $stash_env(caught_env);
+                        $env = caught_env;
                         catch.next().unwrap()
                     }
                 }
@@ -261,8 +261,8 @@ macro_rules! special_form {
                                                     break Err($crate::LispError::IncorrectArguments(1, 0));
                                                 };
                 let global = $env.global();
-                $env = $stash_env(global);
-                $eval(expr, $env)?
+                $env = global;
+                $eval(expr, &$env)?
             }
             $crate::util::LispSpecialForm::Apply => {
                 $crate::util::assert_or_err!(

@@ -1,4 +1,4 @@
-// #![forbid(unsafe_code)]
+#![forbid(unsafe_code)]
 
 extern crate cfg_if;
 extern crate lazy_static;
