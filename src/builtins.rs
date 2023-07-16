@@ -687,7 +687,7 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &mut LispEnv) -> Result<LispValue>
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
         LispValue::Object(o) => {
-            matches!(&*o, ObjectValue::Func(_) | ObjectValue::BuiltinFunc { .. })
+            matches!(&*o, ObjectValue::Func(_) | ObjectValue::BuiltinFunc(_))
         }
         _ => false,
     }))

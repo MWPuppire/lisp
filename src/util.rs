@@ -158,7 +158,7 @@ impl ObjectValue {
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::List(_) => "list",
-            Self::BuiltinFunc { .. } => "function",
+            Self::BuiltinFunc(_) => "function",
             Self::Func(_) => "function",
             Self::Macro(_) => "function",
             Self::Map(_) => "map",
