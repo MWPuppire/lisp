@@ -1,47 +1,40 @@
 mod common;
 use common::*;
 
-fn basic_macros() -> Arc<RwLock<LispEnv>> {
+fn basic_macros() -> Arc<LispEnv> {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(defmacro! one (fn* () 1))", &mut lock);
-    eval!("(defmacro! two (fn* () 2))", &mut lock);
+    eval!("(defmacro! one (fn* () 1))", &env);
+    eval!("(defmacro! two (fn* () 2))", &env);
     eval!(
         "(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))",
-        &mut lock
+        &env
     );
     eval!(
         "(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))",
-        &mut lock
+        &env
     );
-    eval!("(defmacro! identity (fn* (x) x))", &mut lock);
-    drop(lock);
+    eval!("(defmacro! identity (fn* (x) x))", &env);
     env
 }
 
 #[test]
 fn macros() {
     let env = basic_macros();
-    let mut lock = env.write();
-    assert_eq!(eval!("(one)", &mut lock), 1.0.into());
-    assert_eq!(eval!("(two)", &mut lock), 2.0.into());
-    assert_eq!(eval!("(unless false 7 8)", &mut lock), 7.0.into());
-    assert_eq!(eval!("(unless true 7 8)", &mut lock), 8.0.into());
-    assert_eq!(eval!("(unless2 false 7 8)", &mut lock), 7.0.into());
-    assert_eq!(eval!("(unless2 true 7 8)", &mut lock), 8.0.into());
-    assert_eq!(
-        eval!("(let* (a 123) (identity a))", &mut lock),
-        123.0.into()
-    );
+    assert_eq!(eval!("(one)", &env), 1.0.into());
+    assert_eq!(eval!("(two)", &env), 2.0.into());
+    assert_eq!(eval!("(unless false 7 8)", &env), 7.0.into());
+    assert_eq!(eval!("(unless true 7 8)", &env), 8.0.into());
+    assert_eq!(eval!("(unless2 false 7 8)", &env), 7.0.into());
+    assert_eq!(eval!("(unless2 true 7 8)", &env), 8.0.into());
+    assert_eq!(eval!("(let* (a 123) (identity a))", &env), 123.0.into());
 }
 
 #[test]
 fn macroexpand() {
     let env = basic_macros();
-    let mut lock = env.write();
-    assert_eq!(eval!("(macroexpand (one))", &mut lock), 1.0.into());
+    assert_eq!(eval!("(macroexpand (one))", &env), 1.0.into());
     assert_eq!(
-        eval!("(macroexpand (unless PRED A B))", &mut lock),
+        eval!("(macroexpand (unless PRED A B))", &env),
         vector![
             LispValue::symbol_for("if"),
             LispValue::symbol_for("PRED"),
@@ -51,7 +44,7 @@ fn macroexpand() {
         .into()
     );
     assert_eq!(
-        eval!("(macroexpand (unless2 PRED A B))", &mut lock),
+        eval!("(macroexpand (unless2 PRED A B))", &env),
         vector![
             LispValue::symbol_for("if"),
             vector![LispValue::symbol_for("not"), LispValue::symbol_for("PRED"),].into(),
@@ -61,7 +54,7 @@ fn macroexpand() {
         .into()
     );
     assert_eq!(
-        eval!("(macroexpand (unless2 2 3 4))", &mut lock),
+        eval!("(macroexpand (unless2 2 3 4))", &env),
         vector![
             LispValue::symbol_for("if"),
             vector![LispValue::symbol_for("not"), 2.0.into(),].into(),
@@ -71,7 +64,7 @@ fn macroexpand() {
         .into()
     );
     assert_eq!(
-        eval!("(let* (a 123) (macroexpand (identity a)))", &mut lock),
+        eval!("(let* (a 123) (macroexpand (identity a)))", &env),
         LispValue::symbol_for("a"),
     );
 }
@@ -127,9 +120,8 @@ fn cond_uneven() {
 #[test]
 fn macro_closure() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! x 2)", &mut lock);
-    eval!("(defmacro! a (fn* [] x))", &mut lock);
-    assert_eq!(eval!("(a)", &mut lock), 2.0.into());
-    assert_eq!(eval!("(let* (x 3) (a))", &mut lock), 2.0.into());
+    eval!("(def! x 2)", &env);
+    eval!("(defmacro! a (fn* [] x))", &env);
+    assert_eq!(eval!("(a)", &env), 2.0.into());
+    assert_eq!(eval!("(let* (x 3) (a))", &env), 2.0.into());
 }

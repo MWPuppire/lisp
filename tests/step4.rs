@@ -32,11 +32,10 @@ fn if_form() {
 #[test]
 fn if_side_effects() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(if true (def! x 4) (def! x 5))", &mut lock);
-    assert_eq!(eval!("x", &mut lock), 4.0.into());
-    eval!("(if false (def! x 4) (def! x 5))", &mut lock);
-    assert_eq!(eval!("x", &mut lock), 5.0.into());
+    eval!("(if true (def! x 4) (def! x 5))", &env);
+    assert_eq!(eval!("x", &env), 4.0.into());
+    eval!("(if false (def! x 4) (def! x 5))", &env);
+    assert_eq!(eval!("x", &env), 5.0.into());
 }
 
 #[test]
@@ -104,42 +103,39 @@ fn user_functions() {
 #[test]
 fn closures() {
     let env = testing_env();
-    let mut lock = env.write();
     assert_eq!(eval!("(((fn* (a) (fn* (b) (+ a b))) 5) 7)"), 12.0.into());
-    eval!("(def! gen-plus5 (fn* () (fn* (b) (+ 5 b))))", &mut lock);
-    eval!("(def! plus5 (gen-plus5))", &mut lock);
-    assert_eq!(eval!("(plus5 7)", &mut lock), 12.0.into());
-    eval!("(def! gen-plusX (fn* (x) (fn* (b) (+ x b))))", &mut lock);
-    eval!("(def! plus7 (gen-plusX 7))", &mut lock);
-    assert_eq!(eval!("(plus7 8)", &mut lock), 15.0.into());
+    eval!("(def! gen-plus5 (fn* () (fn* (b) (+ 5 b))))", &env);
+    eval!("(def! plus5 (gen-plus5))", &env);
+    assert_eq!(eval!("(plus5 7)", &env), 12.0.into());
+    eval!("(def! gen-plusX (fn* (x) (fn* (b) (+ x b))))", &env);
+    eval!("(def! plus7 (gen-plusX 7))", &env);
+    assert_eq!(eval!("(plus7 8)", &env), 15.0.into());
 }
 
 #[test]
 fn do_form() {
     let env = testing_env();
-    let mut lock = env.write();
-    assert_eq!(eval!("(do (def! a 6) 7 (+ a 8))", &mut lock), 14.0.into());
-    assert_eq!(eval!("a", &mut lock), 6.0.into());
+    assert_eq!(eval!("(do (def! a 6) 7 (+ a 8))", &env), 14.0.into());
+    assert_eq!(eval!("a", &env), 6.0.into());
 }
 
 #[test]
 fn recursive_funcs() {
     let env = testing_env();
-    let mut lock = env.write();
     eval!(
         "(def! sumdown (fn* (N) (if (> N 0) (+ N (sumdown (- N 1))) 0)))",
-        &mut lock
+        &env
     );
-    assert_eq!(eval!("(sumdown 1)", &mut lock), 1.0.into());
-    assert_eq!(eval!("(sumdown 2)", &mut lock), 3.0.into());
-    assert_eq!(eval!("(sumdown 6)", &mut lock), 21.0.into());
+    assert_eq!(eval!("(sumdown 1)", &env), 1.0.into());
+    assert_eq!(eval!("(sumdown 2)", &env), 3.0.into());
+    assert_eq!(eval!("(sumdown 6)", &env), 21.0.into());
     eval!(
         "(def! fib (fn* (N) (if (= N 0) 1 (if (= N 1) 1 (+ (fib (- N 1)) (fib (- N 2)))))))",
-        &mut lock
+        &env
     );
-    assert_eq!(eval!("(fib 1)", &mut lock), 1.0.into());
-    assert_eq!(eval!("(fib 2)", &mut lock), 2.0.into());
-    assert_eq!(eval!("(fib 4)", &mut lock), 5.0.into());
+    assert_eq!(eval!("(fib 1)", &env), 1.0.into());
+    assert_eq!(eval!("(fib 2)", &env), 2.0.into());
+    assert_eq!(eval!("(fib 4)", &env), 5.0.into());
 }
 
 #[test]

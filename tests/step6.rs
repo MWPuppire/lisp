@@ -52,10 +52,9 @@ fn test_eval_global_scope() {
         7.0.into()
     );
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! a 1)", &mut lock);
+    eval!("(def! a 1)", &env);
     assert_eq!(
-        eval!("(let* (a 2) (eval (read-string \"a\")))", &mut lock),
+        eval!("(let* (a 2) (eval (read-string \"a\")))", &env),
         1.0.into()
     );
 }
@@ -71,20 +70,19 @@ fn test_slurp() {
 #[test]
 fn test_load_file() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(load-file \"inc.mal\")", &mut lock);
-    assert_eq!(eval!("(inc1 7)", &mut lock), 8.0.into());
-    assert_eq!(eval!("(inc2 7)", &mut lock), 9.0.into());
-    assert_eq!(eval!("(inc3 9)", &mut lock), 12.0.into());
-    eval!("(load-file \"computations.mal\")", &mut lock);
-    assert_eq!(eval!("(sumdown 2)", &mut lock), 3.0.into());
-    assert_eq!(eval!("(fib 2)", &mut lock), 1.0.into());
-    eval!("(load-file \"incB.mal\")", &mut lock);
-    assert_eq!(eval!("(inc4 7)", &mut lock), 11.0.into());
-    assert_eq!(eval!("(inc5 7)", &mut lock), 12.0.into());
-    eval!("(load-file \"incC.mal\")", &mut lock);
+    eval!("(load-file \"inc.mal\")", &env);
+    assert_eq!(eval!("(inc1 7)", &env), 8.0.into());
+    assert_eq!(eval!("(inc2 7)", &env), 9.0.into());
+    assert_eq!(eval!("(inc3 9)", &env), 12.0.into());
+    eval!("(load-file \"computations.mal\")", &env);
+    assert_eq!(eval!("(sumdown 2)", &env), 3.0.into());
+    assert_eq!(eval!("(fib 2)", &env), 1.0.into());
+    eval!("(load-file \"incB.mal\")", &env);
+    assert_eq!(eval!("(inc4 7)", &env), 11.0.into());
+    assert_eq!(eval!("(inc5 7)", &env), 12.0.into());
+    eval!("(load-file \"incC.mal\")", &env);
     assert_eq!(
-        eval!("mymap", &mut lock),
+        eval!("mymap", &env),
         hashmap! {
             "a".to_owned().into() => 1.0.into(),
         }
@@ -95,34 +93,32 @@ fn test_load_file() {
 #[test]
 fn test_atom() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! inc3 (fn* (a) (+ 3 a)))", &mut lock);
-    eval!("(def! a (atom 2))", &mut lock);
-    assert_eq!(eval!("(atom? a)", &mut lock), true.into());
-    assert_eq!(eval!("(atom? 1)", &mut lock), false.into());
-    assert_eq!(eval!("(deref a)", &mut lock), 2.0.into());
-    eval!("(reset! a 3)", &mut lock);
-    assert_eq!(eval!("@a", &mut lock), 3.0.into());
-    eval!("(swap! a inc3)", &mut lock);
-    assert_eq!(eval!("@a", &mut lock), 6.0.into());
-    eval!("(swap! a (fn* (a) (* 2 a)))", &mut lock);
-    assert_eq!(eval!("@a", &mut lock), 12.0.into());
-    eval!("(swap! a (fn* (a b) (* a b)) 10)", &mut lock);
-    assert_eq!(eval!("@a", &mut lock), 120.0.into());
-    eval!("(swap! a + 3)", &mut lock);
-    assert_eq!(eval!("@a", &mut lock), 123.0.into());
+    eval!("(def! inc3 (fn* (a) (+ 3 a)))", &env);
+    eval!("(def! a (atom 2))", &env);
+    assert_eq!(eval!("(atom? a)", &env), true.into());
+    assert_eq!(eval!("(atom? 1)", &env), false.into());
+    assert_eq!(eval!("(deref a)", &env), 2.0.into());
+    eval!("(reset! a 3)", &env);
+    assert_eq!(eval!("@a", &env), 3.0.into());
+    eval!("(swap! a inc3)", &env);
+    assert_eq!(eval!("@a", &env), 6.0.into());
+    eval!("(swap! a (fn* (a) (* 2 a)))", &env);
+    assert_eq!(eval!("@a", &env), 12.0.into());
+    eval!("(swap! a (fn* (a b) (* a b)) 10)", &env);
+    assert_eq!(eval!("@a", &env), 120.0.into());
+    eval!("(swap! a + 3)", &env);
+    assert_eq!(eval!("@a", &env), 123.0.into());
 }
 
 #[test]
 fn atom_closure() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! inc-it (fn* (a) (+ 1 a)))", &mut lock);
-    eval!("(def! atm (atom 7))", &mut lock);
-    eval!("(def! f (fn* () (swap! atm inc-it)))", &mut lock);
-    assert_eq!(eval!("(f)", &mut lock), 8.0.into());
-    assert_eq!(eval!("(f)", &mut lock), 9.0.into());
-    eval!("(def! g (let* (atm (atom 0)) (fn* () @atm)))", &mut lock);
-    assert_eq!(eval!("(f)", &mut lock), 10.0.into());
-    assert_eq!(eval!("(g)", &mut lock), 0.0.into());
+    eval!("(def! inc-it (fn* (a) (+ 1 a)))", &env);
+    eval!("(def! atm (atom 7))", &env);
+    eval!("(def! f (fn* () (swap! atm inc-it)))", &env);
+    assert_eq!(eval!("(f)", &env), 8.0.into());
+    assert_eq!(eval!("(f)", &env), 9.0.into());
+    eval!("(def! g (let* (atm (atom 0)) (fn* () @atm)))", &env);
+    assert_eq!(eval!("(f)", &env), 10.0.into());
+    assert_eq!(eval!("(g)", &env), 0.0.into());
 }

@@ -122,28 +122,24 @@ fn quasiquote() {
 #[test]
 fn unquote() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! a 8)", &mut lock);
+    eval!("(def! a 8)", &env);
+    assert_eq!(eval!("(quasiquote a)", &env), LispValue::symbol_for("a"));
+    assert_eq!(eval!("(quasiquote (unquote a))", &env), 8.0.into());
     assert_eq!(
-        eval!("(quasiquote a)", &mut lock),
-        LispValue::symbol_for("a")
-    );
-    assert_eq!(eval!("(quasiquote (unquote a))", &mut lock), 8.0.into());
-    assert_eq!(
-        eval!("(quasiquote (1 a 3))", &mut lock),
+        eval!("(quasiquote (1 a 3))", &env),
         vector![1.0.into(), LispValue::symbol_for("a"), 3.0.into(),].into()
     );
     assert_eq!(
-        eval!("(quasiquote (1 (unquote a) 3))", &mut lock),
+        eval!("(quasiquote (1 (unquote a) 3))", &env),
         vector![1.0.into(), 8.0.into(), 3.0.into(),].into()
     );
-    eval!("(def! b (quote (1 \"b\" \"d\")))", &mut lock);
+    eval!("(def! b (quote (1 \"b\" \"d\")))", &env);
     assert_eq!(
-        eval!("(quasiquote (1 b 3))", &mut lock),
+        eval!("(quasiquote (1 b 3))", &env),
         vector![1.0.into(), LispValue::symbol_for("b"), 3.0.into(),].into()
     );
     assert_eq!(
-        eval!("(quasiquote (1 (unquote b) 3))", &mut lock),
+        eval!("(quasiquote (1 (unquote b) 3))", &env),
         vector![
             1.0.into(),
             vector![1.0.into(), "b".to_owned().into(), "d".to_owned().into(),].into(),
@@ -152,20 +148,20 @@ fn unquote() {
         .into()
     );
     assert_eq!(
-        eval!("(quasiquote ((unquote 1) (unquote 2)))", &mut lock),
+        eval!("(quasiquote ((unquote 1) (unquote 2)))", &env),
         vector![1.0.into(), 2.0.into(),].into()
     );
     assert_eq!(
-        eval!("(let* (x 0) (quasiquote (unquote x)))", &mut lock),
+        eval!("(let* (x 0) (quasiquote (unquote x)))", &env),
         0.0.into()
     );
-    assert_eq!(eval!("`~7", &mut lock), 7.0.into());
+    assert_eq!(eval!("`~7", &env), 7.0.into());
     assert_eq!(
-        eval!("`(1 ~a 3)", &mut lock),
+        eval!("`(1 ~a 3)", &env),
         vector![1.0.into(), 8.0.into(), 3.0.into(),].into()
     );
     assert_eq!(
-        eval!("`(1 ~b 3)", &mut lock),
+        eval!("`(1 ~b 3)", &env),
         vector![
             1.0.into(),
             vector![1.0.into(), "b".to_owned().into(), "d".to_owned().into(),].into(),
@@ -178,14 +174,13 @@ fn unquote() {
 #[test]
 fn splice_unquote() {
     let env = testing_env();
-    let mut lock = env.write();
-    eval!("(def! c (quote (1 \"b\" \"d\")))", &mut lock);
+    eval!("(def! c (quote (1 \"b\" \"d\")))", &env);
     assert_eq!(
-        eval!("(quasiquote (1 c 3))", &mut lock),
+        eval!("(quasiquote (1 c 3))", &env),
         vector![1.0.into(), LispValue::symbol_for("c"), 3.0.into(),].into()
     );
     assert_eq!(
-        eval!("(quasiquote (1 (splice-unquote c) 3))", &mut lock),
+        eval!("(quasiquote (1 (splice-unquote c) 3))", &env),
         vector![
             1.0.into(),
             1.0.into(),
@@ -196,10 +191,7 @@ fn splice_unquote() {
         .into()
     );
     assert_eq!(
-        eval!(
-            "(quasiquote ((splice-unquote c) (splice-unquote c)))",
-            &mut lock
-        ),
+        eval!("(quasiquote ((splice-unquote c) (splice-unquote c)))", &env),
         vector![
             1.0.into(),
             "b".to_owned().into(),
@@ -211,7 +203,7 @@ fn splice_unquote() {
         .into()
     );
     assert_eq!(
-        eval!("`(1 ~@c 3)", &mut lock),
+        eval!("`(1 ~@c 3)", &env),
         vector![
             1.0.into(),
             1.0.into(),
@@ -247,6 +239,5 @@ fn quine() {
     .unwrap()
     .unwrap();
     let env = testing_env();
-    let mut lock = env.write();
-    assert_eq!(&eval(expr.clone(), &mut lock).unwrap(), &expr);
+    assert_eq!(&eval(expr.clone(), &env).unwrap(), &expr);
 }

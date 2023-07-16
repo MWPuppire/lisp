@@ -13,14 +13,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let env = LispEnv::new_stdlib();
     #[cfg(not(feature = "io-stdlib"))]
     let env = LispEnv::new_stdlib_protected();
-    let mut env_writer = env.write();
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && &args[1] != "--" {
         let file = fs::read_to_string(&args[1])?;
         parser.add_tokenize(&file)?;
         for val in parser {
-            eval(val?, &mut env_writer)?;
+            eval(val?, &env)?;
         }
         return Ok(());
     }
@@ -36,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             for val in &mut parser {
                 match val {
-                    Ok(tok) => match eval(tok, &mut env_writer) {
+                    Ok(tok) => match eval(tok, &env) {
                         Ok(out) => println!("{:#}", out),
                         Err(err) => println!("Err: {}", err),
                     },

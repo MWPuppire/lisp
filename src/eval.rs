@@ -4,9 +4,7 @@ use crate::util::{LispFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use im::Vector;
 use itertools::Itertools;
-use parking_lot::{RwLock, RwLockWriteGuard};
 use std::iter::zip;
-use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 #[inline]
@@ -40,10 +38,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(
-    val: LispValue,
-    env: &mut LispEnv,
-) -> Result<(LispValue, Arc<RwLock<LispEnv>>)> {
+pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, Arc<LispEnv>)> {
     if is_macro_call(&val, env) {
         let mut list = val.try_into_iter()?;
         let Some(head) = list.next() else { unreachable!() };
@@ -87,8 +82,8 @@ pub fn expand_macros(
 pub fn expand_fn(
     f: &LispFunc,
     args: Vector<LispValue>,
-    env: &mut LispEnv,
-) -> Result<(LispValue, Arc<RwLock<LispEnv>>)> {
+    env: &LispEnv,
+) -> Result<(LispValue, Arc<LispEnv>)> {
     if f.variadic && args.len() >= (f.args.len() - 1) {
         let mut args: Vector<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
         let variadic_idx = f.args.len() - 1;
@@ -96,19 +91,19 @@ pub fn expand_fn(
         let arg_names = f.args[0..variadic_idx].iter().copied();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
         params.push((f.args[variadic_idx], last_args.into_iter().collect()));
-        let fn_env = f.closure.make_env(&params, env);
+        let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
         let args: Vec<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
         let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
-        let fn_env = f.closure.make_env(&params, env);
+        let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     }
 }
 
-fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
+fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
     Ok(match ast {
         LispValue::Symbol(s) => lookup_variable(s, env)?,
         LispValue::VariadicSymbol(s) => lookup_variable(s, env)?,
@@ -127,36 +122,12 @@ fn eval_ast(ast: LispValue, env: &mut LispEnv) -> Result<LispValue> {
     })
 }
 
-pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
-    let mut locks_to_drop: Vec<(
-        *const RwLock<LispEnv>,
-        ManuallyDrop<RwLockWriteGuard<'_, LispEnv>>,
-    )> = vec![];
-    let env_copy = env.clone_arc();
-    // whether the environment was unlocked in `stash_env` and needs to be
-    // re-locked before returning (bad design)
-    let mut relock = false;
-    // This whole function is an unsafe mess, and it almost certainly breaks
-    // Stacked Borrows. (Unfortunately, `im` violating Stacked Borrows means
-    // testing never gets far enough to see whether `eval` breaks it, too).
-    // I'm not a huge fan, but I'm not sure how to do it better.
-    let mut stash_env = |new_env: Arc<RwLock<LispEnv>>| unsafe {
-        let idx = locks_to_drop.len();
-        if idx > 0 {
-            let last_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx - 1].1);
-            ManuallyDrop::drop(last_ptr.as_mut().unwrap());
-        } else {
-            let lock = &*env_copy;
-            if lock.is_locked_exclusive() {
-                lock.force_unlock_write();
-                relock = true;
-            }
-        }
+pub fn eval(mut ast: LispValue, mut env: &LispEnv) -> Result<LispValue> {
+    let mut envs_to_drop: Vec<*const LispEnv> = vec![];
+    let mut stash_env = |new_env: Arc<LispEnv>| unsafe {
         let ptr = Arc::into_raw(new_env);
-        let lock = ManuallyDrop::new(ptr.as_ref().unwrap().write());
-        locks_to_drop.push((ptr, lock));
-        let lock_ptr = std::ptr::addr_of_mut!(locks_to_drop[idx].1);
-        &mut *lock_ptr.as_mut().unwrap()
+        envs_to_drop.push(ptr);
+        &*ptr
     };
     // Not a fan of this immediately invoked closure, but specific clean-up
     // needs to be performed at end-of-function (and the `?` syntax is too
@@ -197,20 +168,9 @@ pub fn eval(mut ast: LispValue, mut env: &mut LispEnv) -> Result<LispValue> {
             x => break Err(LispError::InvalidDataType("function", x.type_of())),
         }
     })();
-    // Release those environments we've been holding on to, and release the lock
-    // we've got, if any.
-    if let Some((_, lock)) = locks_to_drop.last_mut() {
-        unsafe { ManuallyDrop::drop(lock) };
-    }
-    locks_to_drop.into_iter().for_each(|(arc_ptr, _)| unsafe {
+    // Release those environments we've been holding on to.
+    envs_to_drop.into_iter().for_each(|arc_ptr| unsafe {
         drop(Arc::from_raw(arc_ptr));
     });
-    // If `stash_env` unlocked an outer write-lock, a new lock needs to be
-    // acquired before returning (otherwise, the write-lock that was NOT passed
-    // to this function will stop working, causing UB [and making an error
-    // that's a pain to track down with no compiler aid]).
-    if relock {
-        std::mem::forget(env_copy.write());
-    }
     out
 }

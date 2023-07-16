@@ -9,8 +9,8 @@ pub(crate) const CATCH: LispValue = LispValue::Special(LispSpecialForm::Catch);
 
 pub(crate) fn inner_quasiquote(
     arg: LispValue,
-    eval: fn(LispValue, &mut LispEnv) -> Result<LispValue>,
-    env: &mut LispEnv,
+    eval: fn(LispValue, &LispEnv) -> Result<LispValue>,
+    env: &LispEnv,
 ) -> Result<(LispValue, bool)> {
     match arg {
         LispValue::Object(o) => match &*o {
@@ -58,7 +58,7 @@ macro_rules! special_form {
                     break Err($crate::LispError::CannotRedefineSpecialForm(*form));
                 }
                 let name = $list.pop_front().unwrap().try_into()?;
-                let val = $eval($list.pop_back().unwrap(), &mut $env)?;
+                let val = $eval($list.pop_back().unwrap(), &$env)?;
                 $env.set(name, val.clone());
                 break Ok(val);
             }
@@ -71,7 +71,7 @@ macro_rules! special_form {
                     break Err($crate::LispError::CannotRedefineSpecialForm(*form));
                 }
                 let name = $list.pop_front().unwrap().try_into()?;
-                let val = $eval($list.pop_back().unwrap(), &mut $env)?;
+                let val = $eval($list.pop_back().unwrap(), &$env)?;
                 let val = match val {
                     $crate::LispValue::Object(o) => match &*o {
                         $crate::util::ObjectValue::Func(f) => {
@@ -136,7 +136,7 @@ macro_rules! special_form {
                                 let mut out = Vector::new();
                                 for val in list {
                                     let (new_val, inplace) =
-                                        $crate::specials::inner_quasiquote(val, $eval, &mut $env)?;
+                                        $crate::specials::inner_quasiquote(val, $eval, &$env)?;
                                     if inplace {
                                         let mut iter = new_val.try_into_iter()?;
                                         out.extend(&mut iter);
@@ -157,7 +157,7 @@ macro_rules! special_form {
             }
             $crate::util::LispSpecialForm::Macroexpand => {
                 if let Some(quoted) = $list.pop_front() {
-                    break Ok(expand_macros(quoted, &mut $env)?.0);
+                    break Ok(expand_macros(quoted, &$env)?.0);
                 } else {
                     break Err($crate::LispError::IncorrectArguments(1, 0));
                 }
@@ -178,21 +178,17 @@ macro_rules! special_form {
                 if catch.next().unwrap() != $crate::specials::CATCH {
                     break Err($crate::LispError::TryNoCatch);
                 }
-                match $eval($list.pop_front().unwrap(), &mut $env) {
+                match $eval($list.pop_front().unwrap(), &$env) {
                     Ok(x) => break Ok(x),
                     Err(err) => {
                         let err_name = catch.next().unwrap().try_into()?;
                         let caught_env = $env.new_nested();
-                        let mut lock = caught_env.write();
                         if let $crate::LispError::UncaughtException(exc) = err {
-                            lock.set(err_name, exc);
+                            caught_env.set(err_name, exc);
                         } else {
                             let s = err.to_string();
-                            lock.set(err_name, s.into());
+                            caught_env.set(err_name, s.into());
                         }
-                        // lock needs to be dropped before $stash_env can be
-                        // called
-                        drop(lock);
                         // run the `catch*` body in the new environment
                         $env = $stash_env(caught_env);
                         catch.next().unwrap()
@@ -207,7 +203,7 @@ macro_rules! special_form {
                                                     break Err($crate::LispError::IncorrectArguments(1, 0));
                                                 };
                 for val in $list.into_iter() {
-                    $eval(val, &mut $env)?;
+                    $eval(val, &$env)?;
                 }
                 tail
             }
@@ -217,7 +213,7 @@ macro_rules! special_form {
                     $crate::LispError::IncorrectArguments(2, $list.len())
                 );
                 let pred = $list.pop_front().unwrap();
-                let pred = $eval(pred, &mut $env)?.truthiness();
+                let pred = $eval(pred, &$env)?.truthiness();
                 if pred {
                     $list.pop_front().unwrap()
                 } else if $list.len() > 1 {
@@ -253,7 +249,7 @@ macro_rules! special_form {
             }
             $crate::util::LispSpecialForm::Deref => {
                 if let Some(atom) = $list.pop_front() {
-                    let atom: std::sync::Arc<parking_lot::RwLock<$crate::LispValue>> = $eval(atom, &mut $env)?.try_into()?;
+                    let atom: std::sync::Arc<parking_lot::RwLock<$crate::LispValue>> = $eval(atom, &$env)?.try_into()?;
                     let out = atom.read().clone();
                     break Ok(out);
                 } else {
@@ -273,8 +269,8 @@ macro_rules! special_form {
                     $list.len() > 1,
                     LispError::IncorrectArguments(2, $list.len())
                 );
-                let f = $eval($list.pop_front().unwrap(), &mut $env)?;
-                let mut args = $eval($list.pop_back().unwrap(), &mut $env)?.try_into_iter()?;
+                let f = $eval($list.pop_front().unwrap(), &$env)?;
+                let mut args = $eval($list.pop_back().unwrap(), &$env)?.try_into_iter()?;
                 let mut full_list = im::vector![f];
                 full_list.append($list);
                 full_list.extend(&mut args);
@@ -286,7 +282,7 @@ macro_rules! special_form {
                 let mut out = $crate::LispValue::Nil;
                 while let Some(pred) = $list.pop_front() {
                     let then = $list.pop_front().unwrap();
-                    if $eval(pred, &mut $env)?.truthiness() {
+                    if $eval(pred, &$env)?.truthiness() {
                         out = then;
                         break;
                     }
