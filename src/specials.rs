@@ -1,4 +1,4 @@
-use crate::util::{assert_or_err, LispSpecialForm, ObjectValue};
+use crate::util::{assert_or_err, InnerObjectValue, LispSpecialForm};
 use crate::{LispEnv, LispError, LispValue, Result};
 use im::vector;
 use std::sync::Arc;
@@ -13,13 +13,13 @@ pub(crate) fn inner_quasiquote(
     env: &LispEnv,
 ) -> Result<(LispValue, bool)> {
     match arg {
-        LispValue::Object(o) => match &*o {
-            ObjectValue::List(l) => {
+        LispValue::Object(o) => match &o.val {
+            InnerObjectValue::List(l) => {
                 if l.is_empty() {
                     return Ok((LispValue::Object(o.clone()), false));
                 }
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::List(mut l) = cloned else { unreachable!() };
+                let InnerObjectValue::List(mut l) = cloned.val else { unreachable!() };
                 // established non-empty just prior
                 if l[0] == UNQUOTE {
                     assert_or_err!(l.len() == 2, LispError::IncorrectArguments(1, l.len() - 1));
@@ -73,9 +73,13 @@ macro_rules! special_form {
                 let name = $list.pop_front().unwrap().try_into()?;
                 let val = $eval($list.pop_back().unwrap(), &$env)?;
                 let val = match val {
-                    $crate::LispValue::Object(o) => match &*o {
-                        $crate::util::ObjectValue::Func(f) => {
-                            $crate::LispValue::Object(std::sync::Arc::new($crate::util::ObjectValue::Macro(f.clone())))
+                    $crate::LispValue::Object(o) => match &o.val {
+                        $crate::util::InnerObjectValue::Func(f) => {
+                            $crate::LispValue::Object(std::sync::Arc::new($crate::util::ObjectValue {
+                                val: $crate::util::InnerObjectValue::Macro(f.clone()),
+                                meta: None,
+                                quoted: false,
+                            }))
                         }
                         _ => $crate::LispValue::Object(o.clone()),
                     },
@@ -115,13 +119,13 @@ macro_rules! special_form {
                                                     break Err($crate::LispError::IncorrectArguments(1, 0));
                                                 };
                 match front {
-                    $crate::LispValue::Object(o) => match &*o {
-                        $crate::util::ObjectValue::List(list) => {
+                    $crate::LispValue::Object(o) => match &o.val {
+                        $crate::util::InnerObjectValue::List(list) => {
                             if list.is_empty() {
                                 break Ok($crate::LispValue::Object(o.clone()));
                             }
                             let cloned = std::sync::Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                            let $crate::util::ObjectValue::List(mut list) = cloned else {
+                            let $crate::util::InnerObjectValue::List(mut list) = cloned.val else {
                                                                 unreachable!()
                                                             };
                             if list[0] == $crate::specials::UNQUOTE
@@ -239,13 +243,17 @@ macro_rules! special_form {
                 let args = args_list.into_iter().map(|x| x.try_into()).try_collect()?;
                 let body = $list.pop_front().unwrap();
                 let closure = $env.make_closure();
-                let inner = $crate::util::ObjectValue::Func($crate::util::LispFunc {
+                let inner = $crate::util::InnerObjectValue::Func($crate::util::LispFunc {
                     args,
                     body,
                     closure,
                     variadic,
                 });
-                break Ok($crate::LispValue::Object(std::sync::Arc::new(inner)));
+                break Ok($crate::LispValue::Object(std::sync::Arc::new($crate::util::ObjectValue {
+                    val: inner,
+                    meta: None,
+                    quoted: false,
+                })));
             }
             $crate::util::LispSpecialForm::Deref => {
                 if let Some(atom) = $list.pop_front() {

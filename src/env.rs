@@ -1,5 +1,5 @@
 use crate::builtins;
-use crate::util::{LispBuiltinFunc, ObjectValue, Result};
+use crate::util::{InnerObjectValue, LispBuiltinFunc, ObjectValue, Result};
 use crate::LispValue;
 use by_address::ByAddress;
 use dashmap::DashMap;
@@ -144,10 +144,11 @@ impl LispEnv {
         name: &'static str,
         body: fn(Vector<LispValue>, &Self) -> Result<LispValue>,
     ) {
-        let f = LispValue::Object(Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
-            name,
-            body,
-        })));
+        let f = LispValue::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::BuiltinFunc(LispBuiltinFunc { name, body }),
+            meta: None,
+            quoted: false,
+        }));
         let sym = hash(name);
         self.set(sym, f);
     }

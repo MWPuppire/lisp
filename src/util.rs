@@ -143,7 +143,7 @@ impl fmt::Debug for LispBuiltinFunc {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ObjectValue {
+pub(crate) enum InnerObjectValue {
     List(Vector<LispValue>),
     BuiltinFunc(LispBuiltinFunc),
     Func(LispFunc),
@@ -154,7 +154,7 @@ pub enum ObjectValue {
     Keyword(String),
 }
 
-impl ObjectValue {
+impl InnerObjectValue {
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::List(_) => "list",
@@ -167,6 +167,19 @@ impl ObjectValue {
             Self::Keyword(_) => "keyword",
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ObjectValue {
+    pub(crate) val: InnerObjectValue,
+    pub(crate) meta: Option<LispValue>,
+    pub(crate) quoted: bool,
+}
+
+impl ObjectValue {
+    pub fn type_of(&self) -> &'static str {
+        self.val.type_of()
+    }
 
     /// Yields a string that, if parsed, will represent the same value as this.
     /// Equivalent to formatting with the "alternate" form using `{:#}` instead
@@ -177,8 +190,8 @@ impl ObjectValue {
     }
     // outputs the value fully-quoted
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::List(l) => {
+        match &self.val {
+            InnerObjectValue::List(l) => {
                 write!(f, "'(")?;
                 l.iter()
                     .take(l.len() - 1)
@@ -191,7 +204,7 @@ impl ObjectValue {
                     write!(f, ")")
                 }
             }
-            Self::Map(m) => {
+            InnerObjectValue::Map(m) => {
                 write!(f, "'{{")?;
                 let mut iter = m.iter();
                 // just take the first one; Lisp maps are unordered, and there's
@@ -205,7 +218,7 @@ impl ObjectValue {
                     write!(f, "}}")
                 }
             }
-            Self::Vector(l) => {
+            InnerObjectValue::Vector(l) => {
                 write!(f, "'[")?;
                 l.iter()
                     .take(l.len() - 1)
@@ -221,8 +234,8 @@ impl ObjectValue {
     }
     // outputs the value assuming it is already quoted
     fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::List(l) => {
+        match &self.val {
+            InnerObjectValue::List(l) => {
                 write!(f, "(")?;
                 l.iter()
                     .take(l.len() - 1)
@@ -233,8 +246,8 @@ impl ObjectValue {
                     write!(f, ")")
                 }
             }
-            Self::BuiltinFunc(func) => write!(f, "{}", func.name),
-            Self::Func(func) => {
+            InnerObjectValue::BuiltinFunc(func) => write!(f, "{}", func.name),
+            InnerObjectValue::Func(func) => {
                 write!(f, "(fn* (")?;
                 func.args
                     .iter()
@@ -245,7 +258,7 @@ impl ObjectValue {
                 }
                 write!(f, ") ({})", func.body)
             }
-            Self::Macro(func) => {
+            InnerObjectValue::Macro(func) => {
                 // because macros have to be defined to a variable before they
                 // can be used, this is the only form that cannot be inspected
                 // properly (and hence uses "#<macro-fn*>")
@@ -259,7 +272,7 @@ impl ObjectValue {
                 }
                 write!(f, ") ({})", func.body)
             }
-            Self::Map(m) => {
+            InnerObjectValue::Map(m) => {
                 // code explained above, in `inspect_fmt`
                 write!(f, "{{")?;
                 let mut iter = m.iter();
@@ -271,7 +284,7 @@ impl ObjectValue {
                     write!(f, "}}")
                 }
             }
-            Self::Vector(l) => {
+            InnerObjectValue::Vector(l) => {
                 write!(f, "[")?;
                 l.iter()
                     .take(l.len() - 1)
@@ -282,9 +295,17 @@ impl ObjectValue {
                     write!(f, "]")
                 }
             }
-            Self::String(s) => write!(f, r#""{}""#, s.escape_default()),
-            Self::Keyword(s) => write!(f, ":{}", s),
+            InnerObjectValue::String(s) => write!(f, r#""{}""#, s.escape_default()),
+            InnerObjectValue::Keyword(s) => write!(f, ":{}", s),
         }
+    }
+
+    pub fn meta(&self) -> Option<&LispValue> {
+        self.meta.as_ref()
+    }
+
+    pub fn with_meta(&mut self, meta: LispValue) {
+        self.meta = Some(meta);
     }
 }
 
@@ -322,12 +343,20 @@ impl LispValue {
 
     #[inline]
     pub fn string_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue::String(s)))
+        Self::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::String(s),
+            meta: None,
+            quoted: false,
+        }))
     }
 
     #[inline]
     pub fn keyword_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue::Keyword(s)))
+        Self::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::Keyword(s),
+            meta: None,
+            quoted: false,
+        }))
     }
 
     pub fn type_of(&self) -> &'static str {
@@ -386,13 +415,16 @@ impl LispValue {
 
     pub fn try_into_iter(self) -> Result<std::vec::IntoIter<LispValue>> {
         if let Self::Object(o) = self {
-            if matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)) {
+            if matches!(
+                o.val,
+                InnerObjectValue::List(_) | InnerObjectValue::Vector(_)
+            ) {
                 // `matches!` before the `match` to avoid potentially cloning a
                 // non-list object
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let vec = match cloned {
-                    ObjectValue::List(l) => l.into_iter().collect(),
-                    ObjectValue::Vector(l) => l,
+                let vec = match cloned.val {
+                    InnerObjectValue::List(l) => l.into_iter().collect(),
+                    InnerObjectValue::Vector(l) => l,
                     _ => unreachable!(),
                 };
                 Ok(vec.into_iter())
@@ -406,8 +438,8 @@ impl LispValue {
 
     pub fn expect_string(&self) -> Result<&str> {
         match self {
-            Self::Object(o) => match &**o {
-                ObjectValue::String(s) => Ok(s),
+            Self::Object(o) => match &o.val {
+                InnerObjectValue::String(s) => Ok(s),
                 _ => Err(LispError::InvalidDataType("string", self.type_of())),
             },
             _ => Err(LispError::InvalidDataType("string", self.type_of())),
@@ -417,17 +449,26 @@ impl LispValue {
     // recursively transforms vectors to lists; used for testing equality,
     // since the spec requires lists and vectors containing the same elements
     // to compare equal
-    pub fn vector_to_list(self) -> Self {
+    pub(crate) fn vector_to_list(self) -> Self {
         if let Self::Object(o) = self {
-            if matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)) {
+            if matches!(
+                o.val,
+                InnerObjectValue::List(_) | InnerObjectValue::Vector(_)
+            ) {
                 // `matches!` before the `match` explained in `try_into_iter`
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let list: Vector<LispValue> = match cloned {
-                    ObjectValue::List(l) => l.into_iter().map(Self::vector_to_list).collect(),
-                    ObjectValue::Vector(l) => l.into_iter().map(Self::vector_to_list).collect(),
+                let list: Vector<LispValue> = match cloned.val {
+                    InnerObjectValue::List(l) => l.into_iter().map(Self::vector_to_list).collect(),
+                    InnerObjectValue::Vector(l) => {
+                        l.into_iter().map(Self::vector_to_list).collect()
+                    }
                     _ => unreachable!(),
                 };
-                Self::Object(Arc::new(ObjectValue::List(list)))
+                Self::Object(Arc::new(ObjectValue {
+                    val: InnerObjectValue::List(list),
+                    meta: None,
+                    quoted: false,
+                }))
             } else {
                 Self::Object(o)
             }
@@ -438,8 +479,12 @@ impl LispValue {
 
     #[inline]
     pub fn vector_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
-        let vector = ObjectValue::Vector(iter.into_iter().collect());
-        Self::Object(Arc::new(vector))
+        let vector = InnerObjectValue::Vector(iter.into_iter().collect());
+        Self::Object(Arc::new(ObjectValue {
+            val: vector,
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 
@@ -464,7 +509,11 @@ impl From<bool> for LispValue {
 impl From<String> for LispValue {
     #[inline]
     fn from(item: String) -> Self {
-        Self::Object(Arc::new(ObjectValue::String(item)))
+        Self::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::String(item),
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 impl From<LispSymbol> for LispValue {
@@ -476,28 +525,44 @@ impl From<LispSymbol> for LispValue {
 impl From<Vector<LispValue>> for LispValue {
     #[inline]
     fn from(item: Vector<LispValue>) -> Self {
-        Self::Object(Arc::new(ObjectValue::List(item)))
+        Self::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::List(item),
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 impl From<HashMap<LispValue, LispValue>> for LispValue {
     #[inline]
     fn from(item: HashMap<LispValue, LispValue>) -> Self {
-        Self::Object(Arc::new(ObjectValue::Map(item)))
+        Self::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::Map(item),
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 impl FromIterator<LispValue> for LispValue {
     #[inline]
     fn from_iter<T: IntoIterator<Item = LispValue>>(iter: T) -> Self {
-        let list = ObjectValue::List(iter.into_iter().collect());
-        Self::Object(Arc::new(list))
+        let list = InnerObjectValue::List(iter.into_iter().collect());
+        Self::Object(Arc::new(ObjectValue {
+            val: list,
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 
 impl FromIterator<(LispValue, LispValue)> for LispValue {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (LispValue, LispValue)>>(iter: T) -> Self {
-        let map = ObjectValue::Map(iter.into_iter().collect());
-        Self::Object(Arc::new(map))
+        let map = InnerObjectValue::Map(iter.into_iter().collect());
+        Self::Object(Arc::new(ObjectValue {
+            val: map,
+            meta: None,
+            quoted: false,
+        }))
     }
 }
 
@@ -539,9 +604,9 @@ impl TryFrom<LispValue> for Vector<LispValue> {
         if let LispValue::Object(o) = item {
             // `matches!` instead of a `match` or `if let` guard to avoid
             // potentially cloning a non-list object
-            if matches!(&*o, ObjectValue::List(_)) {
+            if matches!(o.val, InnerObjectValue::List(_)) {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::List(l) = cloned else { unreachable!() };
+                let InnerObjectValue::List(l) = cloned.val else { unreachable!() };
                 Ok(l)
             } else {
                 Err(LispError::InvalidDataType("list", o.type_of()))
@@ -557,9 +622,9 @@ impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
     fn try_from(item: LispValue) -> Result<Self> {
         if let LispValue::Object(o) = item {
             // `matches!` explained in `TryFrom` for `Vector`
-            if matches!(&*o, ObjectValue::Map(_)) {
+            if matches!(o.val, InnerObjectValue::Map(_)) {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::Map(l) = cloned else { unreachable!() };
+                let InnerObjectValue::Map(l) = cloned.val else { unreachable!() };
                 Ok(l)
             } else {
                 Err(LispError::InvalidDataType("map", o.type_of()))
@@ -617,8 +682,6 @@ pub enum LispError {
     TryNoCatch,
     #[error("prefix symbol `{0}` not followed by any tokens")]
     MissingToken(&'static str),
-    #[error("`meta` and `with-meta` are not implemented for this version")]
-    NoMeta,
     #[error("odd number of arguments passed to cond")]
     OddCondArguments,
     #[error("cannot redefine special form `{0}`")]

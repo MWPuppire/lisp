@@ -1,7 +1,7 @@
 use crate::env::{hash, LispEnv, LispSymbol};
 use crate::eval::eval;
 use crate::parser::LispParser;
-use crate::util::{assert_or_err, LispBuiltinFunc, ObjectValue};
+use crate::util::{assert_or_err, InnerObjectValue, LispBuiltinFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use by_address::ByAddress;
 use im::{hashmap, vector, HashMap, Vector};
@@ -126,7 +126,7 @@ fn lisp_listq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     );
     let val = eval_head!(args, env)?;
     Ok(LispValue::Bool(match val {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::List(_)),
+        LispValue::Object(o) => matches!(o.val, InnerObjectValue::List(_)),
         _ => false,
     }))
 }
@@ -418,7 +418,7 @@ fn lisp_macroq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::Macro(_)),
+        LispValue::Object(o) => matches!(o.val, InnerObjectValue::Macro(_)),
         _ => false,
     }))
 }
@@ -500,7 +500,7 @@ fn lisp_vectorq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::Vector(_)),
+        LispValue::Object(o) => matches!(o.val, InnerObjectValue::Vector(_)),
         _ => false,
     }))
 }
@@ -512,12 +512,16 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match &*o {
-            ObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
-            ObjectValue::String(_) => {
+        LispValue::Object(o) => match &o.val {
+            InnerObjectValue::Keyword(_) => Ok(LispValue::Object(o.clone())),
+            InnerObjectValue::String(_) => {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::String(inner) = cloned else { unreachable!() };
-                Ok(LispValue::Object(Arc::new(ObjectValue::Keyword(inner))))
+                let InnerObjectValue::String(inner) = cloned.val else { unreachable!() };
+                Ok(LispValue::Object(Arc::new(ObjectValue {
+                    val: InnerObjectValue::Keyword(inner),
+                    meta: None,
+                    quoted: false,
+                })))
             }
             _ => Err(LispError::InvalidDataType("string", o.type_of())),
         },
@@ -532,7 +536,7 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::Keyword(_)),
+        LispValue::Object(o) => matches!(o.val, InnerObjectValue::Keyword(_)),
         _ => false,
     }))
 }
@@ -552,7 +556,7 @@ fn lisp_mapq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::Map(_)),
+        LispValue::Object(o) => matches!(o.val, InnerObjectValue::Map(_)),
         _ => false,
     }))
 }
@@ -564,7 +568,10 @@ fn lisp_sequentialq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispVa
     );
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
-        LispValue::Object(o) => matches!(&*o, ObjectValue::List(_) | ObjectValue::Vector(_)),
+        LispValue::Object(o) => matches!(
+            o.val,
+            InnerObjectValue::List(_) | InnerObjectValue::Vector(_)
+        ),
         _ => false,
     }))
 }
@@ -686,7 +693,10 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let arg = eval_head!(args, env)?;
     Ok(LispValue::Bool(match arg {
         LispValue::Object(o) => {
-            matches!(&*o, ObjectValue::Func(_) | ObjectValue::BuiltinFunc(_))
+            matches!(
+                o.val,
+                InnerObjectValue::Func(_) | InnerObjectValue::BuiltinFunc(_)
+            )
         }
         _ => false,
     }))
@@ -721,9 +731,9 @@ fn lisp_vec(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match &*o {
-            ObjectValue::Vector(_) => Ok(LispValue::Object(o.clone())),
-            ObjectValue::List(l) => Ok(LispValue::vector_from(l.iter().cloned())),
+        LispValue::Object(o) => match &o.val {
+            InnerObjectValue::Vector(_) => Ok(LispValue::Object(o.clone())),
+            InnerObjectValue::List(l) => Ok(LispValue::vector_from(l.iter().cloned())),
             x => Err(LispError::InvalidDataType("list", x.type_of())),
         },
         x => Err(LispError::InvalidDataType("list", x.type_of())),
@@ -750,18 +760,18 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     );
     let arg = eval_head!(args, env)?;
     match arg {
-        LispValue::Object(o) => match &*o {
-            ObjectValue::List(l) => Ok(if l.is_empty() {
+        LispValue::Object(o) => match &o.val {
+            InnerObjectValue::List(l) => Ok(if l.is_empty() {
                 LispValue::Nil
             } else {
                 LispValue::Object(o.clone())
             }),
-            ObjectValue::Vector(l) => Ok(if l.is_empty() {
+            InnerObjectValue::Vector(l) => Ok(if l.is_empty() {
                 LispValue::Nil
             } else {
                 l.iter().cloned().collect()
             }),
-            ObjectValue::String(s) => Ok(if s.is_empty() {
+            InnerObjectValue::String(s) => Ok(if s.is_empty() {
                 LispValue::Nil
             } else {
                 s.chars().map(|x| LispValue::from(x.to_string())).collect()
@@ -778,24 +788,24 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let first = eval_head!(args, env)?;
     let args = args.into_iter().map(|x| eval(x, env));
     match first {
-        LispValue::Object(o) => match &*o {
-            ObjectValue::Vector(l) => {
+        LispValue::Object(o) => match &o.val {
+            InnerObjectValue::Vector(l) => {
                 let mut args: Vec<LispValue> = args.try_collect()?;
                 if l.is_empty() {
                     return Ok(LispValue::vector_from(args));
                 }
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::Vector(mut l) = cloned else { unreachable!() };
+                let InnerObjectValue::Vector(mut l) = cloned.val else { unreachable!() };
                 l.append(&mut args);
                 Ok(LispValue::vector_from(l))
             }
-            ObjectValue::List(l) => {
+            InnerObjectValue::List(l) => {
                 let mut args: Vector<LispValue> = args.rev().try_collect()?;
                 if l.is_empty() {
                     return Ok(args.into());
                 }
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
-                let ObjectValue::List(l) = cloned else { unreachable!() };
+                let InnerObjectValue::List(l) = cloned.val else { unreachable!() };
                 args.append(l);
                 Ok(args.into())
             }
@@ -805,22 +815,47 @@ fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
 }
 
-fn lisp_meta(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue> {
-    Err(LispError::NoMeta)
+fn lisp_meta(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let obj = eval_head!(args, env)?;
+    match obj {
+        LispValue::Object(o) => Ok(o.meta.clone().unwrap_or(LispValue::Nil)),
+        x => Err(LispError::InvalidDataType("object", x.type_of())),
+    }
 }
 
-fn lisp_with_meta(_args: Vector<LispValue>, _env: &LispEnv) -> Result<LispValue> {
-    Err(LispError::NoMeta)
+fn lisp_with_meta(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 2,
+        LispError::IncorrectArguments(2, args.len())
+    );
+    let obj = eval_head!(args, env)?;
+    assert_or_err!(
+        matches!(obj, LispValue::Object(_)),
+        LispError::InvalidDataType("object", obj.type_of())
+    );
+    let meta = eval_head!(args, env)?;
+    let LispValue::Object(mut o) = obj else { unreachable!() };
+    let inner = Arc::make_mut(&mut o);
+    inner.meta = Some(meta);
+    Ok(LispValue::Object(o))
 }
 
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
         hashmap! {
             $(hash($name) => LispValue::Object(
-                    Arc::new(ObjectValue::BuiltinFunc(LispBuiltinFunc {
-                        name: $name,
-                        body: $f,
-                    }))
+                    Arc::new(ObjectValue {
+                        val: InnerObjectValue::BuiltinFunc(LispBuiltinFunc {
+                            name: $name,
+                            body: $f,
+                        }),
+                        meta: None,
+                        quoted: false,
+                    })
                 )
             ),*
         }
