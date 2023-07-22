@@ -224,9 +224,9 @@ impl InnerObjectValue {
 #[derivative(PartialEq, Eq, Hash)]
 pub struct ObjectValue {
     pub(crate) val: InnerObjectValue,
-    #[derivative(PartialEq="ignore", Hash="ignore")]
+    #[derivative(PartialEq = "ignore", Hash = "ignore")]
     pub(crate) meta: Option<LispValue>,
-    #[derivative(PartialEq="ignore", Hash="ignore")]
+    #[derivative(PartialEq = "ignore", Hash = "ignore")]
     pub(crate) quoted: bool,
 }
 
@@ -379,9 +379,9 @@ impl fmt::Display for ObjectValue {
 pub enum LispValue {
     Symbol {
         sym: LispSymbol,
-        #[derivative(PartialEq="ignore", Hash="ignore")]
+        #[derivative(PartialEq = "ignore", Hash = "ignore")]
         quoted: bool,
-        #[derivative(PartialEq="ignore", Hash="ignore")]
+        #[derivative(PartialEq = "ignore", Hash = "ignore")]
         variadic: bool,
     },
     Number(OrderedFloat<f64>),
@@ -391,7 +391,7 @@ pub enum LispValue {
     Object(Arc<ObjectValue>),
     Special {
         form: LispSpecialForm,
-    #[derivative(PartialEq="ignore", Hash="ignore")]
+        #[derivative(PartialEq = "ignore", Hash = "ignore")]
         quoted: bool,
     },
 }
@@ -567,16 +567,13 @@ impl LispValue {
             Self::Object(mut o) => {
                 Arc::make_mut(&mut o).quoted = true;
                 Self::Object(o)
-            },
+            }
             Self::Symbol { sym, variadic, .. } => Self::Symbol {
                 sym,
                 quoted: true,
                 variadic,
             },
-            Self::Special { form, .. } => Self::Special {
-                form,
-                quoted: true,
-            },
+            Self::Special { form, .. } => Self::Special { form, quoted: true },
             x => x,
         }
     }
@@ -586,7 +583,7 @@ impl LispValue {
             Self::Object(mut o) => {
                 Arc::make_mut(&mut o).quoted = false;
                 Self::Object(o)
-            },
+            }
             Self::Symbol { sym, variadic, .. } => Self::Symbol {
                 sym,
                 quoted: false,
@@ -632,7 +629,11 @@ impl From<String> for LispValue {
 impl From<LispSymbol> for LispValue {
     #[inline]
     fn from(sym: LispSymbol) -> Self {
-        Self::Symbol { sym, quoted: false, variadic: false }
+        Self::Symbol {
+            sym,
+            quoted: false,
+            variadic: false,
+        }
     }
 }
 impl From<Vector<LispValue>> for LispValue {
