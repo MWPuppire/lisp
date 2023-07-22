@@ -4,11 +4,7 @@ This is my attempt at writing a LISP interpreter, following [mal](https://github
 
 ## Known issues
 
-Macros don't work. They had been mostly working until commit 3320aa7b5a5457fbe1d9313c5ca89abac828ce6c (which mentions breaking macros); after testing step 9, it seemed likely that my `eval` method was in error, so I changed it and haven't bothered yet to rewrite macros to the new `eval` until I correct eval for step 9.
-
 Step 9 has failing tests with undefined variables in `symbol?`, which I assume means my evaluator is too eager in evaluating expressions.
-
-The effort to hold locks for multiple operations has been largely unsuccessful. I still end up releasing locks and reclaiming them very often in `eval`, and it now is a large `unsafe` mess (including, notably, releasing a lock not passed to the function and later re-locking it before returning, all hidden from the user). More details can be found in `src/eval.rs:eval()`, with comments explaining some of the code.
 
 `im` violates Stacked Borrows. I'd be surprised if I don't also, but I can never test that far under MIRI.
 
