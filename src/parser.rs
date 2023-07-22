@@ -357,7 +357,7 @@ macro_rules! token_prefix {
             LispError::MissingToken($prefix),
         )
         .map(|inner| {
-            vector![LispValue::Special(LispSpecialForm::$name), inner,]
+            vector![LispValue::Special { form: LispSpecialForm::$name, quoted: false }, inner,]
                 .into_iter()
                 .collect()
         })
@@ -473,13 +473,15 @@ impl LispParser {
             LispTokenType::LCurly => Self::read_map(tokens),
             LispTokenType::RCurly => Err(LispError::SyntaxError(row, col)),
             LispTokenType::AtSign => token_prefix!("@", Deref, tokens),
-            LispTokenType::Apostrophe => token_prefix!("'", Quote, tokens),
+            LispTokenType::Apostrophe =>
+                some_or_err(Self::read_form(tokens), LispError::MissingToken("'"))
+                    .map(|x| x.quote()),
             LispTokenType::Backtick => token_prefix!("`", Quasiquote, tokens),
             LispTokenType::Tilde => token_prefix!("~", Unquote, tokens),
             LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens),
             LispTokenType::Ampersand => {
                 match some_or_err(Self::read_form(tokens), LispError::MissingToken("&")) {
-                    Ok(LispValue::Symbol(s)) => Ok(LispValue::VariadicSymbol(s)),
+                    Ok(LispValue::Symbol { sym, quoted, variadic: false }) => Ok(LispValue::Symbol { sym, quoted, variadic: true }),
                     Ok(_) => Err(LispError::SyntaxError(row, col)),
                     Err(x) => Err(x),
                 }
@@ -566,12 +568,12 @@ impl LispParser {
         match token {
             LispTokenType::Number(num) => LispValue::Number(OrderedFloat(num)),
             LispTokenType::String(s) => LispValue::string_for(s),
-            LispTokenType::Symbol(sym) => LispValue::Symbol(hash(&sym)),
-            LispTokenType::HashedSymbol(sym) => LispValue::Symbol(sym),
+            LispTokenType::Symbol(sym) => LispValue::Symbol { sym: hash(&sym), variadic: false, quoted: false },
+            LispTokenType::HashedSymbol(sym) => LispValue::Symbol { sym, variadic: false, quoted: false },
             LispTokenType::Keyword(kw) => LispValue::keyword_for(kw),
             LispTokenType::True => LispValue::Bool(true),
             LispTokenType::False => LispValue::Bool(false),
-            LispTokenType::Special(form) => LispValue::Special(form),
+            LispTokenType::Special(form) => LispValue::Special { form, quoted: false },
             _ => LispValue::Nil,
         }
     }

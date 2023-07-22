@@ -79,23 +79,74 @@ impl fmt::Display for LispSpecialForm {
 // than the evaluator (e.g. `parse("true")` returns the boolean `true`, but
 // `parse("x")` returns the identifier `x` for any non-reserved `x`)
 static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
-    "def!" => LispValue::Special(LispSpecialForm::Def),
-    "defmacro!" => LispValue::Special(LispSpecialForm::Defmacro),
-    "let*" => LispValue::Special(LispSpecialForm::Let),
-    "quote" => LispValue::Special(LispSpecialForm::Quote),
-    "quasiquote" => LispValue::Special(LispSpecialForm::Quasiquote),
-    "unquote" => LispValue::Special(LispSpecialForm::Unquote),
-    "splice-unquote" => LispValue::Special(LispSpecialForm::SpliceUnquote),
-    "macroexpand" => LispValue::Special(LispSpecialForm::Macroexpand),
-    "try*" => LispValue::Special(LispSpecialForm::Try),
-    "catch*" => LispValue::Special(LispSpecialForm::Catch),
-    "do" => LispValue::Special(LispSpecialForm::Do),
-    "if" => LispValue::Special(LispSpecialForm::If),
-    "fn*" => LispValue::Special(LispSpecialForm::Fn),
-    "deref" => LispValue::Special(LispSpecialForm::Deref),
-    "eval" => LispValue::Special(LispSpecialForm::Eval),
-    "apply" => LispValue::Special(LispSpecialForm::Apply),
-    "cond" => LispValue::Special(LispSpecialForm::Cond),
+    "def!" => LispValue::Special {
+        form: LispSpecialForm::Def,
+        quoted: false,
+    },
+    "defmacro!" => LispValue::Special {
+        form: LispSpecialForm::Defmacro,
+        quoted: false,
+    },
+    "let*" => LispValue::Special {
+        form: LispSpecialForm::Let,
+        quoted: false,
+    },
+    "quote" => LispValue::Special {
+        form: LispSpecialForm::Quote,
+        quoted: false,
+    },
+    "quasiquote" => LispValue::Special {
+        form: LispSpecialForm::Quasiquote,
+        quoted: false,
+    },
+    "unquote" => LispValue::Special {
+        form: LispSpecialForm::Unquote,
+        quoted: false,
+    },
+    "splice-unquote" => LispValue::Special {
+        form: LispSpecialForm::SpliceUnquote,
+        quoted: false,
+    },
+    "macroexpand" => LispValue::Special {
+        form: LispSpecialForm::Macroexpand,
+        quoted: false,
+    },
+    "try*" => LispValue::Special {
+        form: LispSpecialForm::Try,
+        quoted: false,
+    },
+    "catch*" => LispValue::Special {
+        form: LispSpecialForm::Catch,
+        quoted: false,
+    },
+    "do" => LispValue::Special {
+        form: LispSpecialForm::Do,
+        quoted: false,
+    },
+    "if" => LispValue::Special {
+        form: LispSpecialForm::If,
+        quoted: false,
+    },
+    "fn*" => LispValue::Special {
+        form: LispSpecialForm::Fn,
+        quoted: false,
+    },
+    "deref" => LispValue::Special {
+        form: LispSpecialForm::Deref,
+        quoted: false,
+    },
+    "eval" => LispValue::Special {
+        form: LispSpecialForm::Eval,
+        quoted: false,
+    },
+    "apply" => LispValue::Special {
+        form: LispSpecialForm::Apply,
+        quoted: false,
+    },
+    "cond" => LispValue::Special {
+        form: LispSpecialForm::Cond,
+        quoted: false,
+    },
     "nil" => LispValue::Nil,
     "true" => LispValue::Bool(true),
     "false" => LispValue::Bool(false),
@@ -169,10 +220,13 @@ impl InnerObjectValue {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Derivative)]
+#[derivative(PartialEq, Eq, Hash)]
 pub struct ObjectValue {
     pub(crate) val: InnerObjectValue,
+    #[derivative(PartialEq="ignore", Hash="ignore")]
     pub(crate) meta: Option<LispValue>,
+    #[derivative(PartialEq="ignore", Hash="ignore")]
     pub(crate) quoted: bool,
 }
 
@@ -194,7 +248,7 @@ impl ObjectValue {
             InnerObjectValue::List(l) => {
                 write!(f, "'(")?;
                 l.iter()
-                    .take(l.len() - 1)
+                    .take(l.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "{} ", x))?;
                 // take the last value separate to avoid printing an extra space
                 // before the closing parenthesis
@@ -221,7 +275,7 @@ impl ObjectValue {
             InnerObjectValue::Vector(l) => {
                 write!(f, "'[")?;
                 l.iter()
-                    .take(l.len() - 1)
+                    .take(l.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "{} ", x))?;
                 if let Some(last) = l.last() {
                     write!(f, "{}]", last)
@@ -238,7 +292,7 @@ impl ObjectValue {
             InnerObjectValue::List(l) => {
                 write!(f, "(")?;
                 l.iter()
-                    .take(l.len() - 1)
+                    .take(l.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "{} ", x))?;
                 if let Some(last) = l.last() {
                     write!(f, "{})", last)
@@ -251,7 +305,7 @@ impl ObjectValue {
                 write!(f, "(fn* (")?;
                 func.args
                     .iter()
-                    .take(func.args.len() - 1)
+                    .take(func.args.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "\\{} ", *x))?;
                 if let Some(last) = func.args.last() {
                     write!(f, "\\{}", *last)?;
@@ -265,7 +319,7 @@ impl ObjectValue {
                 write!(f, "(#<macro-fn*> (")?;
                 func.args
                     .iter()
-                    .take(func.args.len() - 1)
+                    .take(func.args.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "\\{} ", *x))?;
                 if let Some(last) = func.args.last() {
                     write!(f, "\\{}", *last)?;
@@ -287,7 +341,7 @@ impl ObjectValue {
             InnerObjectValue::Vector(l) => {
                 write!(f, "[")?;
                 l.iter()
-                    .take(l.len() - 1)
+                    .take(l.len().saturating_sub(1))
                     .try_for_each(|x| write!(f, "{} ", x))?;
                 if let Some(last) = l.last() {
                     write!(f, "{}]", last)
@@ -320,16 +374,26 @@ impl fmt::Display for ObjectValue {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Derivative)]
+#[derivative(PartialEq, Eq, Hash)]
 pub enum LispValue {
-    Symbol(LispSymbol),
-    VariadicSymbol(LispSymbol),
+    Symbol {
+        sym: LispSymbol,
+        #[derivative(PartialEq="ignore", Hash="ignore")]
+        quoted: bool,
+        #[derivative(PartialEq="ignore", Hash="ignore")]
+        variadic: bool,
+    },
     Number(OrderedFloat<f64>),
     Bool(bool),
     Nil,
     Atom(ByAddress<Arc<RwLock<LispValue>>>),
     Object(Arc<ObjectValue>),
-    Special(LispSpecialForm),
+    Special {
+        form: LispSpecialForm,
+    #[derivative(PartialEq="ignore", Hash="ignore")]
+        quoted: bool,
+    },
 }
 
 impl LispValue {
@@ -337,7 +401,11 @@ impl LispValue {
         if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
             val.clone()
         } else {
-            Self::Symbol(hash(s))
+            Self::Symbol {
+                sym: hash(s),
+                quoted: false,
+                variadic: false,
+            }
         }
     }
 
@@ -361,14 +429,13 @@ impl LispValue {
 
     pub fn type_of(&self) -> &'static str {
         match self {
-            Self::Symbol(_) => "symbol",
-            Self::VariadicSymbol(_) => "symbol",
+            Self::Symbol { .. } => "symbol",
             Self::Number(_) => "number",
             Self::Bool(_) => "bool",
             Self::Nil => "nil",
             Self::Atom(_) => "atom",
             Self::Object(obj) => obj.type_of(),
-            Self::Special(_) => "function",
+            Self::Special { .. } => "function",
         }
     }
 
@@ -378,15 +445,14 @@ impl LispValue {
     }
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => write!(f, "'\\{}", *s),
+            Self::Symbol { sym, .. } => write!(f, "'\\{}", *sym),
             Self::Object(o) => o.inspect_fmt(f),
             _ => self.inspect_quoted_fmt(f),
         }
     }
     fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Symbol(s) => write!(f, "\\{}", *s),
-            Self::VariadicSymbol(s) => write!(f, "&\\{}", *s),
+            Self::Symbol { sym, .. } => write!(f, "\\{}", *sym),
             Self::Number(n) => write!(f, "{}", n),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Nil => write!(f, "nil"),
@@ -396,7 +462,7 @@ impl LispValue {
                 write!(f, ")")
             }
             Self::Object(o) => o.inspect_quoted_fmt(f),
-            Self::Special(s) => write!(f, "{}", s),
+            Self::Special { form, .. } => write!(f, "{}", form),
         }
     }
 
@@ -486,6 +552,53 @@ impl LispValue {
             quoted: false,
         }))
     }
+
+    pub fn is_quoted(&self) -> bool {
+        match self {
+            Self::Object(o) => o.quoted,
+            Self::Symbol { quoted, .. } => *quoted,
+            Self::Special { quoted, .. } => *quoted,
+            _ => false,
+        }
+    }
+
+    pub fn quote(self) -> Self {
+        match self {
+            Self::Object(mut o) => {
+                Arc::make_mut(&mut o).quoted = true;
+                Self::Object(o)
+            },
+            Self::Symbol { sym, variadic, .. } => Self::Symbol {
+                sym,
+                quoted: true,
+                variadic,
+            },
+            Self::Special { form, .. } => Self::Special {
+                form,
+                quoted: true,
+            },
+            x => x,
+        }
+    }
+
+    pub fn unquote(self) -> Self {
+        match self {
+            Self::Object(mut o) => {
+                Arc::make_mut(&mut o).quoted = false;
+                Self::Object(o)
+            },
+            Self::Symbol { sym, variadic, .. } => Self::Symbol {
+                sym,
+                quoted: false,
+                variadic,
+            },
+            Self::Special { form, .. } => Self::Special {
+                form,
+                quoted: false,
+            },
+            x => x,
+        }
+    }
 }
 
 impl From<f64> for LispValue {
@@ -518,8 +631,8 @@ impl From<String> for LispValue {
 }
 impl From<LispSymbol> for LispValue {
     #[inline]
-    fn from(item: LispSymbol) -> Self {
-        Self::Symbol(item)
+    fn from(sym: LispSymbol) -> Self {
+        Self::Symbol { sym, quoted: false, variadic: false }
     }
 }
 impl From<Vector<LispValue>> for LispValue {
@@ -571,8 +684,7 @@ impl TryFrom<LispValue> for LispSymbol {
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
         match item {
-            LispValue::Symbol(s) => Ok(s),
-            LispValue::VariadicSymbol(s) => Ok(s),
+            LispValue::Symbol { sym, .. } => Ok(sym),
             _ => Err(LispError::InvalidDataType("symbol", item.type_of())),
         }
     }

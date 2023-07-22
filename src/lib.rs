@@ -17,6 +17,8 @@ extern crate nom;
 extern crate ordered_float;
 extern crate parking_lot;
 extern crate phf;
+#[macro_use]
+extern crate derivative;
 
 // Also with Miri test fails, Miri reports a memory leak in the test suite
 // (starting at step 4 tests)

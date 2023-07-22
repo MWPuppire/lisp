@@ -475,7 +475,7 @@ fn lisp_symbolq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
         LispError::IncorrectArguments(1, args.len())
     );
     let arg = eval_head!(args, env)?;
-    Ok(LispValue::Bool(matches!(arg, LispValue::Symbol(_))))
+    Ok(LispValue::Bool(matches!(arg, LispValue::Symbol { .. })))
 }
 
 fn lisp_symbol(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
@@ -950,15 +950,14 @@ lazy_static! {
         );
 
         let args: Vec<String> = std::env::args().collect();
-        let mut lisp_argv: Vector<LispValue> = args.into_iter()
+        let lisp_argv: LispValue = args.into_iter()
             // Lisp *ARGV* doesn't include the interpreter name
             .skip(1)
             .map(LispValue::string_for)
             .collect();
-        lisp_argv.push_front(LispValue::Symbol(hash("list")));
         ext.insert(
             hash("*ARGV*"),
-            lisp_argv.into(),
+            lisp_argv.quote(),
         );
 
         base.union(ext)

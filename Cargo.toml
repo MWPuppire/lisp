@@ -19,6 +19,7 @@ parking_lot = "0.12"
 itertools = "0.10"
 rustyline = { version = "11.0", optional = true }
 dashmap = "5.5"
+derivative = "2.2"
 
 [features]
 default = ["io-stdlib", "rustyline"]

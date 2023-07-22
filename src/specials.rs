@@ -3,9 +3,18 @@ use crate::{LispEnv, LispError, LispValue, Result};
 use im::vector;
 use std::sync::Arc;
 
-pub(crate) const UNQUOTE: LispValue = LispValue::Special(LispSpecialForm::Unquote);
-pub(crate) const SPLICE_UNQUOTE: LispValue = LispValue::Special(LispSpecialForm::SpliceUnquote);
-pub(crate) const CATCH: LispValue = LispValue::Special(LispSpecialForm::Catch);
+pub(crate) const UNQUOTE: LispValue = LispValue::Special {
+    form: LispSpecialForm::Unquote,
+    quoted: false,
+};
+pub(crate) const SPLICE_UNQUOTE: LispValue = LispValue::Special {
+    form: LispSpecialForm::SpliceUnquote,
+    quoted: false,
+};
+pub(crate) const CATCH: LispValue = LispValue::Special {
+    form: LispSpecialForm::Catch,
+    quoted: false,
+};
 
 pub(crate) fn inner_quasiquote(
     arg: LispValue,
@@ -54,7 +63,7 @@ macro_rules! special_form {
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
-                if let $crate::LispValue::Special(form) = &$list[0] {
+                if let $crate::LispValue::Special { form, .. } = &$list[0] {
                     break Err($crate::LispError::CannotRedefineSpecialForm(*form));
                 }
                 let name = $list.pop_front().unwrap().try_into()?;
@@ -67,7 +76,7 @@ macro_rules! special_form {
                     $list.len() == 2,
                     $crate::LispError::IncorrectArguments(2, $list.len(),)
                 );
-                if let $crate::LispValue::Special(form) = &$list[0] {
+                if let $crate::LispValue::Special { form, .. } = &$list[0] {
                     break Err($crate::LispError::CannotRedefineSpecialForm(*form));
                 }
                 let name = $list.pop_front().unwrap().try_into()?;
@@ -109,7 +118,7 @@ macro_rules! special_form {
             }
             $crate::util::LispSpecialForm::Quote => {
                 if let Some(quoted) = $list.pop_front() {
-                    break Ok(quoted);
+                    break Ok(quoted.quote());
                 } else {
                     break Err($crate::LispError::IncorrectArguments(1, 0));
                 }
@@ -238,7 +247,7 @@ macro_rules! special_form {
                     $list.pop_front().unwrap().try_into_iter()?.collect();
                 let variadic = args_list
                     .last()
-                    .map(|last| matches!(last, LispValue::VariadicSymbol(_)))
+                    .map(|last| matches!(last, LispValue::Symbol { variadic: true, .. }))
                     .unwrap_or(false);
                 let args = args_list.into_iter().map(|x| x.try_into()).try_collect()?;
                 let body = $list.pop_front().unwrap();

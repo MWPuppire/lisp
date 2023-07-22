@@ -2,20 +2,20 @@ mod common;
 use common::*;
 
 #[inline]
-fn test_inspect(expr: &str) -> bool {
+fn test_inspect(expr: &str) {
     let formatted = format!("(eval (read-string (inspect {})))", expr);
-    eval!(expr) == eval!(&formatted)
+    assert_eq!(eval!(expr), eval!(&formatted))
 }
 
 #[test]
 fn inspect_outputs_code() {
-    assert!(test_inspect("7"));
-    assert!(test_inspect("'a"));
-    assert!(test_inspect("[1 2 3 4]"));
-    assert!(test_inspect("['a 'b]"));
-    assert!(test_inspect("(list 1 2 3)"));
-    assert!(test_inspect("{:a 9 :b (+ 2 3)}"));
-    assert!(test_inspect("'(+ 2 3)"));
+    test_inspect("7");
+    test_inspect("'a");
+    test_inspect("[1 2 3 4]");
+    test_inspect("['a 'b]");
+    test_inspect("(list 1 2 3)");
+    test_inspect("{:a 9 :b (+ 2 3)}");
+    test_inspect("'(+ 2 3)");
 }
 
 #[test]

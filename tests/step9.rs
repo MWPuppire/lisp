@@ -52,7 +52,7 @@ fn apply() {
     assert_eq!(eval!("(apply + (list 2 3))"), 5.0.into());
     assert_eq!(eval!("(apply + 4 (list 2 3))"), 9.0.into());
     assert_eq!(eval!("(apply list (list))"), vector![].into());
-    assert_eq!(eval!("(apply symbol? (list 'two))"), true.into());
+    assert_eq!(eval!("(apply symbol? (list (quote two)))"), true.into());
     assert_eq!(eval!("(apply (fn* (a b) (+ a b)) (list 2 3))"), 5.0.into());
 }
 

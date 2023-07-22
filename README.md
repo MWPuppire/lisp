@@ -4,8 +4,6 @@ This is my attempt at writing a LISP interpreter, following [mal](https://github
 
 ## Known issues
 
-Step 9 has failing tests with undefined variables in `symbol?`, which I assume means my evaluator is too eager in evaluating expressions.
-
 `im` violates Stacked Borrows. I'd be surprised if I don't also, but I can never test that far under MIRI.
 
 The code has memory leaks. Testing under MIRI reveals Arcs leaking in some of the tests, starting at step 4. It wouldn't surprise me if those are circular references, but I'm not sure what to do about those (other than switching to GC, which may actually be the best move).
