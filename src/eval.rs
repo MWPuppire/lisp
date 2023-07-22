@@ -38,7 +38,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, Arc<LispEnv>)> {
+pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
     if is_macro_call(&val, env) {
         let mut list = val.try_into_iter()?;
         let Some(head) = list.next() else { unreachable!() };
@@ -50,7 +50,7 @@ pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, Arc<Li
         // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
             let mut args: Vector<LispValue> = list
-                .map(|x| Ok::<_, LispError>(expand_macros(x, env)?.0))
+                .map(|x| expand_macros(x, env))
                 .try_collect()?;
             let variadic_idx = f.args.len() - 1;
             let last_args = args.split_off(variadic_idx);
@@ -58,21 +58,19 @@ pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<(LispValue, Arc<Li
             let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
             params.push((f.args[variadic_idx], last_args.into_iter().collect()));
             let fn_env = f.closure.make_macro_env(&params, env);
-            Ok((f.body.clone(), fn_env))
+            eval(f.body.clone(), &fn_env)
         } else if list.len() != f.args.len() {
             Err(LispError::IncorrectArguments(f.args.len(), list.len()))
         } else {
             let args: Vec<LispValue> = list
-                .map(|x| Ok::<_, LispError>(expand_macros(x, env)?.0))
+                .map(|x| expand_macros(x, env))
                 .try_collect()?;
             let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
             let fn_env = f.closure.make_macro_env(&params, env);
-            Ok((f.body.clone(), fn_env))
+            eval(f.body.clone(), &fn_env)
         }
     } else {
-        // TODO cloning environments is cheap since it's just bumping an Arc,
-        // but I should maybe still find a better solution to this
-        Ok((val, env.clone_arc()))
+        Ok(val)
     }
 }
 
@@ -125,11 +123,8 @@ fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
 pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
     let mut env = env.clone_arc();
     loop {
-        if is_macro_call(&ast, &env) {
-            let (new_ast, new_env) = expand_macros(ast, &env)?;
-            ast = new_ast;
-            env = new_env;
-        }
+        // `is_macro_call` is used in `expand_macros`, so isn't needed here
+        ast = expand_macros(ast, &env)?;
         if !matches!(ast, LispValue::Object(_)) {
             break eval_ast(ast, &env);
         }
