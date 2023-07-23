@@ -1,11 +1,6 @@
 mod common;
 use common::*;
 
-#[inline]
-fn parse(input: &str) -> LispValue {
-    LispParser::parse(input).unwrap().unwrap()
-}
-
 #[test]
 fn read_numbers() {
     assert_eq!(parse("1"), 1.0.into());

@@ -3,120 +3,117 @@ use common::*;
 
 #[test]
 fn list_functions() {
-    assert_eq!(eval!("(list)"), vector![].into());
-    assert_eq!(eval!("(list? (list))"), true.into());
-    assert_eq!(eval!("(empty? (list))"), true.into());
-    assert_eq!(eval!("(empty? (list 1))"), false.into());
-    assert_eq!(
-        eval!("(list 1 2 3)"),
-        vector![1.0.into(), 2.0.into(), 3.0.into(),].into()
-    );
-    assert_eq!(eval!("(count (list 1 2 3))"), 3.0.into());
-    assert_eq!(eval!("(count (list))"), 0.0.into());
-    assert_eq!(eval!("(count nil)"), 0.0.into());
-    assert_eq!(eval!("(count [1 2 3])"), 3.0.into());
-    assert_eq!(eval!("(empty? [])"), true.into());
-    assert_eq!(eval!("(empty? [1 2 3])"), false.into());
-    assert_eq!(eval!("(list? [1 2 3])"), false.into());
+    eval_eq!("(list)", vector![]);
+    eval_eq!("(list? (list))", true);
+    eval_eq!("(empty? (list))", true);
+    eval_eq!("(empty? (list 1))", false);
+    eval_eq!("(list 1 2 3)", vector![1.0.into(), 2.0.into(), 3.0.into(),]);
+    eval_eq!("(count (list 1 2 3))", 3.0);
+    eval_eq!("(count (list))", 0.0);
+    eval_eq!("(count nil)", 0.0);
+    eval_eq!("(count [1 2 3])", 3.0);
+    eval_eq!("(empty? [])", true);
+    eval_eq!("(empty? [1 2 3])", false);
+    eval_eq!("(list? [1 2 3])", false);
 }
 
 #[test]
 fn if_form() {
-    assert_eq!(eval!("(if true 7 8)"), 7.0.into());
-    assert_eq!(eval!("(if false 7 8)"), 8.0.into());
-    assert_eq!(eval!("(if nil 7 8)"), 8.0.into());
-    assert_eq!(eval!("(if 0 7 8)"), 7.0.into());
-    assert_eq!(eval!("(if (list) 7 8)"), 7.0.into());
+    eval_eq!("(if true 7 8)", 7.0);
+    eval_eq!("(if false 7 8)", 8.0);
+    eval_eq!("(if nil 7 8)", 8.0);
+    eval_eq!("(if 0 7 8)", 7.0);
+    eval_eq!("(if (list) 7 8)", 7.0);
 }
 
 #[test]
 fn if_side_effects() {
     let env = testing_env();
     eval!("(if true (def! x 4) (def! x 5))", &env);
-    assert_eq!(eval!("x", &env), 4.0.into());
+    eval_eq!("x", &env, 4.0);
     eval!("(if false (def! x 4) (def! x 5))", &env);
-    assert_eq!(eval!("x", &env), 5.0.into());
+    eval_eq!("x", &env, 5.0);
 }
 
 #[test]
 fn if_one_path() {
-    assert_eq!(eval!("(if false 8)"), LispValue::Nil);
-    assert_eq!(eval!("(if nil 8)"), LispValue::Nil);
-    assert_eq!(eval!("(if true (+ 1 7))"), 8.0.into());
+    eval_eq!("(if false 8)", LispValue::Nil);
+    eval_eq!("(if nil 8)", LispValue::Nil);
+    eval_eq!("(if true (+ 1 7))", 8.0);
 }
 
 #[test]
 fn equality() {
-    assert_eq!(eval!("(= 2 1)"), false.into());
-    assert_eq!(eval!("(= 1 1)"), true.into());
-    assert_eq!(eval!("(= 1 2)"), false.into());
-    assert_eq!(eval!("(= 2 (+ 1 1))"), true.into());
-    assert_eq!(eval!("(= nil nil)"), true.into());
-    assert_eq!(eval!("(= nil (list))"), false.into());
-    assert_eq!(eval!("(= (list) (list))"), true.into());
-    assert_eq!(eval!("(= (list) ())"), true.into());
-    assert_eq!(eval!("(= true true)"), true.into());
-    assert_eq!(eval!("(= false false)"), true.into());
-    assert_eq!(eval!("(= (list 1 2) (list 1 2))"), true.into());
-    assert_eq!(eval!("(= (list 1 2) (list 1))"), false.into());
-    assert_eq!(eval!("(= \"\" \"\")"), true.into());
-    assert_eq!(eval!("(= \"abc\" \"abc\")"), true.into());
-    assert_eq!(eval!("(= \"abc\" \"\")"), false.into());
-    assert_eq!(eval!("(= \"abc\" \"ABC\")"), false.into());
-    assert_eq!(eval!("(= \"\" (list))"), false.into());
-    assert_eq!(eval!("(= [] (list))"), true.into());
-    assert_eq!(eval!("(= [7 8] (list 7 8))"), true.into());
-    assert_eq!(eval!("(= [7 8] [7 8])"), true.into());
-    assert_eq!(
-        eval!("(= [1 2 (list 3 4 [5 6])] (list 1 2 [3 4 (list 5 6)]))"),
-        true.into()
+    eval_eq!("(= 2 1)", false);
+    eval_eq!("(= 1 1)", true);
+    eval_eq!("(= 1 2)", false);
+    eval_eq!("(= 2 (+ 1 1))", true);
+    eval_eq!("(= nil nil)", true);
+    eval_eq!("(= nil (list))", false);
+    eval_eq!("(= (list) (list))", true);
+    eval_eq!("(= (list) ())", true);
+    eval_eq!("(= true true)", true);
+    eval_eq!("(= false false)", true);
+    eval_eq!("(= (list 1 2) (list 1 2))", true);
+    eval_eq!("(= (list 1 2) (list 1))", false);
+    eval_eq!("(= \"\" \"\")", true);
+    eval_eq!("(= \"abc\" \"abc\")", true);
+    eval_eq!("(= \"abc\" \"\")", false);
+    eval_eq!("(= \"abc\" \"ABC\")", false);
+    eval_eq!("(= \"\" (list))", false);
+    eval_eq!("(= [] (list))", true);
+    eval_eq!("(= [7 8] (list 7 8))", true);
+    eval_eq!("(= [7 8] [7 8])", true);
+    eval_eq!(
+        "(= [1 2 (list 3 4 [5 6])] (list 1 2 [3 4 (list 5 6)]))",
+        true
     );
-    assert_eq!(eval!("(= \"abc\" 'abc)"), false.into());
-    assert_eq!(eval!("(= 'abc 'abc)"), true.into());
-    assert_eq!(eval!("(= 'abcd 'abc)"), false.into());
+    eval_eq!("(= \"abc\" 'abc)", false);
+    eval_eq!("(= 'abc 'abc)", true);
+    eval_eq!("(= 'abcd 'abc)", false);
 }
 
 #[test]
 fn comparisons() {
-    assert_eq!(eval!("(> 2 1)"), true.into());
-    assert_eq!(eval!("(> 1 1)"), false.into());
-    assert_eq!(eval!("(> 1 2)"), false.into());
-    assert_eq!(eval!("(>= 2 1)"), true.into());
-    assert_eq!(eval!("(>= 1 1)"), true.into());
-    assert_eq!(eval!("(>= 1 2)"), false.into());
-    assert_eq!(eval!("(< 2 1)"), false.into());
-    assert_eq!(eval!("(< 1 1)"), false.into());
-    assert_eq!(eval!("(< 1 2)"), true.into());
-    assert_eq!(eval!("(<= 2 1)"), false.into());
-    assert_eq!(eval!("(<= 1 1)"), true.into());
-    assert_eq!(eval!("(<= 1 2)"), true.into());
+    eval_eq!("(> 2 1)", true);
+    eval_eq!("(> 1 1)", false);
+    eval_eq!("(> 1 2)", false);
+    eval_eq!("(>= 2 1)", true);
+    eval_eq!("(>= 1 1)", true);
+    eval_eq!("(>= 1 2)", false);
+    eval_eq!("(< 2 1)", false);
+    eval_eq!("(< 1 1)", false);
+    eval_eq!("(< 1 2)", true);
+    eval_eq!("(<= 2 1)", false);
+    eval_eq!("(<= 1 1)", true);
+    eval_eq!("(<= 1 2)", true);
 }
 
 #[test]
 fn user_functions() {
-    assert_eq!(eval!("((fn* (a b) (+ b a)) 3 4)"), 7.0.into());
-    assert_eq!(eval!("((fn* () 4))"), 4.0.into());
-    assert_eq!(eval!("((fn* (f x) (f x)) (fn* (a) (+ 1 a)) 7)"), 8.0.into());
-    assert_eq!(eval!("((fn* [] 4))"), 4.0.into());
+    eval_eq!("((fn* (a b) (+ b a)) 3 4)", 7.0);
+    eval_eq!("((fn* () 4))", 4.0);
+    eval_eq!("((fn* (f x) (f x)) (fn* (a) (+ 1 a)) 7)", 8.0);
+    eval_eq!("((fn* [] 4))", 4.0);
 }
 
 #[test]
 fn closures() {
     let env = testing_env();
-    assert_eq!(eval!("(((fn* (a) (fn* (b) (+ a b))) 5) 7)"), 12.0.into());
+    eval_eq!("(((fn* (a) (fn* (b) (+ a b))) 5) 7)", 12.0);
     eval!("(def! gen-plus5 (fn* () (fn* (b) (+ 5 b))))", &env);
     eval!("(def! plus5 (gen-plus5))", &env);
-    assert_eq!(eval!("(plus5 7)", &env), 12.0.into());
+    eval_eq!("(plus5 7)", &env, 12.0);
     eval!("(def! gen-plusX (fn* (x) (fn* (b) (+ x b))))", &env);
     eval!("(def! plus7 (gen-plusX 7))", &env);
-    assert_eq!(eval!("(plus7 8)", &env), 15.0.into());
+    eval_eq!("(plus7 8)", &env, 15.0);
 }
 
 #[test]
 fn do_form() {
     let env = testing_env();
-    assert_eq!(eval!("(do (def! a 6) 7 (+ a 8))", &env), 14.0.into());
-    assert_eq!(eval!("a", &env), 6.0.into());
+    eval_eq!("(do (def! a 6) 7 (+ a 8))", &env, 14.0);
+    eval_eq!("a", &env, 6.0);
 }
 
 #[test]
@@ -126,50 +123,50 @@ fn recursive_funcs() {
         "(def! sumdown (fn* (N) (if (> N 0) (+ N (sumdown (- N 1))) 0)))",
         &env
     );
-    assert_eq!(eval!("(sumdown 1)", &env), 1.0.into());
-    assert_eq!(eval!("(sumdown 2)", &env), 3.0.into());
-    assert_eq!(eval!("(sumdown 6)", &env), 21.0.into());
+    eval_eq!("(sumdown 1)", &env, 1.0);
+    eval_eq!("(sumdown 2)", &env, 3.0);
+    eval_eq!("(sumdown 6)", &env, 21.0);
     eval!(
         "(def! fib (fn* (N) (if (= N 0) 1 (if (= N 1) 1 (+ (fib (- N 1)) (fib (- N 2)))))))",
         &env
     );
-    assert_eq!(eval!("(fib 1)", &env), 1.0.into());
-    assert_eq!(eval!("(fib 2)", &env), 2.0.into());
-    assert_eq!(eval!("(fib 4)", &env), 5.0.into());
+    eval_eq!("(fib 1)", &env, 1.0);
+    eval_eq!("(fib 2)", &env, 2.0);
+    eval_eq!("(fib 4)", &env, 5.0);
 }
 
 #[test]
 fn recursive_func_environment() {
-    assert_eq!(eval!("(let* (f (fn* () x) x 3) (f))"), 3.0.into());
-    assert_eq!(
-        eval!("(let* (cst (fn* (n) (if (= n 0) nil (cst (- n 1))))) (cst 1))"),
+    eval_eq!("(let* (f (fn* () x) x 3) (f))", 3.0);
+    eval_eq!(
+        "(let* (cst (fn* (n) (if (= n 0) nil (cst (- n 1))))) (cst 1))",
         LispValue::Nil
     );
-    assert_eq!(
-        eval!("(let* (f (fn* (n) (if (= n 0) 0 (g (- n 1)))) g (fn* (n) (f n))) (f 2))"),
-        0.0.into()
+    eval_eq!(
+        "(let* (f (fn* (n) (if (= n 0) 0 (g (- n 1)))) g (fn* (n) (f n))) (f 2))",
+        0.0
     );
 }
 
 #[test]
 fn variadic_function() {
-    assert_eq!(
-        eval!("((fn* (& more) more) 1 2 3)"),
-        vector![1.0.into(), 2.0.into(), 3.0.into(),].into()
+    eval_eq!(
+        "((fn* (& more) more) 1 2 3)",
+        vector![1.0.into(), 2.0.into(), 3.0.into(),]
     );
-    assert_eq!(eval!("((fn* (& more) (count more)) 1 2 3)"), 3.0.into());
-    assert_eq!(eval!("((fn* (& more) (list? more)) 1 2 3)"), true.into());
-    assert_eq!(eval!("((fn* (& more) (count more)))"), 0.0.into());
-    assert_eq!(eval!("((fn* (& more) (list? more)))"), true.into());
+    eval_eq!("((fn* (& more) (count more)) 1 2 3)", 3.0);
+    eval_eq!("((fn* (& more) (list? more)) 1 2 3)", true);
+    eval_eq!("((fn* (& more) (count more)))", 0.0);
+    eval_eq!("((fn* (& more) (list? more)))", true);
 }
 
 #[test]
 fn not() {
-    assert_eq!(eval!("(not false)"), true.into());
-    assert_eq!(eval!("(not nil)"), true.into());
-    assert_eq!(eval!("(not true)"), false.into());
-    assert_eq!(eval!("(not ())"), false.into());
-    assert_eq!(eval!("(not 0)"), false.into());
-    assert_eq!(eval!("(not \"\")"), false.into());
-    assert_eq!(eval!("(not [])"), false.into());
+    eval_eq!("(not false)", true);
+    eval_eq!("(not nil)", true);
+    eval_eq!("(not true)", false);
+    eval_eq!("(not ())", false);
+    eval_eq!("(not 0)", false);
+    eval_eq!("(not \"\")", false);
+    eval_eq!("(not [])", false);
 }

@@ -103,12 +103,27 @@ pub fn eval_str_in_env(input: &str, env: &LispEnv) -> Result<LispValue> {
     eval(parsed, env)
 }
 
+#[inline]
+pub fn parse(input: &str) -> LispValue {
+    LispParser::parse(input).unwrap().unwrap()
+}
+
 #[macro_export]
 macro_rules! eval {
-    ($code:expr) => {
+    ($code:expr $(,)?) => {
         eval_str($code).unwrap()
     };
-    ($code:expr, $env:expr) => {
+    ($code:expr, $env:expr $(,)?) => {
         eval_str_in_env($code, $env).unwrap()
+    };
+}
+
+#[macro_export]
+macro_rules! eval_eq {
+    ($code:expr, $res:expr $(,)?) => {
+        assert_eq!(eval_str($code).unwrap(), $res.into())
+    };
+    ($code:expr, $env:expr, $res:expr $(,)?) => {
+        assert_eq!(eval_str_in_env($code, $env).unwrap(), $res.into())
     };
 }
