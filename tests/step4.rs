@@ -40,8 +40,8 @@ fn if_side_effects() {
 
 #[test]
 fn if_one_path() {
-    assert_eq!(eval!("(if false 8)"), LispValue::Nil);
-    assert_eq!(eval!("(if nil 8)"), LispValue::Nil);
+    assert_eq!(eval!("(if false 8)"), LispValue::nil());
+    assert_eq!(eval!("(if nil 8)"), LispValue::nil());
     assert_eq!(eval!("(if true (+ 1 7))"), 8.0.into());
 }
 
@@ -143,7 +143,7 @@ fn recursive_func_environment() {
     assert_eq!(eval!("(let* (f (fn* () x) x 3) (f))"), 3.0.into());
     assert_eq!(
         eval!("(let* (cst (fn* (n) (if (= n 0) nil (cst (- n 1))))) (cst 1))"),
-        LispValue::Nil
+        LispValue::nil()
     );
     assert_eq!(
         eval!("(let* (f (fn* (n) (if (= n 0) 0 (g (- n 1)))) g (fn* (n) (f n))) (f 2))"),

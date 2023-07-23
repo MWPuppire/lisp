@@ -97,7 +97,7 @@ fn quote() {
 
 #[test]
 fn quasiquote() {
-    assert_eq!(eval!("(quasiquote nil)"), LispValue::Nil);
+    assert_eq!(eval!("(quasiquote nil)"), LispValue::nil());
     assert_eq!(eval!("(quasiquote 7)"), 7.0.into());
     assert_eq!(eval!("(quasiquote ())"), vector![].into());
     assert_eq!(

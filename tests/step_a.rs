@@ -20,7 +20,7 @@ fn hashmap_atom() {
 #[test]
 fn metadata() {
     let env = testing_env();
-    assert_eq!(eval!("(meta (fn* (a) a))"), LispValue::Nil);
+    assert_eq!(eval!("(meta (fn* (a) a))"), LispValue::nil());
     assert_eq!(
         eval!("(meta (with-meta (fn* (a) a) {\"b\" 1}))"),
         hashmap! {
@@ -54,7 +54,7 @@ fn metadata() {
         }
         .into()
     );
-    assert_eq!(eval!("(meta +)"), LispValue::Nil);
+    assert_eq!(eval!("(meta +)"), LispValue::nil());
 }
 
 #[test]

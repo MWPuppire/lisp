@@ -76,7 +76,7 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result
             eval(val?, &global)?;
         }
     }
-    Ok(LispValue::Nil)
+    Ok(LispValue::nil())
 }
 
 pub fn testing_env() -> Arc<LispEnv> {

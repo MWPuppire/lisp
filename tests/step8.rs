@@ -73,8 +73,8 @@ fn macroexpand() {
 fn list_functions() {
     assert_eq!(eval!("(nth (list 1) 0)"), 1.0.into());
     assert_eq!(eval!("(nth (list 1 2) 1)"), 2.0.into());
-    assert_eq!(eval!("(nth (list 1 2 nil) 2)"), LispValue::Nil);
-    assert_eq!(eval!("(first (list))"), LispValue::Nil);
+    assert_eq!(eval!("(nth (list 1 2 nil) 2)"), LispValue::nil());
+    assert_eq!(eval!("(first (list))"), LispValue::nil());
     assert_eq!(eval!("(first (list 6))"), 6.0.into());
     assert_eq!(eval!("(first (list 7 8 9))"), 7.0.into());
     assert_eq!(eval!("(rest (list))"), vector![].into());
@@ -98,13 +98,13 @@ fn out_of_bounds_access() {
 
 #[test]
 fn cond() {
-    assert_eq!(eval!("(cond)"), LispValue::Nil);
+    assert_eq!(eval!("(cond)"), LispValue::nil());
     assert_eq!(eval!("(cond true 7)"), 7.0.into());
-    assert_eq!(eval!("(cond false 7)"), LispValue::Nil);
+    assert_eq!(eval!("(cond false 7)"), LispValue::nil());
     assert_eq!(eval!("(cond true 7 true 8)"), 7.0.into());
     assert_eq!(eval!("(cond false 7 true 8)"), 8.0.into());
     assert_eq!(eval!("(cond false 7 false 8 \"else\" 9)"), 9.0.into());
-    assert_eq!(eval!("(cond false 7 false 8 false 9)"), LispValue::Nil);
+    assert_eq!(eval!("(cond false 7 false 8 false 9)"), LispValue::nil());
     assert_eq!(
         eval!("(let* (x (cond false \"no\" true \"yes\")) x)"),
         "yes".to_owned().into()
