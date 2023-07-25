@@ -479,10 +479,7 @@ impl LispParser {
             LispTokenType::LCurly => Self::read_map(tokens),
             LispTokenType::RCurly => Err(LispError::SyntaxError(row, col)),
             LispTokenType::AtSign => token_prefix!("@", Deref, tokens),
-            LispTokenType::Apostrophe => {
-                some_or_err(Self::read_form(tokens), LispError::MissingToken("'"))
-                    .map(|x| x.quote())
-            }
+            LispTokenType::Apostrophe => token_prefix!("'", Quote, tokens),
             LispTokenType::Backtick => token_prefix!("`", Quasiquote, tokens),
             LispTokenType::Tilde => token_prefix!("~", Unquote, tokens),
             LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens),

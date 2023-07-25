@@ -21,11 +21,9 @@ Other differences:
 
 ## Known issues
 
-`im` violates Stacked Borrows. I'd be surprised if I don't also, but I can never test that far under MIRI.
+`im` violates Stacked Borrows. It wouldn't surprise me if the LISP interpreter also does, but Miri never gets far enough testing before crashing from `im` (without `-Zmiri-disable-stacked-borrows`).
 
-The code has memory leaks. Testing under MIRI reveals Arcs leaking in some of the tests, starting at step 4. It wouldn't surprise me if those are circular references, but I'm not sure what to do about those (other than switching to GC, which may actually be the best move).
-
-Prefixed apostrophes currently behave differently than the `quote` form, which violates the spec and is also just confusing. Changing either to match behavior causes failing tests, so this'll need to be worked on more.
+The code has memory leaks. Testing under Miri reveals Arcs leaking in some of the tests, starting at step 4. It wouldn't surprise me if those are circular references, but I'm not sure what to do about those (other than switching to GC, which may actually be the best move).
 
 ## License
 

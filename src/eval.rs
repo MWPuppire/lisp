@@ -144,7 +144,7 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
             // just return an empty list without evaluating anything
             break Ok(list.into_iter().collect());
         };
-        match eval(head, &env)? {
+        match eval(head.unquote(), &env)? {
             LispValue::Special { form, .. } => {
                 ast = special_form!(form, list, eval, env);
             }
