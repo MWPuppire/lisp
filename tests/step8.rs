@@ -74,8 +74,8 @@ fn macroexpand() {
 fn list_functions() {
     eval_eq!("(nth (list 1) 0)", 1.0);
     eval_eq!("(nth (list 1 2) 1)", 2.0);
-    eval_eq!("(nth (list 1 2 nil) 2)", LispValue::Nil);
-    eval_eq!("(first (list))", LispValue::Nil);
+    eval_eq!("(nth (list 1 2 nil) 2)", LispValue::nil());
+    eval_eq!("(first (list))", LispValue::nil());
     eval_eq!("(first (list 6))", 6.0);
     eval_eq!("(first (list 7 8 9))", 7.0);
     eval_eq!("(rest (list))", vector![]);
@@ -93,13 +93,13 @@ fn out_of_bounds_access() {
 
 #[test]
 fn cond() {
-    eval_eq!("(cond)", LispValue::Nil);
+    eval_eq!("(cond)", LispValue::nil());
     eval_eq!("(cond true 7)", 7.0);
-    eval_eq!("(cond false 7)", LispValue::Nil);
+    eval_eq!("(cond false 7)", LispValue::nil());
     eval_eq!("(cond true 7 true 8)", 7.0);
     eval_eq!("(cond false 7 true 8)", 8.0);
     eval_eq!("(cond false 7 false 8 \"else\" 9)", 9.0);
-    eval_eq!("(cond false 7 false 8 false 9)", LispValue::Nil);
+    eval_eq!("(cond false 7 false 8 false 9)", LispValue::nil());
     eval_eq!(
         "(let* (x (cond false \"no\" true \"yes\")) x)",
         "yes".to_owned()

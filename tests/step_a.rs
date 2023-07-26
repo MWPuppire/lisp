@@ -21,7 +21,7 @@ fn hashmap_atom() {
 #[test]
 fn metadata() {
     let env = testing_env();
-    eval_eq!("(meta (fn* (a) a))", LispValue::Nil);
+    eval_eq!("(meta (fn* (a) a))", LispValue::nil());
     eval_eq!(
         "(meta (with-meta (fn* (a) a) {\"b\" 1}))",
         hashmap! {
@@ -51,7 +51,7 @@ fn metadata() {
             "b".to_owned().into() => 2.0.into(),
         }
     );
-    eval_eq!("(meta +)", LispValue::Nil);
+    eval_eq!("(meta +)", LispValue::nil());
 }
 
 #[test]

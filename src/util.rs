@@ -79,84 +79,84 @@ impl fmt::Display for LispSpecialForm {
 // than the evaluator (e.g. `parse("true")` returns the boolean `true`, but
 // `parse("x")` returns the identifier `x` for any non-reserved `x`)
 static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
-    "def!" => LispValue::Special {
+    "def!" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Def,
         quoted: false,
-    },
-    "defmacro!" => LispValue::Special {
+    }),
+    "defmacro!" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Defmacro,
         quoted: false,
-    },
-    "let*" => LispValue::Special {
+    }),
+    "let*" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Let,
         quoted: false,
-    },
-    "quote" => LispValue::Special {
+    }),
+    "quote" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Quote,
         quoted: false,
-    },
-    "quasiquote" => LispValue::Special {
+    }),
+    "quasiquote" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Quasiquote,
         quoted: false,
-    },
-    "unquote" => LispValue::Special {
+    }),
+    "unquote" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Unquote,
         quoted: false,
-    },
-    "splice-unquote" => LispValue::Special {
+    }),
+    "splice-unquote" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::SpliceUnquote,
         quoted: false,
-    },
-    "macroexpand" => LispValue::Special {
+    }),
+    "macroexpand" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Macroexpand,
         quoted: false,
-    },
-    "try*" => LispValue::Special {
+    }),
+    "try*" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Try,
         quoted: false,
-    },
-    "catch*" => LispValue::Special {
+    }),
+    "catch*" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Catch,
         quoted: false,
-    },
-    "do" => LispValue::Special {
+    }),
+    "do" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Do,
         quoted: false,
-    },
-    "if" => LispValue::Special {
+    }),
+    "if" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::If,
         quoted: false,
-    },
-    "fn*" => LispValue::Special {
+    }),
+    "fn*" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Fn,
         quoted: false,
-    },
-    "deref" => LispValue::Special {
+    }),
+    "deref" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Deref,
         quoted: false,
-    },
-    "eval" => LispValue::Special {
+    }),
+    "eval" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Eval,
         quoted: false,
-    },
-    "apply" => LispValue::Special {
+    }),
+    "apply" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Apply,
         quoted: false,
-    },
-    "cond" => LispValue::Special {
+    }),
+    "cond" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Cond,
         quoted: false,
-    },
-    "nil" => LispValue::Nil,
-    "true" => LispValue::Bool(true),
-    "false" => LispValue::Bool(false),
+    }),
+    "nil" => LispValue::nil(),
+    "true" => LispValue::new(InnerValue::Bool(true)),
+    "false" => LispValue::new(InnerValue::Bool(false)),
 };
 
 // convenience type
 pub type Result<T> = std::result::Result<T, LispError>;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct LispFunc {
+pub(crate) struct LispFunc {
     pub(crate) args: Vec<LispSymbol>,
     pub(crate) body: LispValue,
     pub(crate) closure: LispClosure,
@@ -164,7 +164,7 @@ pub struct LispFunc {
 }
 
 #[derive(Clone, Copy)]
-pub struct LispBuiltinFunc {
+pub(crate) struct LispBuiltinFunc {
     pub name: &'static str,
     pub body: fn(Vector<LispValue>, &LispEnv) -> Result<LispValue>,
 }
@@ -222,7 +222,7 @@ impl InnerObjectValue {
 
 #[derive(Clone, Debug, Derivative)]
 #[derivative(PartialEq, Eq, Hash)]
-pub struct ObjectValue {
+pub(crate) struct ObjectValue {
     pub(crate) val: InnerObjectValue,
     #[derivative(PartialEq = "ignore", Hash = "ignore")]
     pub(crate) meta: Option<LispValue>,
@@ -235,13 +235,6 @@ impl ObjectValue {
         self.val.type_of()
     }
 
-    /// Yields a string that, if parsed, will represent the same value as this.
-    /// Equivalent to formatting with the "alternate" form using `{:#}` instead
-    /// of `{}` in the format string.
-    #[inline]
-    pub fn inspect(&self) -> String {
-        format!("{:#}", self)
-    }
     // outputs the value fully-quoted
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.val {
@@ -353,14 +346,6 @@ impl ObjectValue {
             InnerObjectValue::Keyword(s) => write!(f, ":{}", s),
         }
     }
-
-    pub fn meta(&self) -> Option<&LispValue> {
-        self.meta.as_ref()
-    }
-
-    pub fn with_meta(&mut self, meta: LispValue) {
-        self.meta = Some(meta);
-    }
 }
 
 impl fmt::Display for ObjectValue {
@@ -374,9 +359,9 @@ impl fmt::Display for ObjectValue {
     }
 }
 
-#[derive(Clone, Debug, Derivative)]
+#[derive(Clone, Debug, Default, Derivative)]
 #[derivative(PartialEq, Eq, Hash)]
-pub enum LispValue {
+pub(crate) enum InnerValue {
     Symbol {
         sym: LispSymbol,
         #[derivative(PartialEq = "ignore", Hash = "ignore")]
@@ -386,6 +371,7 @@ pub enum LispValue {
     },
     Number(OrderedFloat<f64>),
     Bool(bool),
+    #[default]
     Nil,
     Atom(ByAddress<Arc<RwLock<LispValue>>>),
     Object(Arc<ObjectValue>),
@@ -396,37 +382,7 @@ pub enum LispValue {
     },
 }
 
-impl LispValue {
-    pub fn symbol_for(s: &str) -> Self {
-        if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
-            val.clone()
-        } else {
-            Self::Symbol {
-                sym: hash(s),
-                quoted: false,
-                variadic: false,
-            }
-        }
-    }
-
-    #[inline]
-    pub fn string_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue {
-            val: InnerObjectValue::String(s),
-            meta: None,
-            quoted: false,
-        }))
-    }
-
-    #[inline]
-    pub fn keyword_for(s: String) -> Self {
-        Self::Object(Arc::new(ObjectValue {
-            val: InnerObjectValue::Keyword(s),
-            meta: None,
-            quoted: false,
-        }))
-    }
-
+impl InnerValue {
     pub fn type_of(&self) -> &'static str {
         match self {
             Self::Symbol { .. } => "symbol",
@@ -438,49 +394,100 @@ impl LispValue {
             Self::Special { .. } => "function",
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct LispValue {
+    pub(crate) val: InnerValue,
+}
+
+impl LispValue {
+    #[inline]
+    pub(crate) const fn new(val: InnerValue) -> Self {
+        LispValue { val }
+    }
+
+    #[inline]
+    pub const fn nil() -> Self {
+        Self::new(InnerValue::Nil)
+    }
+
+    pub fn symbol_for(s: &str) -> Self {
+        if let Some(val) = LISP_SPECIAL_FORMS.get(s) {
+            val.clone()
+        } else {
+            Self::new(InnerValue::Symbol {
+                sym: hash(s),
+                quoted: false,
+                variadic: false,
+            })
+        }
+    }
+
+    #[inline]
+    pub fn string_for(s: String) -> Self {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::String(s),
+            meta: None,
+            quoted: false,
+        })))
+    }
+
+    #[inline]
+    pub fn keyword_for(s: String) -> Self {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
+            val: InnerObjectValue::Keyword(s),
+            meta: None,
+            quoted: false,
+        })))
+    }
+
+    pub fn type_of(&self) -> &'static str {
+        self.val.type_of()
+    }
 
     #[inline]
     pub fn inspect(&self) -> String {
         format!("{:#}", self)
     }
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Symbol { sym, .. } => write!(f, "'\\{}", *sym),
-            Self::Object(o) => o.inspect_fmt(f),
+        match &self.val {
+            InnerValue::Symbol { sym, .. } => write!(f, "'\\{}", *sym),
+            InnerValue::Object(o) => o.inspect_fmt(f),
             _ => self.inspect_quoted_fmt(f),
         }
     }
     fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Symbol { sym, .. } => write!(f, "\\{}", *sym),
-            Self::Number(n) => write!(f, "{}", n),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Nil => write!(f, "nil"),
-            Self::Atom(x) => {
+        match &self.val {
+            InnerValue::Symbol { sym, .. } => write!(f, "\\{}", *sym),
+            InnerValue::Number(n) => write!(f, "{}", n),
+            InnerValue::Bool(b) => write!(f, "{}", b),
+            InnerValue::Nil => write!(f, "nil"),
+            InnerValue::Atom(x) => {
                 write!(f, "(atom ")?;
                 x.read().inspect_fmt(f)?;
                 write!(f, ")")
             }
-            Self::Object(o) => o.inspect_quoted_fmt(f),
-            Self::Special { form, .. } => write!(f, "{}", form),
+            InnerValue::Object(o) => o.inspect_quoted_fmt(f),
+            InnerValue::Special { form, .. } => write!(f, "{}", form),
         }
     }
 
     pub fn truthiness(&self) -> bool {
-        match self {
-            Self::Nil => false,
-            Self::Bool(b) => *b,
-            Self::Atom(a) => a.read().truthiness(),
+        match &self.val {
+            InnerValue::Nil => false,
+            InnerValue::Bool(b) => *b,
+            InnerValue::Atom(a) => a.read().truthiness(),
             _ => true,
         }
     }
     #[inline]
     pub fn is_nil(&self) -> bool {
-        matches!(self, Self::Nil)
+        matches!(self.val, InnerValue::Nil)
     }
 
     pub fn try_into_iter(self) -> Result<std::vec::IntoIter<LispValue>> {
-        if let Self::Object(o) = self {
+        if let InnerValue::Object(o) = self.val {
             if matches!(
                 o.val,
                 InnerObjectValue::List(_) | InnerObjectValue::Vector(_)
@@ -503,8 +510,8 @@ impl LispValue {
     }
 
     pub fn expect_string(&self) -> Result<&str> {
-        match self {
-            Self::Object(o) => match &o.val {
+        match &self.val {
+            InnerValue::Object(o) => match &o.val {
                 InnerObjectValue::String(s) => Ok(s),
                 _ => Err(LispError::InvalidDataType("string", self.type_of())),
             },
@@ -516,7 +523,7 @@ impl LispValue {
     // since the spec requires lists and vectors containing the same elements
     // to compare equal
     pub(crate) fn vector_to_list(self) -> Self {
-        if let Self::Object(o) = self {
+        if let InnerValue::Object(o) = self.val {
             if matches!(
                 o.val,
                 InnerObjectValue::List(_) | InnerObjectValue::Vector(_)
@@ -530,13 +537,13 @@ impl LispValue {
                     }
                     _ => unreachable!(),
                 };
-                Self::Object(Arc::new(ObjectValue {
+                Self::new(InnerValue::Object(Arc::new(ObjectValue {
                     val: InnerObjectValue::List(list),
                     meta: None,
                     quoted: false,
-                }))
+                })))
             } else {
-                Self::Object(o)
+                Self::new(InnerValue::Object(o))
             }
         } else {
             self
@@ -546,125 +553,125 @@ impl LispValue {
     #[inline]
     pub fn vector_from<T: IntoIterator<Item = Self>>(iter: T) -> Self {
         let vector = InnerObjectValue::Vector(iter.into_iter().collect());
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: vector,
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 
     pub fn is_quoted(&self) -> bool {
-        match self {
-            Self::Object(o) => o.quoted,
-            Self::Symbol { quoted, .. } => *quoted,
-            Self::Special { quoted, .. } => *quoted,
+        match &self.val {
+            InnerValue::Object(o) => o.quoted,
+            InnerValue::Symbol { quoted, .. } => *quoted,
+            InnerValue::Special { quoted, .. } => *quoted,
             _ => false,
         }
     }
 
     pub fn quote(self) -> Self {
-        match self {
-            Self::Object(mut o) => {
+        Self::new(match self.val {
+            InnerValue::Object(mut o) => {
                 Arc::make_mut(&mut o).quoted = true;
-                Self::Object(o)
+                InnerValue::Object(o)
             }
-            Self::Symbol { sym, variadic, .. } => Self::Symbol {
+            InnerValue::Symbol { sym, variadic, .. } => InnerValue::Symbol {
                 sym,
                 quoted: true,
                 variadic,
             },
-            Self::Special { form, .. } => Self::Special { form, quoted: true },
+            InnerValue::Special { form, .. } => InnerValue::Special { form, quoted: true },
             x => x,
-        }
+        })
     }
 
     pub fn unquote(self) -> Self {
-        match self {
-            Self::Object(mut o) => {
+        Self::new(match self.val {
+            InnerValue::Object(mut o) => {
                 Arc::make_mut(&mut o).quoted = false;
-                Self::Object(o)
+                InnerValue::Object(o)
             }
-            Self::Symbol { sym, variadic, .. } => Self::Symbol {
+            InnerValue::Symbol { sym, variadic, .. } => InnerValue::Symbol {
                 sym,
                 quoted: false,
                 variadic,
             },
-            Self::Special { form, .. } => Self::Special {
+            InnerValue::Special { form, .. } => InnerValue::Special {
                 form,
                 quoted: false,
             },
             x => x,
-        }
+        })
     }
 }
 
 impl From<f64> for LispValue {
     #[inline]
     fn from(item: f64) -> Self {
-        Self::Number(OrderedFloat(item))
+        Self::new(InnerValue::Number(OrderedFloat(item)))
     }
 }
 impl From<OrderedFloat<f64>> for LispValue {
     #[inline]
     fn from(item: OrderedFloat<f64>) -> Self {
-        Self::Number(item)
+        Self::new(InnerValue::Number(item))
     }
 }
 impl From<bool> for LispValue {
     #[inline]
     fn from(item: bool) -> Self {
-        Self::Bool(item)
+        Self::new(InnerValue::Bool(item))
     }
 }
 impl From<String> for LispValue {
     #[inline]
     fn from(item: String) -> Self {
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: InnerObjectValue::String(item),
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 }
 impl From<LispSymbol> for LispValue {
     #[inline]
     fn from(sym: LispSymbol) -> Self {
-        Self::Symbol {
+        Self::new(InnerValue::Symbol {
             sym,
             quoted: false,
             variadic: false,
-        }
+        })
     }
 }
 impl From<Vector<LispValue>> for LispValue {
     #[inline]
     fn from(item: Vector<LispValue>) -> Self {
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: InnerObjectValue::List(item),
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 }
 impl From<HashMap<LispValue, LispValue>> for LispValue {
     #[inline]
     fn from(item: HashMap<LispValue, LispValue>) -> Self {
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: InnerObjectValue::Map(item),
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 }
 impl FromIterator<LispValue> for LispValue {
     #[inline]
     fn from_iter<T: IntoIterator<Item = LispValue>>(iter: T) -> Self {
         let list = InnerObjectValue::List(iter.into_iter().collect());
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: list,
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 }
 
@@ -672,11 +679,11 @@ impl FromIterator<(LispValue, LispValue)> for LispValue {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (LispValue, LispValue)>>(iter: T) -> Self {
         let map = InnerObjectValue::Map(iter.into_iter().collect());
-        Self::Object(Arc::new(ObjectValue {
+        Self::new(InnerValue::Object(Arc::new(ObjectValue {
             val: map,
             meta: None,
             quoted: false,
-        }))
+        })))
     }
 }
 
@@ -684,8 +691,8 @@ impl TryFrom<LispValue> for LispSymbol {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        match item {
-            LispValue::Symbol { sym, .. } => Ok(sym),
+        match item.val {
+            InnerValue::Symbol { sym, .. } => Ok(sym),
             _ => Err(LispError::InvalidDataType("symbol", item.type_of())),
         }
     }
@@ -694,8 +701,8 @@ impl TryFrom<LispValue> for f64 {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        match item {
-            LispValue::Number(f) => Ok(f.0),
+        match item.val {
+            InnerValue::Number(f) => Ok(f.0),
             _ => Err(LispError::InvalidDataType("number", item.type_of())),
         }
     }
@@ -704,8 +711,8 @@ impl TryFrom<LispValue> for OrderedFloat<f64> {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        match item {
-            LispValue::Number(f) => Ok(f),
+        match item.val {
+            InnerValue::Number(f) => Ok(f),
             _ => Err(LispError::InvalidDataType("number", item.type_of())),
         }
     }
@@ -714,7 +721,7 @@ impl TryFrom<LispValue> for Vector<LispValue> {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        if let LispValue::Object(o) = item {
+        if let InnerValue::Object(o) = item.val {
             // `matches!` instead of a `match` or `if let` guard to avoid
             // potentially cloning a non-list object
             if matches!(o.val, InnerObjectValue::List(_)) {
@@ -733,7 +740,7 @@ impl TryFrom<LispValue> for HashMap<LispValue, LispValue> {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        if let LispValue::Object(o) = item {
+        if let InnerValue::Object(o) = item.val {
             // `matches!` explained in `TryFrom` for `Vector`
             if matches!(o.val, InnerObjectValue::Map(_)) {
                 let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
@@ -751,8 +758,8 @@ impl TryFrom<LispValue> for Arc<RwLock<LispValue>> {
     type Error = LispError;
     #[inline]
     fn try_from(item: LispValue) -> Result<Self> {
-        match item {
-            LispValue::Atom(x) => Ok(x.0),
+        match item.val {
+            InnerValue::Atom(x) => Ok(x.0),
             _ => Err(LispError::InvalidDataType("atom", item.type_of())),
         }
     }

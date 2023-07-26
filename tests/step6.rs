@@ -26,16 +26,16 @@ fn read_string() {
             1.0.into(),
             2.0.into(),
             vector![3.0.into(), 4.0.into(),].into(),
-            LispValue::Nil,
+            LispValue::nil(),
         ]
     );
-    eval_eq!("(read-string \"nil\")", LispValue::Nil);
+    eval_eq!("(read-string \"nil\")", LispValue::nil());
     eval_eq!(
         "(read-string \"(+ 2 3)\")",
         vector![LispValue::symbol_for("+"), 2.0.into(), 3.0.into(),]
     );
     eval_eq!("(read-string \"7 ;; comment\")", 7.0);
-    eval_eq!("(read-string \";; comment\")", LispValue::Nil);
+    eval_eq!("(read-string \";; comment\")", LispValue::nil());
 }
 
 #[test]

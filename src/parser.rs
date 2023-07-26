@@ -1,5 +1,5 @@
 use crate::env::{hash, LispSymbol};
-use crate::util::LispSpecialForm;
+use crate::util::{InnerValue, LispSpecialForm};
 use crate::{LispError, LispValue, Result};
 use im::{vector, Vector};
 use nom::{
@@ -11,7 +11,6 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated, tuple},
     Finish, IResult,
 };
-use ordered_float::OrderedFloat;
 use std::collections::VecDeque;
 
 // numbers can't start an identifier, but they're valid in one
@@ -358,10 +357,10 @@ macro_rules! token_prefix {
         )
         .map(|inner| {
             vector![
-                LispValue::Special {
+                LispValue::new(InnerValue::Special {
                     form: LispSpecialForm::$name,
                     quoted: false
-                },
+                }),
                 inner,
             ]
             .into_iter()
@@ -471,7 +470,7 @@ impl LispParser {
             return None;
         };
         Some(match token {
-            LispTokenType::Comment => Self::read_form(tokens).unwrap_or(Ok(LispValue::Nil)),
+            LispTokenType::Comment => Self::read_form(tokens).unwrap_or(Ok(LispValue::nil())),
             LispTokenType::LParen => Self::read_list(tokens),
             LispTokenType::RParen => Err(LispError::SyntaxError(row, col)),
             LispTokenType::LBracket => Self::read_vec(tokens),
@@ -485,15 +484,18 @@ impl LispParser {
             LispTokenType::TildeAtSign => token_prefix!("~@", SpliceUnquote, tokens),
             LispTokenType::Ampersand => {
                 match some_or_err(Self::read_form(tokens), LispError::MissingToken("&")) {
-                    Ok(LispValue::Symbol {
-                        sym,
-                        quoted,
-                        variadic: false,
-                    }) => Ok(LispValue::Symbol {
+                    Ok(LispValue {
+                        val:
+                            InnerValue::Symbol {
+                                sym,
+                                quoted,
+                                variadic: false,
+                            },
+                    }) => Ok(LispValue::new(InnerValue::Symbol {
                         sym,
                         quoted,
                         variadic: true,
-                    }),
+                    })),
                     Ok(_) => Err(LispError::SyntaxError(row, col)),
                     Err(x) => Err(x),
                 }
@@ -578,26 +580,26 @@ impl LispParser {
     }
     fn read_atom(token: LispTokenType) -> LispValue {
         match token {
-            LispTokenType::Number(num) => LispValue::Number(OrderedFloat(num)),
+            LispTokenType::Number(num) => num.into(),
             LispTokenType::String(s) => LispValue::string_for(s),
-            LispTokenType::Symbol(sym) => LispValue::Symbol {
+            LispTokenType::Symbol(sym) => LispValue::new(InnerValue::Symbol {
                 sym: hash(&sym),
                 variadic: false,
                 quoted: false,
-            },
-            LispTokenType::HashedSymbol(sym) => LispValue::Symbol {
+            }),
+            LispTokenType::HashedSymbol(sym) => LispValue::new(InnerValue::Symbol {
                 sym,
                 variadic: false,
                 quoted: false,
-            },
+            }),
             LispTokenType::Keyword(kw) => LispValue::keyword_for(kw),
-            LispTokenType::True => LispValue::Bool(true),
-            LispTokenType::False => LispValue::Bool(false),
-            LispTokenType::Special(form) => LispValue::Special {
+            LispTokenType::True => true.into(),
+            LispTokenType::False => false.into(),
+            LispTokenType::Special(form) => LispValue::new(InnerValue::Special {
                 form,
                 quoted: false,
-            },
-            _ => LispValue::Nil,
+            }),
+            _ => LispValue::nil(),
         }
     }
 }
@@ -624,6 +626,6 @@ impl Iterator for LispParser {
 impl std::str::FromStr for LispValue {
     type Err = LispError;
     fn from_str(s: &str) -> Result<Self> {
-        LispParser::parse(s).unwrap_or(Ok(LispValue::Nil))
+        LispParser::parse(s).unwrap_or(Ok(LispValue::nil()))
     }
 }

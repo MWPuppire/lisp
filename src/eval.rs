@@ -1,6 +1,6 @@
 use crate::env::{LispEnv, LispSymbol};
 use crate::specials::special_form;
-use crate::util::{InnerObjectValue, LispFunc, ObjectValue};
+use crate::util::{InnerObjectValue, InnerValue, LispFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use im::Vector;
 use itertools::Itertools;
@@ -17,15 +17,18 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     if val.is_quoted() {
         return false;
     }
-    match val {
-        LispValue::Object(o) => match &o.val {
+    match &val.val {
+        InnerValue::Object(o) => match &o.val {
             InnerObjectValue::List(l) => {
                 if l.is_empty() {
                     false
                 } else {
-                    match &l[0] {
-                        LispValue::Symbol { sym, .. } => {
-                            if let Ok(LispValue::Object(o)) = lookup_variable(*sym, env) {
+                    match &l[0].val {
+                        InnerValue::Symbol { sym, .. } => {
+                            if let Ok(LispValue {
+                                val: InnerValue::Object(o),
+                            }) = lookup_variable(*sym, env)
+                            {
                                 matches!(o.val, InnerObjectValue::Macro(_),)
                             } else {
                                 false
@@ -41,16 +44,14 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
     }
 }
 
-pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
+fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
     if is_macro_call(&val, env) {
         let mut list = val.try_into_iter()?;
         let Some(head) = list.next() else { unreachable!() };
-        let LispValue::Symbol { sym, .. } = head else { unreachable!() };
+        let InnerValue::Symbol { sym, .. } = head.val else { unreachable!() };
         let var = lookup_variable(sym, env)?;
-        let LispValue::Object(obj) = var else { unreachable!() };
+        let InnerValue::Object(obj) = var.val else { unreachable!() };
         let InnerObjectValue::Macro(f) = &obj.val else { unreachable!() };
-        // some code duplication from `expand_fn`, but I didn't want `is_macro`
-        // as a parameter for `expand_fn` to be in public API
         if f.variadic && list.len() >= (f.args.len() - 1) {
             let mut args: Vector<LispValue> = list.map(|x| expand_macros(x, env)).try_collect()?;
             let variadic_idx = f.args.len() - 1;
@@ -76,7 +77,7 @@ pub fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
 // doesn't actually execute the function with its arguments (to allow TCO), just
 // replaces the function with its body after creating the closure with all
 // arguments properly applied
-pub fn expand_fn(
+fn expand_fn(
     f: &LispFunc,
     args: Vector<LispValue>,
     env: &LispEnv,
@@ -101,9 +102,9 @@ pub fn expand_fn(
 }
 
 fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
-    Ok(match ast {
-        LispValue::Symbol { sym, .. } => lookup_variable(sym, env)?,
-        LispValue::Object(o) => LispValue::Object(Arc::new(ObjectValue {
+    Ok(match ast.val {
+        InnerValue::Symbol { sym, .. } => lookup_variable(sym, env)?,
+        InnerValue::Object(o) => LispValue::new(InnerValue::Object(Arc::new(ObjectValue {
             val: match &o.val {
                 InnerObjectValue::Vector(l) => {
                     InnerObjectValue::Vector(l.iter().cloned().map(|x| eval(x, env)).try_collect()?)
@@ -119,8 +120,8 @@ fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
             },
             meta: None,
             quoted: false,
-        })),
-        x => x,
+        }))),
+        x => LispValue::new(x),
     })
 }
 
@@ -132,10 +133,10 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
         if ast.is_quoted() {
             return Ok(ast.unquote());
         }
-        if !matches!(ast, LispValue::Object(_)) {
+        if !matches!(ast.val, InnerValue::Object(_)) {
             break eval_ast(ast, &env);
         }
-        let LispValue::Object(ref arc) = ast else { unreachable!() };
+        let InnerValue::Object(ref arc) = ast.val else { unreachable!() };
         if !matches!(arc.val, InnerObjectValue::List(_)) {
             break eval_ast(ast, &env);
         }
@@ -144,11 +145,11 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
             // just return an empty list without evaluating anything
             break Ok(list.into_iter().collect());
         };
-        match eval(head.unquote(), &env)? {
-            LispValue::Special { form, .. } => {
+        match eval(head.unquote(), &env)?.val {
+            InnerValue::Special { form, .. } => {
                 ast = special_form!(form, list, eval, env);
             }
-            LispValue::Object(o) => match &o.val {
+            InnerValue::Object(o) => match &o.val {
                 InnerObjectValue::BuiltinFunc(f) => break (f.body)(list, &env),
                 InnerObjectValue::Func(f) => {
                     let (new_ast, new_env) = expand_fn(f, list, &env)?;

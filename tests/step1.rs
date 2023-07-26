@@ -26,7 +26,7 @@ fn read_lists() {
     );
     assert_eq!(parse("()"), vector![].into());
     assert_eq!(parse("( )"), vector![].into());
-    assert_eq!(parse("(nil)"), vector![LispValue::Nil,].into());
+    assert_eq!(parse("(nil)"), vector![LispValue::nil(),].into());
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn ignore_commas() {
 
 #[test]
 fn builtin_values() {
-    assert_eq!(parse("nil"), LispValue::Nil);
+    assert_eq!(parse("nil"), LispValue::nil());
     assert_eq!(parse("true"), true.into());
     assert_eq!(parse("false"), false.into());
 }
