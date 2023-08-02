@@ -17,7 +17,7 @@ Additional functions in the standard library:
 
 Other differences:
 
-* Most printing functions (and the REPL) use `inspect` instead of directly writing strings.
+* The REPL uses `inspect` instead of directly writing strings.
 * `+`, `-`, and `*` accept multiple arguments (mal specifies only binary definitions for these).
 
 ## Known issues

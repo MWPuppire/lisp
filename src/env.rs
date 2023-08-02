@@ -201,7 +201,7 @@ impl LispEnv {
                         let (key, val) = item.pair();
                         match &val.val {
                             InnerValue::Atom(x) => {
-                                if let Some(&sym) = atoms.get(&x) {
+                                if let Some(&sym) = atoms.get(x) {
                                     format!("(def! \\{} \\{})", key, sym)
                                 } else {
                                     atoms.insert(x.clone(), *key);
