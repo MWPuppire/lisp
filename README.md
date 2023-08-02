@@ -13,6 +13,7 @@ Additional functions in the standard library:
 * `//` is the integer division function, dividing and truncating the result.
 * `typeof` returns a string representation of the value's type (e.g. `"string"` or `"list"`).
 * `inspect` returns a string that, if `eval`ed, should return a structurally equal value (which may not compare equal, since atoms, functions, and macros compare by address).
+* `dump-env` returns a string that, if `eval`ed, would create an equivalent environment to the current one by redefining every variable to its current value.
 
 Other differences:
 

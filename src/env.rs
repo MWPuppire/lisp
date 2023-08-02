@@ -4,6 +4,7 @@ use crate::LispValue;
 use by_address::ByAddress;
 use dashmap::DashMap;
 use im::{HashMap, Vector};
+use itertools::Itertools;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
 
@@ -187,6 +188,43 @@ impl LispEnv {
         std::iter::once(self.this.upgrade().unwrap()).chain(NestedEnvIter {
             current: self.enclosing.clone(),
         })
+    }
+
+    pub fn dump(&self) -> String {
+        let mut atoms: HashMap<ByAddress<Arc<parking_lot::RwLock<LispValue>>>, LispSymbol> =
+            HashMap::new();
+        self.nested_envs()
+            .flat_map(|env| {
+                env.data
+                    .iter()
+                    .map(|item| {
+                        let (key, val) = item.pair();
+                        match &val.val {
+                            InnerValue::Atom(x) => {
+                                if let Some(&sym) = atoms.get(&x) {
+                                    format!("(def! \\{} \\{})", key, sym)
+                                } else {
+                                    atoms.insert(x.clone(), *key);
+                                    format!("(def! \\{} {})", key, val)
+                                }
+                            }
+                            InnerValue::Object(o) => match &o.val {
+                                InnerObjectValue::Macro(f) => {
+                                    format!(
+                                        "(defmacro! \\{} (fn* ({}) ({})))",
+                                        key,
+                                        f.args.iter().map(|x| format!("\\{}", x)).join(" "),
+                                        f.body
+                                    )
+                                }
+                                _ => format!("(def! \\{} {:#})", key, o),
+                            },
+                            _ => format!("(def! \\{} {:#})", key, val),
+                        }
+                    })
+                    .collect::<Vec<String>>()
+            })
+            .join(" ")
     }
 }
 

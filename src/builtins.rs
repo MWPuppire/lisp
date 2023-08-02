@@ -39,6 +39,14 @@ fn eval_list_to_numbers<I: IntoIterator<Item = LispValue>>(
     args.into_iter().map(|x| eval(x, env)?.try_into()).collect()
 }
 
+fn printable_value(val: LispValue) -> String {
+    if let Ok(s) = val.expect_string() {
+        s.to_owned()
+    } else {
+        val.to_string()
+    }
+}
+
 // note: differs from Mal spec by allowing multiple parameters
 fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
@@ -105,10 +113,10 @@ fn lisp_prn(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if let Some(last) = args.pop_back() {
         for val in args.into_iter() {
             let val = eval(val, env)?;
-            print!("{} ", val.inspect());
+            print!("{} ", printable_value(val));
         }
         let last_val = eval(last, env)?;
-        println!("{}", last_val.inspect());
+        println!("{}", printable_value(last_val));
     } else {
         println!();
     }
@@ -256,9 +264,8 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 #[cfg(feature = "io-stdlib")]
 fn lisp_readline(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if !args.is_empty() {
-        let s_owner = eval_head!(args, env)?;
-        let s = s_owner.expect_string()?;
-        print!("{}", s);
+        let s = eval_head!(args, env)?;
+        print!("{}", printable_value(s));
         std::io::stdout().flush()?;
     }
     let mut buffer = String::new();
@@ -291,11 +298,7 @@ fn lisp_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let mut buffer = String::new();
     for arg in args.into_iter() {
         let x = eval(arg, env)?;
-        if let Ok(s) = x.expect_string() {
-            buffer.push_str(s);
-        } else {
-            buffer.push_str(&x.to_string());
-        }
+        buffer.push_str(&printable_value(x));
     }
     Ok(LispValue::string_for(buffer))
 }
@@ -680,9 +683,9 @@ fn lisp_println(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     if let Some(last) = args.pop_back() {
         for val in args.into_iter() {
             let val = eval(val, env)?;
-            print!("{} ", val);
+            print!("{} ", printable_value(val));
         }
-        println!("{}", eval(last, env)?);
+        println!("{}", printable_value(eval(last, env)?));
     } else {
         println!();
     }
@@ -849,6 +852,11 @@ fn lisp_with_meta(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValu
     Ok(LispValue::new(InnerValue::Object(o)))
 }
 
+// new function (not in Mal)
+fn lisp_dump_env(_args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    Ok(LispValue::string_for(env.dump()))
+}
+
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
         hashmap! {
@@ -930,6 +938,7 @@ lazy_static! {
             "conj" => lisp_conj,
             "meta" => lisp_meta,
             "with-meta" => lisp_with_meta,
+            "dump-env" => lisp_dump_env,
         );
 
         funcs.insert(
