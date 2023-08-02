@@ -266,6 +266,33 @@ macro_rules! special_form {
                     quoted: false,
                 }))));
             }
+            // copy-pasted from `Fn`, modified to return a `Macro`
+            $crate::util::LispSpecialForm::FnMacro => {
+                $crate::util::assert_or_err!(
+                    $list.len() == 2,
+                    $crate::LispError::IncorrectArguments(2, $list.len())
+                );
+                let args_list: Vec<$crate::LispValue> =
+                    $list.pop_front().unwrap().try_into_iter()?.collect();
+                let variadic = args_list
+                    .last()
+                    .map(|last| matches!(last.val, InnerValue::Symbol { variadic: true, .. }))
+                    .unwrap_or(false);
+                let args = args_list.into_iter().map(|x| x.try_into()).try_collect()?;
+                let body = $list.pop_front().unwrap();
+                let closure = $env.make_closure();
+                let inner = $crate::util::InnerObjectValue::Macro($crate::util::LispFunc {
+                    args,
+                    body,
+                    closure,
+                    variadic,
+                });
+                break Ok($crate::LispValue::new($crate::util::InnerValue::Object(std::sync::Arc::new($crate::util::ObjectValue {
+                    val: inner,
+                    meta: None,
+                    quoted: false,
+                }))));
+            }
             $crate::util::LispSpecialForm::Deref => {
                 if let Some(atom) = $list.pop_front() {
                     let atom: std::sync::Arc<parking_lot::RwLock<$crate::LispValue>> = $eval(atom, &$env)?.try_into()?;

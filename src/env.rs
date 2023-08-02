@@ -64,6 +64,9 @@ impl LispClosure {
     }
 }
 
+// used with dumping environments
+type AtomMap = HashMap<ByAddress<Arc<parking_lot::RwLock<LispValue>>>, LispSymbol>;
+
 impl LispEnv {
     #[cfg(feature = "io-stdlib")]
     pub fn new_stdlib() -> Arc<Self> {
@@ -190,41 +193,47 @@ impl LispEnv {
         })
     }
 
-    pub fn dump(&self) -> String {
-        let mut atoms: HashMap<ByAddress<Arc<parking_lot::RwLock<LispValue>>>, LispSymbol> =
-            HashMap::new();
-        self.nested_envs()
-            .flat_map(|env| {
-                env.data
-                    .iter()
-                    .map(|item| {
-                        let (key, val) = item.pair();
-                        match &val.val {
-                            InnerValue::Atom(x) => {
-                                if let Some(&sym) = atoms.get(x) {
-                                    format!("(def! \\{} \\{})", key, sym)
-                                } else {
-                                    atoms.insert(x.clone(), *key);
-                                    format!("(def! \\{} {})", key, val)
-                                }
-                            }
-                            InnerValue::Object(o) => match &o.val {
-                                InnerObjectValue::Macro(f) => {
-                                    format!(
-                                        "(defmacro! \\{} (fn* ({}) ({})))",
-                                        key,
-                                        f.args.iter().map(|x| format!("\\{}", x)).join(" "),
-                                        f.body
-                                    )
-                                }
-                                _ => format!("(def! \\{} {:#})", key, o),
-                            },
-                            _ => format!("(def! \\{} {:#})", key, val),
+    fn dump_inner(&self, def: &str, defclose: &str, atoms: &mut AtomMap) -> String {
+        self.data
+            .iter()
+            .map(|item| {
+                let (key, val) = item.pair();
+                match &val.val {
+                    InnerValue::Atom(x) => {
+                        if let Some(&sym) = atoms.get(x) {
+                            format!("{}\\{} \\{}{}", def, key, sym, defclose)
+                        } else {
+                            atoms.insert(x.clone(), *key);
+                            format!("{}\\{} {}{}", def, key, val, defclose)
                         }
-                    })
-                    .collect::<Vec<String>>()
+                    }
+                    InnerValue::Object(o) => match &o.val {
+                        InnerObjectValue::Func(f) | InnerObjectValue::Macro(f) => {
+                            format!(
+                                "{}\\{} (let* ({}) {:#}){}",
+                                def,
+                                key,
+                                f.closure.0.dump_inner("", "", atoms),
+                                o,
+                                defclose
+                            )
+                        }
+                        _ => format!("{}\\{} {:#}{}", def, key, o, defclose),
+                    },
+                    _ => format!("{}\\{} {:#}{}", def, key, val, defclose),
+                }
             })
             .join(" ")
+    }
+
+    #[inline]
+    pub fn dump(&self) -> String {
+        // Special case atoms, since they aren't referentially transparent.
+        // Not doing similar for functions/macros will only affect comparison
+        // operators, since functions/macros can't be modified after creation.
+        // Most other values (should) have referential transparency.
+        let mut atoms: AtomMap = HashMap::new();
+        self.dump_inner("(def! ", ")", &mut atoms)
     }
 }
 

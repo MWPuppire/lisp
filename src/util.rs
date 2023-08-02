@@ -43,6 +43,12 @@ pub enum LispSpecialForm {
     Do,
     If,
     Fn,
+    // `fn-macro*` is not in Mal but isn't documented in the README, since its
+    // practical usage is highly limited and it could be confusing; macros can't
+    // do anything unless they're assigned to a variable, so `defmacro!` is
+    // practically-speaking the only way to create a macro, but `dump-env` and
+    // `inspect` benefit from having a function that can produce macro-types.
+    FnMacro,
     Deref,
     Eval,
     Apply,
@@ -65,6 +71,7 @@ impl fmt::Display for LispSpecialForm {
             Self::Do => write!(f, "do"),
             Self::If => write!(f, "if"),
             Self::Fn => write!(f, "fn*"),
+            Self::FnMacro => write!(f, "fn-macro*"),
             Self::Deref => write!(f, "deref"),
             Self::Eval => write!(f, "eval"),
             Self::Apply => write!(f, "apply"),
@@ -129,6 +136,10 @@ static LISP_SPECIAL_FORMS: phf::Map<&'static str, LispValue> = phf_map! {
     }),
     "fn*" => LispValue::new(InnerValue::Special {
         form: LispSpecialForm::Fn,
+        quoted: false,
+    }),
+    "fn-macro*" => LispValue::new(InnerValue::Special {
+        form: LispSpecialForm::FnMacro,
         quoted: false,
     }),
     "deref" => LispValue::new(InnerValue::Special {
@@ -303,13 +314,10 @@ impl ObjectValue {
                 if let Some(last) = func.args.last() {
                     write!(f, "\\{}", *last)?;
                 }
-                write!(f, ") ({})", func.body)
+                write!(f, ") {})", func.body)
             }
             InnerObjectValue::Macro(func) => {
-                // because macros have to be defined to a variable before they
-                // can be used, this is the only form that cannot be inspected
-                // properly (and hence uses "#<macro-fn*>")
-                write!(f, "(#<macro-fn*> (")?;
+                write!(f, "(fn-macro* (")?;
                 func.args
                     .iter()
                     .take(func.args.len().saturating_sub(1))
@@ -317,7 +325,7 @@ impl ObjectValue {
                 if let Some(last) = func.args.last() {
                     write!(f, "\\{}", *last)?;
                 }
-                write!(f, ") ({})", func.body)
+                write!(f, ") {})", func.body)
             }
             InnerObjectValue::Map(m) => {
                 // code explained above, in `inspect_fmt`
