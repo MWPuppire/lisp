@@ -14,6 +14,8 @@ Additional functions in the standard library:
 * `typeof` returns a string representation of the value's type (e.g. `"string"` or `"list"`).
 * `inspect` returns a string that, if `eval`ed, should return a structurally equal value (which may not compare equal, since atoms, functions, and macros compare by address).
 * `dump-env` returns a string that, if `eval`ed, would create an equivalent environment to the current one by redefining every variable to its current value.
+* `pairs` takes a hash-map and returns a list of the map's key-value pairs (as lists).
+* `join` takes a list of strings and a string separator and returns each string in the list joined by the separator.
 
 Other differences:
 

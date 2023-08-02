@@ -717,6 +717,24 @@ impl TryFrom<LispValue> for OrderedFloat<f64> {
         }
     }
 }
+impl TryFrom<LispValue> for String {
+    type Error = LispError;
+    #[inline]
+    fn try_from(item: LispValue) -> Result<Self> {
+        if let InnerValue::Object(o) = item.val {
+            // `matches!` explained in `TryFrom` for `Vector`
+            if matches!(o.val, InnerObjectValue::String(_)) {
+                let cloned = Arc::try_unwrap(o).unwrap_or_else(|arc| (*arc).clone());
+                let InnerObjectValue::String(l) = cloned.val else { unreachable!() };
+                Ok(l)
+            } else {
+                Err(LispError::InvalidDataType("string", o.type_of()))
+            }
+        } else {
+            Err(LispError::InvalidDataType("string", item.type_of()))
+        }
+    }
+}
 impl TryFrom<LispValue> for Vector<LispValue> {
     type Error = LispError;
     #[inline]

@@ -92,9 +92,26 @@ fn hashmap_functions() {
     eval_eq!("(keys {})", vector![]);
 
     let tested = eval!(r#"(keys {"1" 1 "2" 2})"#);
-    // order of hash-map keys isn't guaranteed, so either is acceptable
+    // order of hash-map keys isn't specified, so either is acceptable
     assert!(
         tested == vector!["1".to_owned().into(), "2".to_owned().into(),].into()
             || tested == vector!["2".to_owned().into(), "1".to_owned().into(),].into()
+    );
+
+    let tested = eval!(r#"(pairs {"1" 1 "2" 2})"#);
+    // as above, order isn't specified
+    assert!(
+        tested
+            == vector![
+                vector!["1".to_owned().into(), 1.0.into()].into(),
+                vector!["2".to_owned().into(), 2.0.into()].into()
+            ]
+            .into()
+            || tested
+                == vector![
+                    vector!["2".to_owned().into(), 2.0.into()].into(),
+                    vector!["1".to_owned().into(), 1.0.into()].into()
+                ]
+                .into()
     );
 }

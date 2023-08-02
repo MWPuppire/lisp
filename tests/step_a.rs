@@ -73,3 +73,15 @@ fn seq() {
         vector![2.0.into(), 3.0.into(), 4.0.into()]
     );
 }
+
+#[test]
+fn join() {
+    eval_eq!(
+        r#"(join '("hi" "there" "bob") " ")"#,
+        "hi there bob".to_owned()
+    );
+    eval_eq!(
+        r#"(join (seq "123456789") "-")"#,
+        "1-2-3-4-5-6-7-8-9".to_owned()
+    );
+}

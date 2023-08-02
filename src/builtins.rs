@@ -857,6 +857,34 @@ fn lisp_dump_env(_args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(LispValue::string_for(env.dump()))
 }
 
+// new function (not in Mal)
+fn lisp_pairs(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let map: HashMap<LispValue, LispValue> = eval_head!(args, env)?.try_into()?;
+    let pairs = map
+        .iter()
+        .map(|x| LispValue::from(vector![x.0.clone(), x.1.clone()]));
+    Ok(pairs.collect())
+}
+
+// new function (not in Mal)
+fn lisp_join(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 2,
+        LispError::IncorrectArguments(2, args.len())
+    );
+    let iter = eval_head!(args, env)?.try_into_iter()?;
+    let join_owner = eval_head!(args, env)?;
+    let join_with = join_owner.expect_string()?;
+    Ok(LispValue::string_for(iter.map(String::try_from).fold_ok(
+        "".to_owned(),
+        |acc, s| if acc.is_empty() { acc } else { acc + join_with } + &s,
+    )?))
+}
+
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
         hashmap! {
@@ -939,6 +967,8 @@ lazy_static! {
             "meta" => lisp_meta,
             "with-meta" => lisp_with_meta,
             "dump-env" => lisp_dump_env,
+            "pairs" => lisp_pairs,
+            "join" => lisp_join,
         );
 
         funcs.insert(
