@@ -1,6 +1,6 @@
 # Lisp
 
-This is my attempt at writing a LISP interpreter, following [mal](https://github.com/kanaka/mal). I've deviated from the spec in a few places (intentionally; there are also bugs causing more differences, of course). Some functions exist in my stdlib that aren't in Mal, and some functions behave differently.
+This is my attempt at writing a LISP interpreter, following [mal](https://github.com/kanaka/mal). I've deviated from the spec in a few places; some functions exist in my stdlib that aren't in Mal, and some functions behave differently.
 
 ## Usage
 
