@@ -217,7 +217,7 @@ impl LispEnv {
                     }
                     InnerValue::Object(o) => match &o.val {
                         InnerObjectValue::Func(f) | InnerObjectValue::Macro(f) => {
-                            if Weak::ptr_eq(&Arc::downgrade(&f.closure.0.0), &self.this) {
+                            if Weak::ptr_eq(&Arc::downgrade(&f.closure.0 .0), &self.this) {
                                 format!("{}{} {}{}", def, key, o, defclose)
                             } else {
                                 format!(

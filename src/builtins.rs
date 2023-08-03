@@ -156,7 +156,15 @@ fn lisp_listq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .into())
 }
 
-// equiv. to `(fn* (ls) (= (count ls) 0))` or `(fn* (ls) (= ls ()))`
+/* equiv. to `(fn* (ls) (= (count ls) 0))` or
+    (fn* (ls) (
+        or
+            (= ls ())
+            (= ls "")
+            (= ls [])
+            (nil? ls)
+    ))
+*/
 fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -165,6 +173,8 @@ fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     let val = eval_head!(args, env)?;
     if val.is_nil() {
         Ok(true.into())
+    } else if let Ok(s) = val.expect_string() {
+        Ok(s.is_empty().into())
     } else {
         let list = val.try_into_iter()?;
         // `is_empty()` is unstable for iterators
@@ -181,6 +191,8 @@ fn lisp_count(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let val = eval_head!(args, env)?;
     if val.is_nil() {
         Ok(0.0.into())
+    } else if let Ok(s) = val.expect_string() {
+        Ok((s.len() as f64).into())
     } else {
         let list = val.try_into_iter()?;
         Ok((list.len() as f64).into())
@@ -261,7 +273,7 @@ fn lisp_atomq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(matches!(val.val, InnerValue::Atom(_)).into())
 }
 
-// equiv. to `(fn* (atom val) (swap atom (fn* () val)))`
+// equiv. to `(fn* (atom val) (swap! atom (fn* () val)))`
 fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -273,6 +285,7 @@ fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(val)
 }
 
+// equiv. to `(fn* (atom fn &args) (reset! atom (apply fn @atom args)))`
 fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
     let atom: Arc<RwLock<LispValue>> = eval_head!(args, env)?.try_into()?;
@@ -373,7 +386,8 @@ fn lisp_typeof(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     Ok(LispValue::string_for(x.type_of().to_owned()))
 }
 
-// equiv. to `(fn* (ls item) (concat '(item) ls))`
+// equiv. to `(fn* (ls item) (apply list item ls))` or
+// `(fn* (ls item) (concat '(item) ls))`
 fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -411,10 +425,18 @@ fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
         args.len() == 2,
         LispError::IncorrectArguments(2, args.len())
     );
-    let mut iter = eval_head!(args, env)?.try_into_iter()?;
+    let list = eval_head!(args, env)?;
     let floating: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
     let idx = floating.into_inner() as usize;
-    iter.nth(idx).ok_or(LispError::IndexOutOfRange(idx))
+    if let Ok(s) = list.expect_string() {
+        s.chars()
+            .nth(idx)
+            .map(|ch| LispValue::string_for(ch.into()))
+            .ok_or(LispError::IndexOutOfRange(idx))
+    } else {
+        let mut iter = list.try_into_iter()?;
+        iter.nth(idx).ok_or(LispError::IndexOutOfRange(idx))
+    }
 }
 
 // additionally aliased to `head`, which is not in Mal
@@ -428,11 +450,19 @@ fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::nil());
     }
-    let mut list = arg.try_into_iter()?;
-    if let Some(item) = list.next() {
-        Ok(item)
+    if let Ok(s) = arg.expect_string() {
+        if let Some(ch) = s.chars().next() {
+            Ok(LispValue::string_for(ch.into()))
+        } else {
+            Ok(LispValue::nil())
+        }
     } else {
-        Ok(LispValue::nil())
+        let mut list = arg.try_into_iter()?;
+        if let Some(item) = list.next() {
+            Ok(item)
+        } else {
+            Ok(LispValue::nil())
+        }
     }
 }
 
@@ -446,10 +476,16 @@ fn lisp_rest(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(vector![].into());
     }
-    let mut iter = arg.try_into_iter()?;
-    // drop the first item
-    let _ = iter.next();
-    Ok(iter.collect())
+    if let Ok(s) = arg.expect_string() {
+        let mut chars = s.chars();
+        let _ = chars.next();
+        Ok(LispValue::string_for(chars.as_str().to_owned()))
+    } else {
+        let mut iter = arg.try_into_iter()?;
+        // drop the first item
+        let _ = iter.next();
+        Ok(iter.collect())
+    }
 }
 
 // equiv. to `(fn* (x) (= (typeof x) "macro"))`
@@ -592,6 +628,13 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue
     .into())
 }
 
+/* equiv. to `(fn* (&pairs) (apply assoc {} (flatten pairs)))` or
+    (fn* (&pairs) (
+        foldr (fn* (table pair) (
+            assoc table (first pair) (first (rest pair))
+        )) {} pairs
+    ))
+*/
 fn lisp_hashmap(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(args.len() & 1 == 0, LispError::MissingBinding);
     args.into_iter()
@@ -779,6 +822,7 @@ fn lisp_numberq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     Ok(matches!(arg.val, InnerValue::Number(_)).into())
 }
 
+// equiv. to `(fn* (ls) (apply vector ls))`
 fn lisp_vec(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -808,6 +852,15 @@ cfg_if::cfg_if! {
     }
 }
 
+/* equiv to:
+    (fn* (ls) (
+        if (empty? ls)
+            nil
+            (cons (first ls) (let* (tmp (seq (rest ls)))
+                (if (nil? tmp) () tmp)
+            ))
+    ))
+*/
 fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1033,11 +1086,19 @@ fn lisp_last(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if arg.is_nil() {
         return Ok(LispValue::nil());
     }
-    let list = arg.try_into_iter()?;
-    if let Some(item) = list.last() {
-        Ok(item)
+    if let Ok(s) = arg.expect_string() {
+        if let Some(ch) = s.chars().last() {
+            Ok(LispValue::string_for(ch.into()))
+        } else {
+            Ok(LispValue::nil())
+        }
     } else {
-        Ok(LispValue::nil())
+        let list = arg.try_into_iter()?;
+        if let Some(item) = list.last() {
+            Ok(item)
+        } else {
+            Ok(LispValue::nil())
+        }
     }
 }
 
@@ -1086,6 +1147,33 @@ fn lisp_rev(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
     let list = arg.try_into_iter()?;
     Ok(list.rev().collect())
+}
+
+// new function (not in Mal)
+/* equiv. to
+    (fn* (ls) (
+        foldr (fn* (acc ls) (
+            concat acc (if (sequential? ls) ls (list ls))
+        )) () ls
+    ))
+*/
+fn lisp_flatten(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    if arg.is_nil() {
+        return Ok(LispValue::nil());
+    }
+    let list = arg.try_into_iter()?;
+    Ok(list
+        .flat_map(|arg| {
+            arg.clone()
+                .try_into_iter()
+                .unwrap_or_else(|_| vec![arg].into_iter())
+        })
+        .collect())
 }
 
 /* special form equivalencies:
@@ -1184,6 +1272,7 @@ lazy_static! {
             "last" => lisp_last,
             "foldr" => lisp_foldr,
             "rev" => lisp_rev,
+            "flatten" => lisp_flatten,
         );
 
         funcs.insert(
