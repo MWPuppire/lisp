@@ -5,15 +5,18 @@ use by_address::ByAddress;
 use dashmap::DashMap;
 use im::{HashMap, Vector};
 use itertools::Itertools;
-use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
 
-pub type LispSymbol = u32;
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LispSymbol(String);
 #[inline]
-pub(crate) fn hash(s: &str) -> LispSymbol {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish() as LispSymbol
+pub(crate) fn hash(s: impl Into<String>) -> LispSymbol {
+    LispSymbol(s.into())
+}
+impl std::fmt::Display for LispSymbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -117,16 +120,16 @@ impl LispEnv {
         self.this.upgrade().unwrap()
     }
 
-    pub fn get(&self, sym: LispSymbol) -> Option<LispValue> {
-        if let Some(val) = self.data.get(&sym) {
+    pub fn get(&self, sym: &LispSymbol) -> Option<LispValue> {
+        if let Some(val) = self.data.get(sym) {
             return Some(val.clone());
         }
         for env in self.nested_envs().skip(1) {
-            if let Some(val) = env.data.get(&sym) {
+            if let Some(val) = env.data.get(sym) {
                 return Some(val.clone());
             }
         }
-        self.stdlib.get(&sym).map(LispValue::clone)
+        self.stdlib.get(sym).map(LispValue::clone)
     }
     #[inline]
     pub fn set(&self, sym: LispSymbol, val: LispValue) {
@@ -135,7 +138,7 @@ impl LispEnv {
     #[inline]
     pub fn get_by_str(&self, key: &str) -> Option<LispValue> {
         let sym = hash(key);
-        self.get(sym)
+        self.get(&sym)
     }
     #[inline]
     pub fn set_by_str(&self, key: &str, val: LispValue) {
@@ -161,7 +164,7 @@ impl LispEnv {
         let mut data = other.data.clone();
         data.extend(self.data.iter().map(|x| {
             let (key, val) = x.pair();
-            (*key, val.clone())
+            (key.clone(), val.clone())
         }));
         let inner = LispEnv {
             data,
@@ -179,11 +182,11 @@ impl LispEnv {
                 // goes out of scope right away
                 env.data
                     .iter()
-                    .map(|x| *x.key())
+                    .map(|x| x.key().clone())
                     .collect::<Vec<_>>()
                     .into_iter()
             })
-            .chain(self.stdlib.keys().copied())
+            .chain(self.stdlib.keys().cloned())
     }
 
     #[inline]
@@ -200,17 +203,17 @@ impl LispEnv {
                 let (key, val) = item.pair();
                 match &val.val {
                     InnerValue::Atom(x) => {
-                        if let Some(&sym) = atoms.get(x) {
-                            format!("{}\\{} \\{}{}", def, key, sym, defclose)
+                        if let Some(sym) = atoms.get(x) {
+                            format!("{}{} {}{}", def, key, sym, defclose)
                         } else {
-                            atoms.insert(x.clone(), *key);
-                            format!("{}\\{} {}{}", def, key, val, defclose)
+                            atoms.insert(x.clone(), key.clone());
+                            format!("{}{} {}{}", def, key, val, defclose)
                         }
                     }
                     InnerValue::Object(o) => match &o.val {
                         InnerObjectValue::Func(f) | InnerObjectValue::Macro(f) => {
                             format!(
-                                "{}\\{} (let* ({}) {:#}){}",
+                                "{}{} (let* ({}) {:#}){}",
                                 def,
                                 key,
                                 f.closure.0.dump_inner("", "", atoms),
@@ -218,9 +221,9 @@ impl LispEnv {
                                 defclose
                             )
                         }
-                        _ => format!("{}\\{} {:#}{}", def, key, o, defclose),
+                        _ => format!("{}{} {:#}{}", def, key, o, defclose),
                     },
-                    _ => format!("{}\\{} {:#}{}", def, key, val, defclose),
+                    _ => format!("{}{} {:#}{}", def, key, val, defclose),
                 }
             })
             .join(" ")

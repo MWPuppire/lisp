@@ -8,9 +8,9 @@ use std::iter::zip;
 use std::sync::Arc;
 
 #[inline]
-fn lookup_variable(val: LispSymbol, env: &LispEnv) -> Result<LispValue> {
+fn lookup_variable(val: &LispSymbol, env: &LispEnv) -> Result<LispValue> {
     env.get(val)
-        .ok_or(LispError::UndefinedVariable(format!("\\{}", val)))
+        .ok_or_else(|| LispError::UndefinedVariable(val.to_string()))
 }
 
 fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
@@ -27,7 +27,7 @@ fn is_macro_call(val: &LispValue, env: &LispEnv) -> bool {
                         InnerValue::Symbol { sym, .. } => {
                             if let Ok(LispValue {
                                 val: InnerValue::Object(o),
-                            }) = lookup_variable(*sym, env)
+                            }) = lookup_variable(sym, env)
                             {
                                 matches!(o.val, InnerObjectValue::Macro(_),)
                             } else {
@@ -49,23 +49,26 @@ fn expand_macros(val: LispValue, env: &LispEnv) -> Result<LispValue> {
         let mut list = val.try_into_iter()?;
         let Some(head) = list.next() else { unreachable!() };
         let InnerValue::Symbol { sym, .. } = head.val else { unreachable!() };
-        let var = lookup_variable(sym, env)?;
+        let var = lookup_variable(&sym, env)?;
         let InnerValue::Object(obj) = var.val else { unreachable!() };
         let InnerObjectValue::Macro(f) = &obj.val else { unreachable!() };
         if f.variadic && list.len() >= (f.args.len() - 1) {
             let mut args: Vector<LispValue> = list.map(|x| expand_macros(x, env)).try_collect()?;
             let variadic_idx = f.args.len() - 1;
             let last_args = args.split_off(variadic_idx);
-            let arg_names = f.args[0..variadic_idx].iter().copied();
+            let arg_names = f.args[0..variadic_idx].iter().cloned();
             let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
-            params.push((f.args[variadic_idx], last_args.into_iter().collect()));
+            params.push((
+                f.args[variadic_idx].clone(),
+                last_args.into_iter().collect(),
+            ));
             let fn_env = f.closure.make_macro_env(&params, env);
             eval(f.body.clone(), &fn_env)
         } else if list.len() != f.args.len() {
             Err(LispError::IncorrectArguments(f.args.len(), list.len()))
         } else {
             let args: Vec<LispValue> = list.map(|x| expand_macros(x, env)).try_collect()?;
-            let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
+            let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().cloned(), args).collect();
             let fn_env = f.closure.make_macro_env(&params, env);
             eval(f.body.clone(), &fn_env)
         }
@@ -86,16 +89,19 @@ fn expand_fn(
         let mut args: Vector<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
         let variadic_idx = f.args.len() - 1;
         let last_args = args.split_off(variadic_idx);
-        let arg_names = f.args[0..variadic_idx].iter().copied();
+        let arg_names = f.args[0..variadic_idx].iter().cloned();
         let mut params: Vec<(LispSymbol, LispValue)> = zip(arg_names, args).collect();
-        params.push((f.args[variadic_idx], last_args.into_iter().collect()));
+        params.push((
+            f.args[variadic_idx].clone(),
+            last_args.into_iter().collect(),
+        ));
         let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     } else if args.len() != f.args.len() {
         Err(LispError::IncorrectArguments(f.args.len(), args.len()))
     } else {
         let args: Vec<LispValue> = args.into_iter().map(|x| eval(x, env)).try_collect()?;
-        let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().copied(), args).collect();
+        let params: Vec<(LispSymbol, LispValue)> = zip(f.args.iter().cloned(), args).collect();
         let fn_env = f.closure.make_env(&params);
         Ok((f.body.clone(), fn_env))
     }
@@ -103,7 +109,7 @@ fn expand_fn(
 
 fn eval_ast(ast: LispValue, env: &LispEnv) -> Result<LispValue> {
     Ok(match ast.val {
-        InnerValue::Symbol { sym, .. } => lookup_variable(sym, env)?,
+        InnerValue::Symbol { sym, .. } => lookup_variable(&sym, env)?,
         InnerValue::Object(o) => LispValue::new(InnerValue::Object(Arc::new(ObjectValue {
             val: match &o.val {
                 InnerObjectValue::Vector(l) => {

@@ -1,4 +1,4 @@
-use crate::env::{hash, LispSymbol};
+use crate::env::hash;
 use crate::util::{InnerValue, LispSpecialForm};
 use crate::{LispError, LispValue, Result};
 use im::{vector, Vector};
@@ -43,7 +43,6 @@ enum LispTokenType {
     String(String),
     Symbol(String),
     Keyword(String),
-    HashedSymbol(LispSymbol),
 }
 
 macro_rules! reserved_word_token {
@@ -84,19 +83,6 @@ fn identifier(input: &str) -> IResult<&str, LispTokenType> {
             many0_count(none_of(IDEN_INVALID_CHARS)),
         )),
         |x: &str| LispTokenType::Symbol(x.to_owned()),
-    )(input)
-}
-
-fn hashed_identifier(input: &str) -> IResult<&str, LispTokenType> {
-    map(
-        preceded(
-            char('\\'),
-            recognize(many1_count(terminated(
-                one_of("0123456789"),
-                opt(pair(many1_count(char('_')), one_of("0123456789"))),
-            ))),
-        ),
-        |x: &str| LispTokenType::HashedSymbol(x.parse().unwrap()),
     )(input)
 }
 
@@ -334,7 +320,6 @@ fn parse_lisp(input: &str) -> IResult<&str, LispTokenType> {
                 reserved_word_token!(special_form!(Cond), "cond"),
             )),
             identifier,
-            hashed_identifier,
             keyword,
         )),
         many0_count(alt((value((), multispace1), value((), char(','))))),
@@ -584,12 +569,7 @@ impl LispParser {
             LispTokenType::Number(num) => num.into(),
             LispTokenType::String(s) => LispValue::string_for(s),
             LispTokenType::Symbol(sym) => LispValue::new(InnerValue::Symbol {
-                sym: hash(&sym),
-                variadic: false,
-                quoted: false,
-            }),
-            LispTokenType::HashedSymbol(sym) => LispValue::new(InnerValue::Symbol {
-                sym,
+                sym: hash(sym),
                 variadic: false,
                 quoted: false,
             }),

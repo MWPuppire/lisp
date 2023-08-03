@@ -310,9 +310,9 @@ impl ObjectValue {
                 func.args
                     .iter()
                     .take(func.args.len().saturating_sub(1))
-                    .try_for_each(|x| write!(f, "\\{} ", *x))?;
+                    .try_for_each(|x| write!(f, "{} ", *x))?;
                 if let Some(last) = func.args.last() {
-                    write!(f, "\\{}", *last)?;
+                    write!(f, "{}{}", if func.variadic { "&" } else { "" }, *last)?;
                 }
                 write!(f, ") {})", func.body)
             }
@@ -321,9 +321,9 @@ impl ObjectValue {
                 func.args
                     .iter()
                     .take(func.args.len().saturating_sub(1))
-                    .try_for_each(|x| write!(f, "\\{} ", *x))?;
+                    .try_for_each(|x| write!(f, "{} ", *x))?;
                 if let Some(last) = func.args.last() {
-                    write!(f, "\\{}", *last)?;
+                    write!(f, "{}{}", if func.variadic { "&" } else { "" }, *last)?;
                 }
                 write!(f, ") {})", func.body)
             }
@@ -460,14 +460,14 @@ impl LispValue {
     }
     fn inspect_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.val {
-            InnerValue::Symbol { sym, .. } => write!(f, "'\\{}", *sym),
+            InnerValue::Symbol { sym, .. } => write!(f, "'{}", *sym),
             InnerValue::Object(o) => o.inspect_fmt(f),
             _ => self.inspect_quoted_fmt(f),
         }
     }
     fn inspect_quoted_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.val {
-            InnerValue::Symbol { sym, .. } => write!(f, "\\{}", *sym),
+            InnerValue::Symbol { sym, .. } => write!(f, "{}", *sym),
             InnerValue::Number(n) => write!(f, "{}", n),
             InnerValue::Bool(b) => write!(f, "{}", b),
             InnerValue::Nil => write!(f, "nil"),
