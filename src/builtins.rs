@@ -15,7 +15,6 @@ use std::sync::Arc;
 cfg_if::cfg_if! {
     if #[cfg(feature = "io-stdlib")] {
         use std::fs;
-        use std::io::prelude::*;
         use std::time::{SystemTime, UNIX_EPOCH};
     }
 }
@@ -294,8 +293,27 @@ fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(out_val)
 }
 
-#[cfg(feature = "io-stdlib")]
+#[cfg(all(feature = "io-stdlib", feature = "rustyline"))]
 fn lisp_readline(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    fn map_rustyline_err<T>(res: rustyline::Result<T>) -> Result<T> {
+        match res {
+            Err(rustyline::error::ReadlineError::Io(e)) => Err(e.into()),
+            Err(x) => Err(LispError::UncaughtException(x.to_string().into())),
+            Ok(x) => Ok(x),
+        }
+    }
+    let mut rl = map_rustyline_err(rustyline::DefaultEditor::new())?;
+    if !args.is_empty() {
+        let prompt_val = eval_head!(args, env)?;
+        let prompt = prompt_val.expect_string()?;
+        map_rustyline_err(rl.readline(prompt)).map(LispValue::from)
+    } else {
+        map_rustyline_err(rl.readline("")).map(LispValue::from)
+    }
+}
+#[cfg(all(feature = "io-stdlib", not(feature = "rustyline")))]
+fn lisp_readline(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    use std::io::prelude::*;
     if !args.is_empty() {
         let s = eval_head!(args, env)?;
         print!("{}", printable_value(s));
@@ -1497,7 +1515,7 @@ pub(crate) static BUILTINS: Lazy<HashMap<LispSymbol, LispValue>> = Lazy::new(|| 
     let lisp_argv: LispValue = args
         .into_iter()
         // Lisp *ARGV* doesn't include the interpreter name
-        .skip(1)
+        .skip(2)
         .map(LispValue::string_for)
         .collect();
     ext.insert(hash("*ARGV*"), lisp_argv.quote());

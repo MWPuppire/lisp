@@ -41,6 +41,8 @@ Other differences:
 
 The code has memory leaks. Testing under Miri reveals Arcs leaking in some of the tests, starting at step 4. It wouldn't surprise me if those are circular references, but I'm not sure what to do about those (other than switching to GC, which may actually be the best move).
 
+`eval` doesn't handle scopes properly with how it evaluates its body. `eval` is supposed to execute code in the global scope, yet still have access to locally defined variables.
+
 ## License
 
 The code is released under the MIT license.

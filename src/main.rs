@@ -16,7 +16,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && &args[1] != "--" {
-        let file = fs::read_to_string(&args[1])?;
+        let path = std::path::Path::new(&args[1]);
+        if !path.exists() {
+            return Err(format!("file {} not found", path.display()).into());
+        } else if path.is_dir() {
+            return Err(format!("{} is a directory", path.display()).into());
+        }
+        let file = if let Some(dir) = path.parent() {
+            // so the script can `load-file` relative paths
+            std::env::set_current_dir(dir).unwrap();
+            fs::read_to_string(path.file_name().unwrap())?
+        } else {
+            fs::read_to_string(path)?
+        };
         parser.add_tokenize(&file)?;
         for val in parser {
             eval(val?, &env)?;

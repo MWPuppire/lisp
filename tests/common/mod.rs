@@ -78,8 +78,10 @@ pub fn testing_env() -> Arc<LispEnv> {
     env.bind_func("slurp", lisp_test_slurp);
     // #[cfg(not(feature = "self-implemented"))]
     env.bind_func("load-file", lisp_test_load_file);
-    // This doesn't work since `eval` evaluates in the global scope, so `file`
-    // isn't defined. Whether this is a bug and should be fixed is undecided.
+    // This doesn't work since getting `eval` to work properly scope-wise is
+    // difficult (evaluating exclusively in global causes `file` to be
+    // undefined, but evaluating outside the global scope causes `load-file` to
+    // import no variables). This is a known bug.
     /*
     #[cfg(feature = "self-implemented")]
     eval_str_in_env(
