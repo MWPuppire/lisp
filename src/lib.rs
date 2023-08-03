@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
+extern crate by_address;
 extern crate cfg_if;
-extern crate lazy_static;
 extern crate thiserror;
 // TODO `im` currently seems to violate Stacked Borrows
 // (I get test fails under Miri, and someone else has a similar problem:
@@ -10,7 +10,6 @@ extern crate thiserror;
 // at some point, but I should decide what I'm going to do
 // the hardest part is finding a `HashMap` that also implements `Hash`, since
 // Mal allows (or encourages allowing) hashmaps to be keys in other hashmaps
-extern crate by_address;
 extern crate im;
 extern crate itertools;
 extern crate nom;
@@ -19,6 +18,7 @@ extern crate parking_lot;
 extern crate phf;
 #[macro_use]
 extern crate derivative;
+extern crate once_cell;
 
 // Also with Miri test fails, Miri reports a memory leak in the test suite
 // (starting at step 4 tests)

@@ -6,7 +6,7 @@ use crate::{LispError, LispValue, Result};
 use by_address::ByAddress;
 use im::{hashmap, vector, HashMap, Vector};
 use itertools::Itertools;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use ordered_float::OrderedFloat;
 use parking_lot::RwLock;
 use std::iter;
@@ -1108,17 +1108,16 @@ fn lisp_ceil(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 // Note that these don't currently pass the entire test suite.
 #[cfg(feature = "self-implemented")]
-lazy_static! {
-    pub(crate) static ref SELF_IMPLEMENTED: HashMap<&'static str, &'static str> = {
-        hashmap! {
-            "//" => r#"(fn* (num den) (
+pub(crate) static SELF_IMPLEMENTED: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
+    hashmap! {
+        "//" => r#"(fn* (num den) (
                 trunc (/ num den))
             )"#,
-            "list" => r#"(fn* (&args) args)"#,
-            "list?" => r#"(fn* (x) (
+        "list" => r#"(fn* (&args) args)"#,
+        "list?" => r#"(fn* (x) (
                 = (typeof x) "list"
             ))"#,
-            "empty?" => r#"(fn* (ls) (
+        "empty?" => r#"(fn* (ls) (
                 ; can't use `or`, since `or` uses `reduce` which uses `empty?`
                 if (= ls ())
                     true
@@ -1130,38 +1129,38 @@ lazy_static! {
                         )
                     )
             ))"#,
-            "count" => r#"(fn* (ls) (
+        "count" => r#"(fn* (ls) (
                 if (empty? ls)
                     0
                     (+ 1 (count (rest ls)))
             ))"#,
-            "<=" => r#"(fn* (x y) (
+        "<=" => r#"(fn* (x y) (
                 not (< y x)
             ))"#,
-            ">" => r#"(fn* (x y) (
+        ">" => r#"(fn* (x y) (
                 < y x
             ))"#,
-            ">=" => r#"(fn* (x y) (
+        ">=" => r#"(fn* (x y) (
                 not (< x y)
             ))"#,
-            "not" => r#"(fn* (bool) (
+        "not" => r#"(fn* (bool) (
                 if bool false true
             ))"#,
-            "atom?" => r#"(fn* (x) (
+        "atom?" => r#"(fn* (x) (
                 = (typeof x) "atom"
             ))"#,
-            "swap!" => r#"(fn* (atom fn &args) (
+        "swap!" => r#"(fn* (atom fn &args) (
                 reset! atom (apply fn @atom args)
             ))"#,
-            "cons" => r#"(fn* (item ls) (
+        "cons" => r#"(fn* (item ls) (
                 apply list item ls
             ))"#,
-            "concat" => r#"(fn* (&lists) (
+        "concat" => r#"(fn* (&lists) (
                 foldr (fn* (acc list) (
                     foldr (fn* (acc item) (cons item acc)) acc (rev list)
                 )) () (rev lists)
             ))"#,
-            "nth" => r#"(fn* (ls n) (
+        "nth" => r#"(fn* (ls n) (
                 if (empty? ls)
                     (throw (str "index " n " out of range"))
                     (if (= n 0)
@@ -1169,101 +1168,101 @@ lazy_static! {
                         (nth (rest ls) (- n 1))
                     )
             ))"#,
-            "head" => "first",
-            "tail" => "rest",
-            "macro?" => r#"(fn* (x) (
+        "head" => "first",
+        "tail" => "rest",
+        "macro?" => r#"(fn* (x) (
                 = (typeof x) "macro"
             ))"#,
-            "nil?" => r#"(fn* (x) (
+        "nil?" => r#"(fn* (x) (
                 = x nil
             ))"#,
-            "true?" => r#"(fn* (x) (
+        "true?" => r#"(fn* (x) (
                 = x true
             ))"#,
-            "false?" => r#"(fn* (x) (
+        "false?" => r#"(fn* (x) (
                 = x false
             ))"#,
-            "symbol?" => r#"(fn* (x) (
+        "symbol?" => r#"(fn* (x) (
                 = (typeof x) "symbol"
             ))"#,
-            "vector?" => r#"(fn* (x) (
+        "vector?" => r#"(fn* (x) (
                 = (typeof x) "vector"
             ))"#,
-            "keyword?" => r#"(fn* (x) (
+        "keyword?" => r#"(fn* (x) (
                 = (typeof x) "keyword"
             ))"#,
-            "hashmap" => r#"(fn* (&pairs) (
+        "hashmap" => r#"(fn* (&pairs) (
                 apply assoc {} (flatten pairs)
             ))"#,
-            "map?" => r#"(fn* (x) (
+        "map?" => r#"(fn* (x) (
                 = (typeof x) "map"
             ))"#,
-            "sequential?" => r#"(fn* (x) (
+        "sequential?" => r#"(fn* (x) (
                 or (list? x) (vector? x)
             ))"#,
-            "keys" => r#"(fn* (mp) (
+        "keys" => r#"(fn* (mp) (
                 map (fn* (pair) (first pair)) (pairs mp)
             ))"#,
-            "vals" => r#"(fn* (mp) (
+        "vals" => r#"(fn* (mp) (
                 map (fn* (pair) (
                     first (rest pair)
                 )) (pairs mp)
             ))"#,
-            "map" => r#"(fn* (transformer ls) (
+        "map" => r#"(fn* (transformer ls) (
                 if (empty? ls)
                     ()
                     (cons (transformer (first ls)) (map transformer (rest ls)))
             ))"#,
-            "pr-str" => r#"(fn* (&strs) (
+        "pr-str" => r#"(fn* (&strs) (
                 if (empty? strs)
                     ""
                     (str (reduce (fn* (acc x) (str acc " " x)) strs))
             ))"#,
-            "fn?" => r#"(fn* (x) (
+        "fn?" => r#"(fn* (x) (
                 = (typeof x) "function"
             ))"#,
-            "string?" => r#"(fn* (x) (
+        "string?" => r#"(fn* (x) (
                 = (typeof x) "string"
             ))"#,
-            "number?" => r#"(fn* (x) (
+        "number?" => r#"(fn* (x) (
                 = (typeof x) "number"
             ))"#,
-            "vec" => r#"(fn* (ls) (
+        "vec" => r#"(fn* (ls) (
                 apply vector ls
             ))"#,
-            "seq" => r#"(fn* (ls) (
+        "seq" => r#"(fn* (ls) (
                 if (empty? ls)
                     nil
                     (cons (first ls) (let* (tmp (seq (rest ls)))
                         (if (nil? tmp) () tmp)
                     ))
             ))"#,
-            "conj" => r#"(fn* (ls &args) (
+        "conj" => r#"(fn* (ls &args) (
                 if (list? ls)
                     (concat args ls)
                     (vec (concat ls args))
             ))"#,
-            "join" => r#"(fn* (strs sep) (
+        "join" => r#"(fn* (strs sep) (
                 if (empty? strs)
                     ""
                     (str (reduce (fn* (acc x) (
                         str acc sep x
                     )) strs))
             ))"#,
-            "and" => r#"(fn* (&args) (
+        "and" => r#"(fn* (&args) (
                 bool (foldr (fn* (acc x) (
                     if acc (bool x) false
                 )) true args)
             ))"#,
-            "or" => r#"(fn* (&args) (
+        "or" => r#"(fn* (&args) (
                 bool (foldr (fn* (acc x) (
                     if acc true (bool x)
                 )) false args)
             ))"#,
-            "bool" => r#"(fn* (bool) (
+        "bool" => r#"(fn* (bool) (
                 if bool true false
             ))"#,
-            "reduce" => r#"(fn* (reducer ls) (
+        "reduce" => r#"(fn* (reducer ls) (
                 let* (acc (first ls) ls (rest ls)) (
                     if (empty? ls)
                         acc
@@ -1272,20 +1271,20 @@ lazy_static! {
                         ))
                 )
             ))"#,
-            "last" => r#"(fn* (ls) (
+        "last" => r#"(fn* (ls) (
                 reduce (fn* (_ item) item) ls
             ))"#,
-            "foldr" => r#"(fn* (reducer acc ls) (
+        "foldr" => r#"(fn* (reducer acc ls) (
                 if (empty? ls)
                     acc
                     (foldr reducer (reducer acc (first ls)) (rest ls))
             ))"#,
-            "rev" => r#"(fn* (ls) (
+        "rev" => r#"(fn* (ls) (
                 foldr (fn* (acc next) (
                     cons next acc
                 )) () ls
             ))"#,
-            "flatten" => r#"(fn* (ls) (
+        "flatten" => r#"(fn* (ls) (
                 foldr (fn* (acc ls) (
                     concat acc (
                         if (sequential? ls)
@@ -1294,32 +1293,31 @@ lazy_static! {
                     )
                 )) () ls
             ))"#,
-            "sign" => r#"(fn* (num) (
+        "sign" => r#"(fn* (num) (
                 if (< num 0) -1 1
             ))"#,
-            "round" => r#"(fn* (num) (
+        "round" => r#"(fn* (num) (
                 trunc (+
                     num
                     (* 0.5 (sign num))
                 )
             ))"#,
-            "floor" => r#"(fn* (num) (
+        "floor" => r#"(fn* (num) (
                 if (= num (trunc num))
                     num
                     (round (- num 0.5))
             ))"#,
-            "ceil" => r#"(fn* (num) (
+        "ceil" => r#"(fn* (num) (
                 if (= num (trunc num))
                     num
                     (round (+ num 0.5))
             ))"#,
-            // shadowed by special form
-            "do" => r#"(fn* (&args) (
+        // shadowed by special form
+        "do" => r#"(fn* (&args) (
                 last args
             ))"#,
-        }
-    };
-}
+    }
+});
 
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
@@ -1339,163 +1337,156 @@ macro_rules! make_lisp_funcs {
     }
 }
 
-lazy_static! {
-    pub(crate) static ref BUILTINS_CORE: HashMap<LispSymbol, LispValue> = {
-        // fairly minimal set of functions needed to produce the others
-        let mut funcs = make_lisp_funcs!(
-            "+" => lisp_plus,
-            "-" => lisp_minus,
-            "*" => lisp_times,
-            "/" => lisp_divide,
-            "=" => lisp_equals,
-            "<" => lisp_lt,
-            "atom" => lisp_atom,
-            "reset!" => lisp_reset,
-            "read-string" => lisp_read_string,
-            "str" => lisp_str,
-            "typeof" => lisp_typeof,
-            "first" => lisp_first,
-            "rest" => lisp_rest,
-            "inspect" => lisp_inspect,
-            "throw" => lisp_throw,
-            "symbol" => lisp_symbol,
-            "vector" => lisp_vector,
-            "keyword" => lisp_keyword,
-            "assoc" => lisp_assoc,
-            "dissoc" => lisp_dissoc,
-            "get" => lisp_get,
-            "contains?" => lisp_containsq,
-            "meta" => lisp_meta,
-            "with-meta" => lisp_with_meta,
-            "dump-env" => lisp_dump_env,
-            "pairs" => lisp_pairs,
-            "trunc" => lisp_trunc,
-        );
+#[cfg(feature = "self-implemented")]
+pub(crate) static BUILTINS_CORE: Lazy<HashMap<LispSymbol, LispValue>> = Lazy::new(|| {
+    // fairly minimal set of functions needed to produce the others
+    let mut funcs = make_lisp_funcs!(
+        "+" => lisp_plus,
+        "-" => lisp_minus,
+        "*" => lisp_times,
+        "/" => lisp_divide,
+        "=" => lisp_equals,
+        "<" => lisp_lt,
+        "atom" => lisp_atom,
+        "reset!" => lisp_reset,
+        "read-string" => lisp_read_string,
+        "str" => lisp_str,
+        "typeof" => lisp_typeof,
+        "first" => lisp_first,
+        "rest" => lisp_rest,
+        "inspect" => lisp_inspect,
+        "throw" => lisp_throw,
+        "symbol" => lisp_symbol,
+        "vector" => lisp_vector,
+        "keyword" => lisp_keyword,
+        "assoc" => lisp_assoc,
+        "dissoc" => lisp_dissoc,
+        "get" => lisp_get,
+        "contains?" => lisp_containsq,
+        "meta" => lisp_meta,
+        "with-meta" => lisp_with_meta,
+        "dump-env" => lisp_dump_env,
+        "pairs" => lisp_pairs,
+        "trunc" => lisp_trunc,
+    );
 
-        funcs.insert(
-            hash("*host-language*"),
-            LispValue::string_for("Rust".to_owned()),
-        );
+    funcs.insert(
+        hash("*host-language*"),
+        LispValue::string_for("Rust".to_owned()),
+    );
 
-        funcs
-    };
-}
+    funcs
+});
 
-lazy_static! {
-    pub(crate) static ref BUILTINS_NO_IO: HashMap<LispSymbol, LispValue> = {
-        let mut funcs = make_lisp_funcs!(
-            "+" => lisp_plus,
-            "-" => lisp_minus,
-            "*" => lisp_times,
-            "/" => lisp_divide,
-            "//" => lisp_int_divide,
-            "=" => lisp_equals,
-            "list" => lisp_list,
-            "list?" => lisp_listq,
-            "empty?" => lisp_emptyq,
-            "count" => lisp_count,
-            "<" => lisp_lt,
-            "<=" => lisp_lte,
-            ">" => lisp_gt,
-            ">=" => lisp_gte,
-            "not" => lisp_not,
-            "atom" => lisp_atom,
-            "atom?" => lisp_atomq,
-            "reset!" => lisp_reset,
-            "swap!" => lisp_swap,
-            "read-string" => lisp_read_string,
-            "str" => lisp_str,
-            "typeof" => lisp_typeof,
-            "cons" => lisp_cons,
-            "concat" => lisp_concat,
-            "nth" => lisp_nth,
-            "first" => lisp_first,
-            "head" => lisp_first,
-            "rest" => lisp_rest,
-            "tail" => lisp_rest,
-            "macro?" => lisp_macroq,
-            "inspect" => lisp_inspect,
-            "throw" => lisp_throw,
-            "nil?" => lisp_nilq,
-            "true?" => lisp_trueq,
-            "false?" => lisp_falseq,
-            "symbol?" => lisp_symbolq,
-            "symbol" => lisp_symbol,
-            "vector" => lisp_vector,
-            "vector?" => lisp_vectorq,
-            "keyword" => lisp_keyword,
-            "keyword?" => lisp_keywordq,
-            "hash-map" => lisp_hashmap,
-            "map?" => lisp_mapq,
-            "sequential?" => lisp_sequentialq,
-            "assoc" => lisp_assoc,
-            "dissoc" => lisp_dissoc,
-            "get" => lisp_get,
-            "contains?" => lisp_containsq,
-            "keys" => lisp_keys,
-            "vals" => lisp_vals,
-            "map" => lisp_map,
-            "pr-str" => lisp_pr_str,
-            "fn?" => lisp_fnq,
-            "string?" => lisp_stringq,
-            "number?" => lisp_numberq,
-            "vec" => lisp_vec,
-            "seq" => lisp_seq,
-            "conj" => lisp_conj,
-            "meta" => lisp_meta,
-            "with-meta" => lisp_with_meta,
-            "dump-env" => lisp_dump_env,
-            "pairs" => lisp_pairs,
-            "join" => lisp_join,
-            "and" => lisp_and,
-            "or" => lisp_or,
-            "bool" => lisp_bool,
-            "reduce" => lisp_reduce,
-            "last" => lisp_last,
-            "foldr" => lisp_foldr,
-            "rev" => lisp_rev,
-            "flatten" => lisp_flatten,
-            "sign" => lisp_sign,
-            "trunc" => lisp_trunc,
-            "round" => lisp_round,
-            "floor" => lisp_floor,
-            "ceil" => lisp_ceil,
-        );
+pub(crate) static BUILTINS_NO_IO: Lazy<HashMap<LispSymbol, LispValue>> = Lazy::new(|| {
+    let mut funcs = make_lisp_funcs!(
+        "+" => lisp_plus,
+        "-" => lisp_minus,
+        "*" => lisp_times,
+        "/" => lisp_divide,
+        "//" => lisp_int_divide,
+        "=" => lisp_equals,
+        "list" => lisp_list,
+        "list?" => lisp_listq,
+        "empty?" => lisp_emptyq,
+        "count" => lisp_count,
+        "<" => lisp_lt,
+        "<=" => lisp_lte,
+        ">" => lisp_gt,
+        ">=" => lisp_gte,
+        "not" => lisp_not,
+        "atom" => lisp_atom,
+        "atom?" => lisp_atomq,
+        "reset!" => lisp_reset,
+        "swap!" => lisp_swap,
+        "read-string" => lisp_read_string,
+        "str" => lisp_str,
+        "typeof" => lisp_typeof,
+        "cons" => lisp_cons,
+        "concat" => lisp_concat,
+        "nth" => lisp_nth,
+        "first" => lisp_first,
+        "head" => lisp_first,
+        "rest" => lisp_rest,
+        "tail" => lisp_rest,
+        "macro?" => lisp_macroq,
+        "inspect" => lisp_inspect,
+        "throw" => lisp_throw,
+        "nil?" => lisp_nilq,
+        "true?" => lisp_trueq,
+        "false?" => lisp_falseq,
+        "symbol?" => lisp_symbolq,
+        "symbol" => lisp_symbol,
+        "vector" => lisp_vector,
+        "vector?" => lisp_vectorq,
+        "keyword" => lisp_keyword,
+        "keyword?" => lisp_keywordq,
+        "hash-map" => lisp_hashmap,
+        "map?" => lisp_mapq,
+        "sequential?" => lisp_sequentialq,
+        "assoc" => lisp_assoc,
+        "dissoc" => lisp_dissoc,
+        "get" => lisp_get,
+        "contains?" => lisp_containsq,
+        "keys" => lisp_keys,
+        "vals" => lisp_vals,
+        "map" => lisp_map,
+        "pr-str" => lisp_pr_str,
+        "fn?" => lisp_fnq,
+        "string?" => lisp_stringq,
+        "number?" => lisp_numberq,
+        "vec" => lisp_vec,
+        "seq" => lisp_seq,
+        "conj" => lisp_conj,
+        "meta" => lisp_meta,
+        "with-meta" => lisp_with_meta,
+        "dump-env" => lisp_dump_env,
+        "pairs" => lisp_pairs,
+        "join" => lisp_join,
+        "and" => lisp_and,
+        "or" => lisp_or,
+        "bool" => lisp_bool,
+        "reduce" => lisp_reduce,
+        "last" => lisp_last,
+        "foldr" => lisp_foldr,
+        "rev" => lisp_rev,
+        "flatten" => lisp_flatten,
+        "sign" => lisp_sign,
+        "trunc" => lisp_trunc,
+        "round" => lisp_round,
+        "floor" => lisp_floor,
+        "ceil" => lisp_ceil,
+    );
 
-        funcs.insert(
-            hash("*host-language*"),
-            LispValue::string_for("Rust".to_owned()),
-        );
+    funcs.insert(
+        hash("*host-language*"),
+        LispValue::string_for("Rust".to_owned()),
+    );
 
-        funcs
-    };
-}
+    funcs
+});
 
 #[cfg(feature = "io-stdlib")]
-lazy_static! {
-    pub(crate) static ref BUILTINS: HashMap<LispSymbol, LispValue> = {
-        let base = BUILTINS_NO_IO.clone();
-        let mut ext = make_lisp_funcs!(
-            "prn" => lisp_prn,
-            "readline" => lisp_readline,
-            "slurp" => lisp_slurp,
-            "load-file" => lisp_load_file,
-            // currently, the functions behave identically
-            "println" => lisp_prn,
-            "time-ms" => lisp_time_ms,
-        );
+pub(crate) static BUILTINS: Lazy<HashMap<LispSymbol, LispValue>> = Lazy::new(|| {
+    let base = BUILTINS_NO_IO.clone();
+    let mut ext = make_lisp_funcs!(
+        "prn" => lisp_prn,
+        "readline" => lisp_readline,
+        "slurp" => lisp_slurp,
+        "load-file" => lisp_load_file,
+        // currently, the functions behave identically
+        "println" => lisp_prn,
+        "time-ms" => lisp_time_ms,
+    );
 
-        let args: Vec<String> = std::env::args().collect();
-        let lisp_argv: LispValue = args.into_iter()
-            // Lisp *ARGV* doesn't include the interpreter name
-            .skip(1)
-            .map(LispValue::string_for)
-            .collect();
-        ext.insert(
-            hash("*ARGV*"),
-            lisp_argv.quote(),
-        );
+    let args: Vec<String> = std::env::args().collect();
+    let lisp_argv: LispValue = args
+        .into_iter()
+        // Lisp *ARGV* doesn't include the interpreter name
+        .skip(1)
+        .map(LispValue::string_for)
+        .collect();
+    ext.insert(hash("*ARGV*"), lisp_argv.quote());
 
-        base.union(ext)
-    };
-}
+    base.union(ext)
+});

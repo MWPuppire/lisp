@@ -1,34 +1,33 @@
 #![allow(unused)]
 
 pub use im::{hashmap, vector, HashMap, Vector};
-pub use lazy_static::lazy_static;
 pub use lisp::{eval, LispEnv, LispError, LispParser, LispValue, Result};
+use once_cell::sync::Lazy;
 pub use std::sync::Arc;
 
-lazy_static! {
-    pub static ref MOCK_FS: HashMap<String, &'static str> = {
-        hashmap! {
-            "inc.mal".to_owned() => r#"
+pub static MOCK_FS: Lazy<HashMap<String, &'static str>> = Lazy::new(|| {
+    hashmap! {
+        "inc.mal".to_owned() => r#"
                 (def! inc1 (fn* (a) (+ 1 a)))
                 (def! inc2 (fn* (a) (+ 2 a)))
                 (def! inc3 (fn* (a)
                     (+ 3 a)))
             "#,
-            "incA.mal".to_owned() => r#"
+        "incA.mal".to_owned() => r#"
                 (def! inc4 (fn* (a) (+ 4 a)))
                 (prn (inc4 5))
             "#,
-            "incB.mal".to_owned() => r#"
+        "incB.mal".to_owned() => r#"
                 ;; A comment in a file
                 (def! inc4 (fn* (a) (+ 4 a)))
                 (def! inc5 (fn* (a) ;; a comment after code
                     (+ 5 a)))
                 ;; ending comment without final new line"#,
-            "incC.mal".to_owned() => r#"
+        "incC.mal".to_owned() => r#"
                 (def! mymap {"a"
                             1})
             "#,
-            "computations.mal".to_owned() => r#"
+        "computations.mal".to_owned() => r#"
                 (def! sumdown
                     (fn* [n]
                         (if (= n 0)
@@ -40,10 +39,9 @@ lazy_static! {
                             n
                             (+ (fib (- n 1)) (fib (- n 2))))))
             "#,
-            "test.txt".to_owned() => "A line of text",
-        }
-    };
-}
+        "test.txt".to_owned() => "A line of text",
+    }
+});
 
 pub fn lisp_test_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if args.len() != 1 {
