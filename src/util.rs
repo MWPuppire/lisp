@@ -10,7 +10,7 @@ use thiserror::Error;
 
 // Utility macro, raise `err` if `cond` is false
 macro_rules! assert_or_err {
-    ($cond:expr, $err:expr) => {
+    ($cond:expr, $err:expr $(,)?) => {
         if !$cond {
             Err($err)?;
         }
@@ -222,7 +222,7 @@ impl InnerObjectValue {
             Self::List(_) => "list",
             Self::BuiltinFunc(_) => "function",
             Self::Func(_) => "function",
-            Self::Macro(_) => "function",
+            Self::Macro(_) => "macro",
             Self::Map(_) => "map",
             Self::Vector(_) => "vector",
             Self::String(_) => "string",

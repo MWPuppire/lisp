@@ -85,3 +85,15 @@ fn join() {
         "1-2-3-4-5-6-7-8-9".to_owned()
     );
 }
+
+#[test]
+fn foldr_reduce() {
+    eval_eq!("(reduce + ())", LispValue::nil());
+    eval_eq!("(reduce + '(1 2 3))", 6.0);
+    eval_eq!(
+        "(reduce (fn* (acc x) (x acc)) '(7 list str))",
+        "(7)".to_owned()
+    );
+    eval_eq!("(foldr + 0 ())", 0.0);
+    eval_eq!("(foldr + -1 '(1 2 3))", 5.0);
+}

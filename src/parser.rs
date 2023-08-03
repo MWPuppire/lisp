@@ -327,6 +327,7 @@ fn parse_lisp(input: &str) -> IResult<&str, LispTokenType> {
                 reserved_word_token!(special_form!(Do), "do"),
                 reserved_word_token!(special_form!(If), "if"),
                 reserved_word_token!(special_form!(Fn), "fn*"),
+                reserved_word_token!(special_form!(FnMacro), "fn-macro*"),
                 reserved_word_token!(special_form!(Deref), "deref"),
                 reserved_word_token!(special_form!(Eval), "eval"),
                 reserved_word_token!(special_form!(Apply), "apply"),

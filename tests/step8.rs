@@ -83,6 +83,21 @@ fn list_functions() {
     eval_eq!("(rest (list 7 8 9))", vector![8.0.into(), 9.0.into(),]);
     eval_eq!("(first [10])", 10.0);
     eval_eq!("(rest [10 11 12])", vector![11.0.into(), 12.0.into(),]);
+    eval_eq!("(last (list 1 2 3))", 3.0);
+    eval_eq!("(last (list 1))", 1.0);
+    eval_eq!("(last (list))", LispValue::nil());
+    eval_eq!(
+        "(last [1 2 [3 4]])",
+        LispValue::vector_from(vec![3.0.into(), 4.0.into(),])
+    );
+    eval_eq!(
+        "(rev (list 1 2 3))",
+        vector![3.0.into(), 2.0.into(), 1.0.into(),]
+    );
+    eval_eq!(
+        "(rev [1 2 3])",
+        vector![3.0.into(), 2.0.into(), 1.0.into(),]
+    );
 }
 
 #[test]
