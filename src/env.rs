@@ -105,6 +105,27 @@ impl LispEnv {
         assign_this_self(inner)
     }
 
+    #[cfg(feature = "self-implemented")]
+    pub fn new_self_implemented() -> Arc<Self> {
+        use std::str::FromStr;
+        let inner = LispEnv {
+            data: DashMap::new(),
+            this: Weak::new(),
+            enclosing: None,
+            stdlib: &builtins::BUILTINS_CORE,
+        };
+        let arced = assign_this_self(inner);
+        for (key, val) in builtins::SELF_IMPLEMENTED.iter() {
+            let parsed =
+                LispValue::from_str(val).expect("Builtins should be syntactically correct");
+            arced.set(
+                hash(*key),
+                crate::eval(parsed, &arced).expect("Builtins should pass evaluation"),
+            );
+        }
+        arced
+    }
+
     #[inline]
     pub fn make_closure(&self) -> LispClosure {
         LispClosure(ByAddress(self.this.upgrade().unwrap()))

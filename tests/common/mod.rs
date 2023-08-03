@@ -72,10 +72,26 @@ pub fn lisp_test_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result
 }
 
 pub fn testing_env() -> Arc<LispEnv> {
+    #[cfg(not(feature = "self-implemented"))]
     let env = LispEnv::new_stdlib_protected();
+    #[cfg(feature = "self-implemented")]
+    let env = LispEnv::new_self_implemented();
     // mock filesystem; other functionality could be mocked later as needed
     env.bind_func("slurp", lisp_test_slurp);
+    // #[cfg(not(feature = "self-implemented"))]
     env.bind_func("load-file", lisp_test_load_file);
+    // This doesn't work since `eval` evaluates in the global scope, so `file`
+    // isn't defined. Whether this is a bug and should be fixed is undecided.
+    /*
+    #[cfg(feature = "self-implemented")]
+    eval_str_in_env(
+        r#"(def! load-file (fn* (file) (
+            eval (read-string (str "(do " (slurp file) " nil)" ))
+        )))"#,
+        &env,
+    )
+    .unwrap();
+    */
 
     // TODO mock println and family?
     env

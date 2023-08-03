@@ -29,6 +29,12 @@ derivative = "2.2"
 default = ["io-stdlib", "rustyline"]
 # Enable functions in the Lisp standard library which require I/O
 io-stdlib = []
+# Enable a more minimal core that allows the rest of the standard library to be
+# built from it. When enabled, the test suite uses this instead of the native
+# stdlib (to make sure it works as well). Disabled by default, since the in-
+# language implementations are slower and unlikely to be used and so would only
+# take up space with strings if unused.
+self-implemented = []
 
 [[bin]]
 name = "lisp-repl"

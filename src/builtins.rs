@@ -100,7 +100,6 @@ fn lisp_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (num den) (trunc (/ num den)))`
 fn lisp_int_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -138,12 +137,10 @@ fn lisp_prn(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(LispValue::nil())
 }
 
-// equiv. to `(fn* (&args) args)`
 fn lisp_list(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     args.into_iter().map(|x| eval(x, env)).try_collect()
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "list"))`
 fn lisp_listq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -157,15 +154,6 @@ fn lisp_listq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .into())
 }
 
-/* equiv. to `(fn* (ls) (= (count ls) 0))` or
-    (fn* (ls) (
-        or
-            (= ls ())
-            (= ls "")
-            (= ls [])
-            (nil? ls)
-    ))
-*/
 fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -183,7 +171,6 @@ fn lisp_emptyq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     }
 }
 
-// equiv. to `(fn* (ls) (if (empty? ls) 0 (+ 1 (count (rest ls)))))`
 fn lisp_count(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -210,7 +197,6 @@ fn lisp_lt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x < y).into())
 }
 
-// equiv. to `(fn* (x y) (not (< y x)))`
 fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -221,7 +207,6 @@ fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x <= y).into())
 }
 
-// equiv. to `(fn* (x y) (< y x))`
 fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -232,7 +217,6 @@ fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x > y).into())
 }
 
-// equiv. to `(fn* (x y) (not (< x y)))`
 fn lisp_gte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -243,7 +227,6 @@ fn lisp_gte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x >= y).into())
 }
 
-// equiv. to `(fn* (bool) (if bool false true))`
 fn lisp_not(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -264,7 +247,6 @@ fn lisp_atom(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     )))))
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "atom"))`
 fn lisp_atomq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -274,7 +256,6 @@ fn lisp_atomq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(matches!(val.val, InnerValue::Atom(_)).into())
 }
 
-// equiv. to `(fn* (atom val) (swap! atom (fn* () val)))`
 fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -286,7 +267,6 @@ fn lisp_reset(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(val)
 }
 
-// equiv. to `(fn* (atom fn &args) (reset! atom (apply fn @atom args)))`
 fn lisp_swap(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(args.len() > 1, LispError::IncorrectArguments(2, args.len()));
     let atom: Arc<RwLock<LispValue>> = eval_head!(args, env)?.try_into()?;
@@ -353,11 +333,6 @@ fn lisp_slurp(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(LispValue::string_for(contents))
 }
 
-/* equiv. to
-    (fn* (file) (
-        eval (read-string (str "(do " (slurp file) " nil)" ))
-    ))
-*/
 #[cfg(feature = "io-stdlib")]
 fn lisp_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
@@ -387,8 +362,6 @@ fn lisp_typeof(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     Ok(LispValue::string_for(x.type_of().to_owned()))
 }
 
-// equiv. to `(fn* (ls item) (apply list item ls))` or
-// `(fn* (ls item) (concat '(item) ls))`
 fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -400,13 +373,6 @@ fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(iter.collect())
 }
 
-/* equiv. to
-    (fn* (&lists) (
-        foldr (fn* (acc list) (
-            foldr (fn* (acc item) (cons item acc)) acc (rev list)
-        )) () (rev lists)
-    ))
-*/
 fn lisp_concat(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     args.into_iter()
         .map(|arg| eval(arg, env)?.try_into_iter())
@@ -414,13 +380,6 @@ fn lisp_concat(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
         .try_collect()
 }
 
-/* equiv. to
-    (fn* (ls n) (
-        if (or (= n 0) (empty? ls))
-            (first ls)
-            (nth (rest ls) (- n 1))
-    ))
-*/
 fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -441,7 +400,6 @@ fn lisp_nth(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // additionally aliased to `head`, which is not in Mal
-// equiv. to `(fn* (ls) (nth ls 0))`
 fn lisp_first(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -489,7 +447,6 @@ fn lisp_rest(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "macro"))`
 fn lisp_macroq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -522,7 +479,6 @@ fn lisp_throw(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Err(LispError::UncaughtException(arg))
 }
 
-// equiv. to `(fn* (x) (= x nil))`
 fn lisp_nilq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -532,7 +488,6 @@ fn lisp_nilq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(arg.is_nil().into())
 }
 
-// equiv. to `(fn* (x) (= x true))`
 fn lisp_trueq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -542,7 +497,6 @@ fn lisp_trueq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(matches!(arg.val, InnerValue::Bool(true)).into())
 }
 
-// equiv. to `(fn* (x) (= x false))`
 fn lisp_falseq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -552,7 +506,6 @@ fn lisp_falseq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
     Ok(matches!(arg.val, InnerValue::Bool(false)).into())
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "symbol"))`
 fn lisp_symbolq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -577,7 +530,6 @@ fn lisp_vector(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(LispValue::vector_from(vals))
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "vector"))`
 fn lisp_vectorq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -615,7 +567,6 @@ fn lisp_keyword(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     }
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "keyword"))`
 fn lisp_keywordq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -629,13 +580,6 @@ fn lisp_keywordq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue
     .into())
 }
 
-/* equiv. to `(fn* (&pairs) (apply assoc {} (flatten pairs)))` or
-    (fn* (&pairs) (
-        foldr (fn* (table pair) (
-            assoc table (first pair) (first (rest pair))
-        )) {} pairs
-    ))
-*/
 fn lisp_hashmap(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(args.len() & 1 == 0, LispError::MissingBinding);
     args.into_iter()
@@ -644,7 +588,6 @@ fn lisp_hashmap(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
         .try_collect()
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "map"))`
 fn lisp_mapq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -658,7 +601,6 @@ fn lisp_mapq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .into())
 }
 
-// equiv. to `(fn* (x) (or (list? x) (vector? x)))`
 fn lisp_sequentialq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -728,7 +670,6 @@ fn lisp_containsq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValu
     Ok(map.contains_key(&key).into())
 }
 
-// equiv. to `(fn* (mp) (map (fn* (pair) (first pair)) (pairs mp)))`
 fn lisp_keys(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -739,7 +680,6 @@ fn lisp_keys(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(keys.collect())
 }
 
-// equiv. to `(fn* (mp) (map (fn* (pair) (first (rest pair))) (pairs mp)))`
 fn lisp_vals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -750,13 +690,6 @@ fn lisp_vals(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(vals.collect())
 }
 
-/* equiv. to
-    (fn* (transformer ls) (
-        if (empty? ls)
-            ()
-            (cons (transformer (first ls)) (map transformer (rest ls)))
-    ))
-*/
 fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -771,13 +704,6 @@ fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .try_collect()
 }
 
-/* equiv. to:
-    (fn* (&strs) (
-        if (empty? strs)
-            ""
-            (str (reduce (fn* (acc x) (str acc " " x)) strs))
-    ))
-*/
 fn lisp_pr_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let full_str: Vec<String> = args
         .into_iter()
@@ -786,7 +712,6 @@ fn lisp_pr_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(LispValue::string_for(full_str.join(" ")))
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "function"))`
 fn lisp_fnq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -806,7 +731,6 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .into())
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "string"))`
 fn lisp_stringq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -820,7 +744,6 @@ fn lisp_stringq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     })
 }
 
-// equiv. to `(fn* (x) (= (typeof x) "number"))`
 fn lisp_numberq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -830,7 +753,6 @@ fn lisp_numberq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
     Ok(matches!(arg.val, InnerValue::Number(_)).into())
 }
 
-// equiv. to `(fn* (ls) (apply vector ls))`
 fn lisp_vec(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -860,15 +782,6 @@ cfg_if::cfg_if! {
     }
 }
 
-/* equiv. to:
-    (fn* (ls) (
-        if (empty? ls)
-            nil
-            (cons (first ls) (let* (tmp (seq (rest ls)))
-                (if (nil? tmp) () tmp)
-            ))
-    ))
-*/
 fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -899,13 +812,6 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
 }
 
-/* equiv. to:
-    (fn* (ls &args) (
-        if (list? ls)
-            (concat args ls)
-            (vec (concat ls args))
-    ))
-*/
 fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first = eval_head!(args, env)?;
@@ -986,16 +892,6 @@ fn lisp_pairs(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    ; outer `str` needed since `join` always coerces to boolean
-    (fn* (strs sep) (
-        if (empty? strs)
-            ""
-            (str (reduce (fn* (acc x) (
-                str acc sep x
-            )) strs))
-    ))
-*/
 fn lisp_join(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -1010,14 +906,6 @@ fn lisp_join(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    ; outer `bool` needed since `and` always coerces to boolean
-    (fn* (&args) (
-        bool (reduce (fn* (acc x) (
-            if acc (bool x) false
-        )) args)
-    ))
-*/
 fn lisp_and(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let bools = eval_list_to_bools(args, env)?;
@@ -1027,14 +915,6 @@ fn lisp_and(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    ; outer `bool` needed since `or` always coerces to boolean
-    (fn* (&args) (
-        bool (reduce (fn* (acc x) (
-            if acc true (bool x)
-        )) args)
-    ))
-*/
 fn lisp_or(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let bools = eval_list_to_bools(args, env)?;
@@ -1044,7 +924,6 @@ fn lisp_or(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (bool) (if bool true false))`
 fn lisp_bool(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1055,15 +934,6 @@ fn lisp_bool(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    (fn* (reducer ls) (
-        let* (acc (first ls) ls (rest ls)) (
-            if (empty? ls)
-                acc
-                (reduce reducer (cons (reducer acc (first ls)) (rest ls)))
-        )
-    ))
-*/
 fn lisp_reduce(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -1093,7 +963,6 @@ fn lisp_reduce(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (list) (reduce (fn* (_ item) item) list))`
 fn lisp_last(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1120,13 +989,6 @@ fn lisp_last(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    (fn* (reducer initial ls)) (
-        if (empty? ls)
-            acc
-            (foldr reducer (reducer acc (first ls)) (rest ls))
-    )
-*/
 fn lisp_foldr(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 3,
@@ -1152,7 +1014,6 @@ fn lisp_foldr(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (list) (foldr (fn* (acc next) (cons next acc)) () list))`
 fn lisp_rev(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1167,13 +1028,6 @@ fn lisp_rev(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-/* equiv. to
-    (fn* (ls) (
-        foldr (fn* (acc ls) (
-            concat acc (if (sequential? ls) ls (list ls))
-        )) () ls
-    ))
-*/
 fn lisp_flatten(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1194,7 +1048,6 @@ fn lisp_flatten(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (num) (if (< num 0) -1 1))`
 fn lisp_sign(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1221,7 +1074,6 @@ fn lisp_trunc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (num) (trunc (+ num (* 0.5 (sign num)))))`
 fn lisp_round(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1233,7 +1085,6 @@ fn lisp_round(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (num) (round (- num 0.5)))`
 fn lisp_floor(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1245,7 +1096,6 @@ fn lisp_floor(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 }
 
 // new function (not in Mal)
-// equiv. to `(fn* (num) (round (+ num 0.5)))`
 fn lisp_ceil(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 1,
@@ -1256,10 +1106,220 @@ fn lisp_ceil(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(num.ceil().into())
 }
 
-/* special form equivalencies:
-`do`:
-    (fn* (&args) (nth args (- (count args) 1)))
-*/
+// Note that these don't currently pass the entire test suite.
+#[cfg(feature = "self-implemented")]
+lazy_static! {
+    pub(crate) static ref SELF_IMPLEMENTED: HashMap<&'static str, &'static str> = {
+        hashmap! {
+            "//" => r#"(fn* (num den) (
+                trunc (/ num den))
+            )"#,
+            "list" => r#"(fn* (&args) args)"#,
+            "list?" => r#"(fn* (x) (
+                = (typeof x) "list"
+            ))"#,
+            "empty?" => r#"(fn* (ls) (
+                ; can't use `or`, since `or` uses `reduce` which uses `empty?`
+                if (= ls ())
+                    true
+                    (if (= ls "")
+                        true
+                        (if (= ls [])
+                            true
+                            (nil? ls)
+                        )
+                    )
+            ))"#,
+            "count" => r#"(fn* (ls) (
+                if (empty? ls)
+                    0
+                    (+ 1 (count (rest ls)))
+            ))"#,
+            "<=" => r#"(fn* (x y) (
+                not (< y x)
+            ))"#,
+            ">" => r#"(fn* (x y) (
+                < y x
+            ))"#,
+            ">=" => r#"(fn* (x y) (
+                not (< x y)
+            ))"#,
+            "not" => r#"(fn* (bool) (
+                if bool false true
+            ))"#,
+            "atom?" => r#"(fn* (x) (
+                = (typeof x) "atom"
+            ))"#,
+            "swap!" => r#"(fn* (atom fn &args) (
+                reset! atom (apply fn @atom args)
+            ))"#,
+            "cons" => r#"(fn* (item ls) (
+                apply list item ls
+            ))"#,
+            "concat" => r#"(fn* (&lists) (
+                foldr (fn* (acc list) (
+                    foldr (fn* (acc item) (cons item acc)) acc (rev list)
+                )) () (rev lists)
+            ))"#,
+            "nth" => r#"(fn* (ls n) (
+                if (empty? ls)
+                    (throw (str "index " n " out of range"))
+                    (if (= n 0)
+                        (first ls)
+                        (nth (rest ls) (- n 1))
+                    )
+            ))"#,
+            "head" => "first",
+            "tail" => "rest",
+            "macro?" => r#"(fn* (x) (
+                = (typeof x) "macro"
+            ))"#,
+            "nil?" => r#"(fn* (x) (
+                = x nil
+            ))"#,
+            "true?" => r#"(fn* (x) (
+                = x true
+            ))"#,
+            "false?" => r#"(fn* (x) (
+                = x false
+            ))"#,
+            "symbol?" => r#"(fn* (x) (
+                = (typeof x) "symbol"
+            ))"#,
+            "vector?" => r#"(fn* (x) (
+                = (typeof x) "vector"
+            ))"#,
+            "keyword?" => r#"(fn* (x) (
+                = (typeof x) "keyword"
+            ))"#,
+            "hashmap" => r#"(fn* (&pairs) (
+                apply assoc {} (flatten pairs)
+            ))"#,
+            "map?" => r#"(fn* (x) (
+                = (typeof x) "map"
+            ))"#,
+            "sequential?" => r#"(fn* (x) (
+                or (list? x) (vector? x)
+            ))"#,
+            "keys" => r#"(fn* (mp) (
+                map (fn* (pair) (first pair)) (pairs mp)
+            ))"#,
+            "vals" => r#"(fn* (mp) (
+                map (fn* (pair) (
+                    first (rest pair)
+                )) (pairs mp)
+            ))"#,
+            "map" => r#"(fn* (transformer ls) (
+                if (empty? ls)
+                    ()
+                    (cons (transformer (first ls)) (map transformer (rest ls)))
+            ))"#,
+            "pr-str" => r#"(fn* (&strs) (
+                if (empty? strs)
+                    ""
+                    (str (reduce (fn* (acc x) (str acc " " x)) strs))
+            ))"#,
+            "fn?" => r#"(fn* (x) (
+                = (typeof x) "function"
+            ))"#,
+            "string?" => r#"(fn* (x) (
+                = (typeof x) "string"
+            ))"#,
+            "number?" => r#"(fn* (x) (
+                = (typeof x) "number"
+            ))"#,
+            "vec" => r#"(fn* (ls) (
+                apply vector ls
+            ))"#,
+            "seq" => r#"(fn* (ls) (
+                if (empty? ls)
+                    nil
+                    (cons (first ls) (let* (tmp (seq (rest ls)))
+                        (if (nil? tmp) () tmp)
+                    ))
+            ))"#,
+            "conj" => r#"(fn* (ls &args) (
+                if (list? ls)
+                    (concat args ls)
+                    (vec (concat ls args))
+            ))"#,
+            "join" => r#"(fn* (strs sep) (
+                if (empty? strs)
+                    ""
+                    (str (reduce (fn* (acc x) (
+                        str acc sep x
+                    )) strs))
+            ))"#,
+            "and" => r#"(fn* (&args) (
+                bool (foldr (fn* (acc x) (
+                    if acc (bool x) false
+                )) true args)
+            ))"#,
+            "or" => r#"(fn* (&args) (
+                bool (foldr (fn* (acc x) (
+                    if acc true (bool x)
+                )) false args)
+            ))"#,
+            "bool" => r#"(fn* (bool) (
+                if bool true false
+            ))"#,
+            "reduce" => r#"(fn* (reducer ls) (
+                let* (acc (first ls) ls (rest ls)) (
+                    if (empty? ls)
+                        acc
+                        (reduce reducer (
+                            cons (reducer acc (first ls)) (rest ls)
+                        ))
+                )
+            ))"#,
+            "last" => r#"(fn* (ls) (
+                reduce (fn* (_ item) item) ls
+            ))"#,
+            "foldr" => r#"(fn* (reducer acc ls) (
+                if (empty? ls)
+                    acc
+                    (foldr reducer (reducer acc (first ls)) (rest ls))
+            ))"#,
+            "rev" => r#"(fn* (ls) (
+                foldr (fn* (acc next) (
+                    cons next acc
+                )) () ls
+            ))"#,
+            "flatten" => r#"(fn* (ls) (
+                foldr (fn* (acc ls) (
+                    concat acc (
+                        if (sequential? ls)
+                            ls
+                            (list ls)
+                    )
+                )) () ls
+            ))"#,
+            "sign" => r#"(fn* (num) (
+                if (< num 0) -1 1
+            ))"#,
+            "round" => r#"(fn* (num) (
+                trunc (+
+                    num
+                    (* 0.5 (sign num))
+                )
+            ))"#,
+            "floor" => r#"(fn* (num) (
+                if (= num (trunc num))
+                    num
+                    (round (- num 0.5))
+            ))"#,
+            "ceil" => r#"(fn* (num) (
+                if (= num (trunc num))
+                    num
+                    (round (+ num 0.5))
+            ))"#,
+            // shadowed by special form
+            "do" => r#"(fn* (&args) (
+                last args
+            ))"#,
+        }
+    };
+}
 
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
@@ -1277,6 +1337,48 @@ macro_rules! make_lisp_funcs {
             )),*
         }
     }
+}
+
+lazy_static! {
+    pub(crate) static ref BUILTINS_CORE: HashMap<LispSymbol, LispValue> = {
+        // fairly minimal set of functions needed to produce the others
+        let mut funcs = make_lisp_funcs!(
+            "+" => lisp_plus,
+            "-" => lisp_minus,
+            "*" => lisp_times,
+            "/" => lisp_divide,
+            "=" => lisp_equals,
+            "<" => lisp_lt,
+            "atom" => lisp_atom,
+            "reset!" => lisp_reset,
+            "read-string" => lisp_read_string,
+            "str" => lisp_str,
+            "typeof" => lisp_typeof,
+            "first" => lisp_first,
+            "rest" => lisp_rest,
+            "inspect" => lisp_inspect,
+            "throw" => lisp_throw,
+            "symbol" => lisp_symbol,
+            "vector" => lisp_vector,
+            "keyword" => lisp_keyword,
+            "assoc" => lisp_assoc,
+            "dissoc" => lisp_dissoc,
+            "get" => lisp_get,
+            "contains?" => lisp_containsq,
+            "meta" => lisp_meta,
+            "with-meta" => lisp_with_meta,
+            "dump-env" => lisp_dump_env,
+            "pairs" => lisp_pairs,
+            "trunc" => lisp_trunc,
+        );
+
+        funcs.insert(
+            hash("*host-language*"),
+            LispValue::string_for("Rust".to_owned()),
+        );
+
+        funcs
+    };
 }
 
 lazy_static! {
