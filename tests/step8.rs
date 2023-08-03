@@ -98,6 +98,25 @@ fn list_functions() {
         "(rev [1 2 3])",
         vector![3.0.into(), 2.0.into(), 1.0.into(),]
     );
+    eval_eq!(
+        "(flatten '(1 2 3))",
+        vector![1.0.into(), 2.0.into(), 3.0.into(),]
+    );
+    eval_eq!(
+        "(flatten '(1 2 3 (4 5)))",
+        vector![1.0.into(), 2.0.into(), 3.0.into(), 4.0.into(), 5.0.into()]
+    );
+    eval_eq!(
+        "(flatten '(1 2 3 (4 5 (6 7))))",
+        vector![
+            1.0.into(),
+            2.0.into(),
+            3.0.into(),
+            4.0.into(),
+            5.0.into(),
+            vector![6.0.into(), 7.0.into()].into(),
+        ]
+    );
 }
 
 #[test]

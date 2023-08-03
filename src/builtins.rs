@@ -100,6 +100,7 @@ fn lisp_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> 
 }
 
 // new function (not in Mal)
+// equiv. to `(fn* (num den) (trunc (/ num den)))`
 fn lisp_int_divide(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -770,6 +771,13 @@ fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     .try_collect()
 }
 
+/* equiv. to:
+    (fn* (&strs) (
+        if (empty? strs)
+            ""
+            (str (reduce (fn* (acc x) (str acc " " x)) strs))
+    ))
+*/
 fn lisp_pr_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let full_str: Vec<String> = args
         .into_iter()
@@ -852,7 +860,7 @@ cfg_if::cfg_if! {
     }
 }
 
-/* equiv to:
+/* equiv. to:
     (fn* (ls) (
         if (empty? ls)
             nil
@@ -891,6 +899,13 @@ fn lisp_seq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     }
 }
 
+/* equiv. to:
+    (fn* (ls &args) (
+        if (list? ls)
+            (concat args ls)
+            (vec (concat ls args))
+    ))
+*/
 fn lisp_conj(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first = eval_head!(args, env)?;
@@ -972,11 +987,13 @@ fn lisp_pairs(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 
 // new function (not in Mal)
 /* equiv. to
-    ; outer `str` needed since `join` always coerces to string
+    ; outer `str` needed since `join` always coerces to boolean
     (fn* (strs sep) (
-        str (reduce (fn* (acc x) (
-            str acc sep x
-        )) strs)
+        if (empty? strs)
+            ""
+            (str (reduce (fn* (acc x) (
+                str acc sep x
+            )) strs))
     ))
 */
 fn lisp_join(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
@@ -1176,6 +1193,69 @@ fn lisp_flatten(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue>
         .collect())
 }
 
+// new function (not in Mal)
+// equiv. to `(fn* (num) (if (< num 0) -1 1))`
+fn lisp_sign(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    let num = OrderedFloat::try_from(arg)?;
+    Ok(if num >= OrderedFloat(0.0) {
+        1.0.into()
+    } else {
+        (-1.0).into()
+    })
+}
+
+// new function (not in Mal)
+fn lisp_trunc(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    let num = OrderedFloat::try_from(arg)?;
+    Ok(num.trunc().into())
+}
+
+// new function (not in Mal)
+// equiv. to `(fn* (num) (trunc (+ num (* 0.5 (sign num)))))`
+fn lisp_round(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    let num = OrderedFloat::try_from(arg)?;
+    Ok(num.round().into())
+}
+
+// new function (not in Mal)
+// equiv. to `(fn* (num) (round (- num 0.5)))`
+fn lisp_floor(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    let num = OrderedFloat::try_from(arg)?;
+    Ok(num.floor().into())
+}
+
+// new function (not in Mal)
+// equiv. to `(fn* (num) (round (+ num 0.5)))`
+fn lisp_ceil(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(
+        args.len() == 1,
+        LispError::IncorrectArguments(1, args.len())
+    );
+    let arg = eval_head!(args, env)?;
+    let num = OrderedFloat::try_from(arg)?;
+    Ok(num.ceil().into())
+}
+
 /* special form equivalencies:
 `do`:
     (fn* (&args) (nth args (- (count args) 1)))
@@ -1273,6 +1353,11 @@ lazy_static! {
             "foldr" => lisp_foldr,
             "rev" => lisp_rev,
             "flatten" => lisp_flatten,
+            "sign" => lisp_sign,
+            "trunc" => lisp_trunc,
+            "round" => lisp_round,
+            "floor" => lisp_floor,
+            "ceil" => lisp_ceil,
         );
 
         funcs.insert(

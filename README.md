@@ -24,6 +24,11 @@ Additional functions in the standard library:
 - `foldr` functions similarly to `reduce`, but the initial value/accumulator is taken as an additional parameter before the list rather than as the head of the list.
 - `rev` takes a list and returns the list with the positions of all items reversed.
 - `flatten` takes a list and returns the list with flattened nested lists (only to one level).
+- `sign` takes a number and returns 1 if it was positive (including zero) and -1 if it was negative.
+- `trunc` returns its argument with fractional parts truncated.
+- `round` rounds a number to the nearest integer, rounding away from 0 in case of ties.
+- `floor` returns the largest integer less than or equal to its argument.
+- `ceil` returns the smallest integer greater than or equal to its argument.
 
 Other differences:
 
