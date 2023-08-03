@@ -705,6 +705,7 @@ fn lisp_fnq(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
                 InnerObjectValue::Func(_) | InnerObjectValue::BuiltinFunc(_)
             )
         }
+        InnerValue::Special { quoted, .. } => !quoted,
         _ => false,
     }
     .into())
