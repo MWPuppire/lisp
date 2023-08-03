@@ -70,10 +70,14 @@ fn lisp_plus(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 fn lisp_minus(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
     let first: OrderedFloat<f64> = eval_head!(args, env)?.try_into()?;
-    let nums = eval_list_to_numbers(args, env)?;
-    Ok(LispValue::new(InnerValue::Number(
-        first - nums.iter().fold(OrderedFloat(0.0), |acc, x| acc + x),
-    )))
+    if args.is_empty() {
+        Ok(LispValue::new(InnerValue::Number(-first)))
+    } else {
+        let nums = eval_list_to_numbers(args, env)?;
+        Ok(LispValue::new(InnerValue::Number(
+            first - nums.iter().fold(OrderedFloat(0.0), |acc, x| acc + x),
+        )))
+    }
 }
 
 // note: differs from Mal spec by allowing multiple parameters
@@ -193,6 +197,7 @@ fn lisp_lt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x < y).into())
 }
 
+// equiv. to `(fn* (x y) (not (< y x)))`
 fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -203,6 +208,7 @@ fn lisp_lte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x <= y).into())
 }
 
+// equiv. to `(fn* (x y) (< y x))`
 fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
@@ -213,6 +219,7 @@ fn lisp_gt(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok((x > y).into())
 }
 
+// equiv. to `(fn* (x y) (not (< x y)))`
 fn lisp_gte(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     assert_or_err!(
         args.len() == 2,
