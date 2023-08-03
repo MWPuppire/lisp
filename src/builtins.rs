@@ -350,14 +350,8 @@ fn lisp_load_file(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValu
     let mut parser = LispParser::new();
     parser.add_tokenize(&contents)?;
     let global = env.global();
-    if Arc::ptr_eq(&global, &env.clone_arc()) {
-        for val in parser {
-            eval(val?, env)?;
-        }
-    } else {
-        for val in parser {
-            eval(val?, &global)?;
-        }
+    for val in parser {
+        eval(val?, &global)?;
     }
     Ok(LispValue::nil())
 }
@@ -384,6 +378,13 @@ fn lisp_cons(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(iter.collect())
 }
 
+/* equiv. to
+    (fn* (&lists) (
+        foldr (fn* (acc list) (
+            foldr (fn* (acc item) (cons item acc)) acc (rev list)
+        )) () (rev lists)
+    ))
+*/
 fn lisp_concat(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     args.into_iter()
         .map(|arg| eval(arg, env)?.try_into_iter())
