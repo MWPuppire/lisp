@@ -24,6 +24,10 @@ fn if_form() {
     eval_eq!("(if nil 7 8)", 8.0);
     eval_eq!("(if 0 7 8)", 7.0);
     eval_eq!("(if (list) 7 8)", 7.0);
+    eval_eq!("(if (and true true) 7 8)", 7.0);
+    eval_eq!("(if (and true false) 7 8)", 8.0);
+    eval_eq!("(if (or true false) 7 8)", 7.0);
+    eval_eq!("(if (or false false) 7 8)", 8.0);
 }
 
 #[test]

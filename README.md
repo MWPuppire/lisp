@@ -16,6 +16,8 @@ Additional functions in the standard library:
 * `dump-env` returns a string that, if `eval`ed, would create an equivalent environment to the current one by redefining every variable to its current value.
 * `pairs` takes a hash-map and returns a list of the map's key-value pairs (as lists).
 * `join` takes a list of strings and a string separator and returns each string in the list joined by the separator.
+* `and` takes any number of arguments, coerces each to a boolean, and returns the logical AND of the arguments. This is not short-circuited (i.e. every argument is always evaluated).
+* `or` takes any number of arguments, coerces each to a boolean, and returns the logical OR of the arguments. This is not short-circuited (i.e. every argument is always evaluated).
 
 Other differences:
 

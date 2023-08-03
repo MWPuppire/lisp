@@ -39,6 +39,14 @@ fn eval_list_to_numbers<I: IntoIterator<Item = LispValue>>(
     args.into_iter().map(|x| eval(x, env)?.try_into()).collect()
 }
 
+#[inline]
+fn eval_list_to_bools<I: IntoIterator<Item = LispValue>>(
+    args: I,
+    env: &LispEnv,
+) -> Result<Vec<bool>> {
+    args.into_iter().map(|x| Ok(eval(x, env)?.truthiness())).collect()
+}
+
 fn printable_value(val: LispValue) -> String {
     if let Ok(s) = val.expect_string() {
         s.to_owned()
@@ -886,6 +894,24 @@ fn lisp_join(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     )?))
 }
 
+// new function (not in Mal)
+fn lisp_and(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
+    let bools = eval_list_to_bools(args, env)?;
+    Ok(LispValue::new(InnerValue::Bool(
+        bools.iter().fold(true, |acc, x| acc & x),
+    )))
+}
+
+// new function (not in Mal)
+fn lisp_or(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    assert_or_err!(!args.is_empty(), LispError::IncorrectArguments(1, 0));
+    let bools = eval_list_to_bools(args, env)?;
+    Ok(LispValue::new(InnerValue::Bool(
+        bools.iter().fold(false, |acc, x| acc | x),
+    )))
+}
+
 macro_rules! make_lisp_funcs {
     ($($name:literal => $f:path,)*) => {
         hashmap! {
@@ -970,6 +996,8 @@ lazy_static! {
             "dump-env" => lisp_dump_env,
             "pairs" => lisp_pairs,
             "join" => lisp_join,
+            "and" => lisp_and,
+            "or" => lisp_or,
         );
 
         funcs.insert(
