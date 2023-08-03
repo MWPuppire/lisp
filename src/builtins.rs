@@ -127,6 +127,21 @@ fn lisp_prn(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     if let Some(last) = args.pop_back() {
         for val in args.into_iter() {
             let val = eval(val, env)?;
+            print!("{} ", val);
+        }
+        let last_val = eval(last, env)?;
+        println!("{}", last_val);
+    } else {
+        println!();
+    }
+    Ok(LispValue::nil())
+}
+
+#[cfg(feature = "io-stdlib")]
+fn lisp_println(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
+    if let Some(last) = args.pop_back() {
+        for val in args.into_iter() {
+            let val = eval(val, env)?;
             print!("{} ", printable_value(val));
         }
         let last_val = eval(last, env)?;
@@ -707,7 +722,7 @@ fn lisp_map(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
 fn lisp_pr_str(args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     let full_str: Vec<String> = args
         .into_iter()
-        .map(|x| Ok::<_, LispError>(printable_value(eval(x, env)?)))
+        .map(|x| Ok::<_, LispError>(eval(x, env)?.to_string()))
         .try_collect()?;
     Ok(LispValue::string_for(full_str.join(" ")))
 }
@@ -1474,8 +1489,7 @@ pub(crate) static BUILTINS: Lazy<HashMap<LispSymbol, LispValue>> = Lazy::new(|| 
         "readline" => lisp_readline,
         "slurp" => lisp_slurp,
         "load-file" => lisp_load_file,
-        // currently, the functions behave identically
-        "println" => lisp_prn,
+        "println" => lisp_println,
         "time-ms" => lisp_time_ms,
     );
 
