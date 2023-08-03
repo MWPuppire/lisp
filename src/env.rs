@@ -18,6 +18,11 @@ impl std::fmt::Display for LispSymbol {
         self.0.fmt(f)
     }
 }
+impl From<LispSymbol> for String {
+    fn from(item: LispSymbol) -> String {
+        item.0
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct LispEnv {
@@ -162,8 +167,8 @@ impl LispEnv {
 
     pub fn union(&self, other: &Self) -> Arc<Self> {
         let mut data = other.data.clone();
-        data.extend(self.data.iter().map(|x| {
-            let (key, val) = x.pair();
+        data.extend(self.data.iter().map(|item| {
+            let (key, val) = item.pair();
             (key.clone(), val.clone())
         }));
         let inner = LispEnv {
@@ -212,14 +217,18 @@ impl LispEnv {
                     }
                     InnerValue::Object(o) => match &o.val {
                         InnerObjectValue::Func(f) | InnerObjectValue::Macro(f) => {
-                            format!(
-                                "{}{} (let* ({}) {:#}){}",
-                                def,
-                                key,
-                                f.closure.0.dump_inner("", "", atoms),
-                                o,
-                                defclose
-                            )
+                            if Weak::ptr_eq(&Arc::downgrade(&f.closure.0.0), &self.this) {
+                                format!("{}{} {}{}", def, key, o, defclose)
+                            } else {
+                                format!(
+                                    "{}{} (let* ({}) {:#}){}",
+                                    def,
+                                    key,
+                                    f.closure.0.dump_inner("", "", atoms),
+                                    o,
+                                    defclose
+                                )
+                            }
                         }
                         _ => format!("{}{} {:#}{}", def, key, o, defclose),
                     },
