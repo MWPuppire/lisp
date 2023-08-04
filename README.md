@@ -43,8 +43,6 @@ The code has memory leaks. Testing under Miri reveals Arcs leaking in some of th
 
 `eval` doesn't handle scopes properly with how it evaluates its body. `eval` is supposed to execute code in the global scope, yet still have access to locally defined variables.
 
-Some of the standard library, when implemented within LISP, fails to function properly. I take this to indicate yet another problem with my current evaluation strategy. (Specifically, the failing tests are `step7::list_functions`, `step8::list_functions`, and `step_a::foldr_reduce`; the common thread seems to be `foldr` & `reduce`.)
-
 ## License
 
 The code is released under the MIT license.

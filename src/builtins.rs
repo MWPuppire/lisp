@@ -1139,7 +1139,6 @@ fn lisp_ceil(mut args: Vector<LispValue>, env: &LispEnv) -> Result<LispValue> {
     Ok(num.ceil().into())
 }
 
-// Note that these don't currently pass the entire test suite.
 #[cfg(feature = "self-implemented")]
 pub(crate) static SELF_IMPLEMENTED: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     hashmap! {
