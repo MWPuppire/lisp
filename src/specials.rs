@@ -306,7 +306,10 @@ macro_rules! special_form {
                 let Some(expr) = $list.pop_front() else {
                                                     break Err($crate::LispError::IncorrectArguments(1, 0));
                                                 };
-                $eval(expr, &$env)?
+                let global = $env.global();
+                let out = $eval(expr, &$env)?;
+                $env = global;
+                out
             }
             $crate::util::LispSpecialForm::Apply => {
                 $crate::util::assert_or_err!(

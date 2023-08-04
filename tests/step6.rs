@@ -45,6 +45,17 @@ fn test_eval() {
 }
 
 #[test]
+fn test_eval_global_scope() {
+    eval_eq!(
+        "(let* (b 12) (do (eval (read-string \"(def! aa 7)\")) aa))",
+        7.0
+    );
+    let env = testing_env();
+    eval!("(def! a 1)", &env);
+    eval_eq!("(let* (a 2) (eval (read-string \"a\")))", &env, 1.0);
+}
+
+#[test]
 fn test_slurp() {
     eval_eq!("(slurp \"test.txt\")", "A line of text".to_owned());
 }
