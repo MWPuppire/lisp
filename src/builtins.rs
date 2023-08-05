@@ -1344,10 +1344,6 @@ pub(crate) static SELF_IMPLEMENTED: Lazy<HashMap<&'static str, &'static str>> = 
                     num
                     (round (+ num 0.5))
             ))"#,
-        // shadowed by special form
-        "do" => r#"(fn* (&args) (
-                last args
-            ))"#,
     }
 });
 
