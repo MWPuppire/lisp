@@ -1,5 +1,6 @@
 use crate::builtins;
-use crate::util::{InnerObjectValue, InnerValue, LispBuiltinFunc, ObjectValue, Result};
+use crate::util::Result;
+use crate::value::{InnerObjectValue, InnerValue, LispBuiltinFunc, ObjectValue};
 use crate::LispValue;
 use by_address::ByAddress;
 use dashmap::DashMap;

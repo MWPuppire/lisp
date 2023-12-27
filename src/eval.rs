@@ -1,6 +1,6 @@
 use crate::env::{LispEnv, LispSymbol};
 use crate::specials::special_form;
-use crate::util::{InnerObjectValue, InnerValue, LispFunc, ObjectValue};
+use crate::value::{InnerObjectValue, InnerValue, LispFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use im::Vector;
 use itertools::Itertools;

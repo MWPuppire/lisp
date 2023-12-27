@@ -1,7 +1,8 @@
 use crate::env::{hash, LispEnv, LispSymbol};
 use crate::eval::eval;
 use crate::parser::LispParser;
-use crate::util::{assert_or_err, InnerObjectValue, InnerValue, LispBuiltinFunc, ObjectValue};
+use crate::util::assert_or_err;
+use crate::value::{InnerObjectValue, InnerValue, LispBuiltinFunc, ObjectValue};
 use crate::{LispError, LispValue, Result};
 use by_address::ByAddress;
 use im::{hashmap, vector, HashMap, Vector};

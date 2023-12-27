@@ -33,13 +33,15 @@ extern crate once_cell;
 // `Hash`, etc., and I'd rather avoid manually implementing those on `LispValue`
 // I haven't looked enough into `zerogc`, but it might be promising
 
-pub mod util;
-pub use crate::util::{LispError, LispValue, Result};
-pub mod parser;
+mod util;
+pub use crate::util::{LispError, Result};
+mod parser;
 pub use crate::parser::LispParser;
-pub mod eval;
+mod eval;
 pub use crate::eval::eval;
 pub mod env;
 pub use crate::env::LispEnv;
 mod builtins;
 mod specials;
+mod value;
+pub use crate::value::LispValue;

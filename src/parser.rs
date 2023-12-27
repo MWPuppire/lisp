@@ -1,5 +1,5 @@
 use crate::env::hash;
-use crate::util::{InnerValue, LispSpecialForm};
+use crate::value::{InnerValue, LispSpecialForm};
 use crate::{LispError, LispValue, Result};
 use im::{vector, Vector};
 use nom::{
