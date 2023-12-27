@@ -166,15 +166,13 @@ pub fn eval(mut ast: LispValue, env: &LispEnv) -> Result<LispValue> {
                     break Ok(std::iter::once(LispValue::new(InnerValue::Object(o)))
                         .chain(list.into_iter())
                         .collect())
-                }
-                // x => break Err(LispError::InvalidDataType("function", x.type_of())),
+                } // x => break Err(LispError::InvalidDataType("function", x.type_of())),
             },
             x => {
                 break Ok(std::iter::once(LispValue::new(x))
                     .chain(list.into_iter())
                     .collect())
-            }
-            // x => break Err(LispError::InvalidDataType("function", x.type_of())),
+            } // x => break Err(LispError::InvalidDataType("function", x.type_of())),
         }
     }
 }

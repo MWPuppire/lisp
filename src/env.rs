@@ -107,7 +107,6 @@ impl LispEnv {
 
     #[cfg(feature = "self-implemented")]
     pub fn new_self_implemented() -> Arc<Self> {
-        use std::str::FromStr;
         let inner = LispEnv {
             data: DashMap::new(),
             this: Weak::new(),
@@ -115,13 +114,13 @@ impl LispEnv {
             stdlib: &builtins::BUILTINS_CORE,
         };
         let arced = assign_this_self(inner);
-        for (key, val) in builtins::SELF_IMPLEMENTED.iter() {
-            let parsed =
-                LispValue::from_str(val).expect("Builtins should be syntactically correct");
-            arced.set(
-                hash(*key),
-                crate::eval(parsed, &arced).expect("Builtins should pass evaluation"),
-            );
+        let mut parser = crate::LispParser::new();
+        parser
+            .add_tokenize(builtins::BUILTINS_SELF_IMPLEMENTED_SRC)
+            .expect("Builtins should be syntactically correct");
+        for val in parser {
+            let val = val.expect("Builtins should be syntactically correct");
+            crate::eval(val, &arced).expect("Builtins should pass evaluation");
         }
         arced
     }
